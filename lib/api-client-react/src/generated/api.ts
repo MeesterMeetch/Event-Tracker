@@ -26,6 +26,8 @@ import type {
   DashboardSummary,
   EdgeOpportunity,
   ErrorResponse,
+  GameAnalysisRequest,
+  GameAnalysisResponse,
   HealthStatus,
   ListBetsParams,
   ListEdgesParams,
@@ -750,4 +752,76 @@ export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDash
 
 
 
+
+export const getGenerateGameAnalysisUrl = () => {
+
+
+
+
+  return `/api/analysis`
+}
+
+/**
+ * Produces an AI-written scouting and betting analysis for a single game, including probable starting pitchers and their recent form for MLB. Results are cached briefly per game to limit AI usage.
+ * @summary Generate an AI analysis for a game
+ */
+export const generateGameAnalysis = async (gameAnalysisRequest: GameAnalysisRequest, options?: RequestInit): Promise<GameAnalysisResponse> => {
+
+  return customFetch<GameAnalysisResponse>(getGenerateGameAnalysisUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(gameAnalysisRequest)
+  }
+);}
+
+
+
+
+
+export const getGenerateGameAnalysisMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateGameAnalysis>>, TError,{data: BodyType<GameAnalysisRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateGameAnalysis>>, TError,{data: BodyType<GameAnalysisRequest>}, TContext> => {
+
+const mutationKey = ['generateGameAnalysis'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateGameAnalysis>>, {data: BodyType<GameAnalysisRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateGameAnalysis(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateGameAnalysisMutationResult = NonNullable<Awaited<ReturnType<typeof generateGameAnalysis>>>
+    export type GenerateGameAnalysisMutationBody = BodyType<GameAnalysisRequest>
+    export type GenerateGameAnalysisMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Generate an AI analysis for a game
+ */
+export const useGenerateGameAnalysis = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateGameAnalysis>>, TError,{data: BodyType<GameAnalysisRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateGameAnalysis>>,
+        TError,
+        {data: BodyType<GameAnalysisRequest>},
+        TContext
+      > => {
+      return useMutation(getGenerateGameAnalysisMutationOptions(options));
+    }
 

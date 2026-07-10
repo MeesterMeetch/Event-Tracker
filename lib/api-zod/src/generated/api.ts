@@ -245,3 +245,82 @@ export const GetDashboardSummaryResponse = zod.object({
 })
 
 
+/**
+ * Produces an AI-written scouting and betting analysis for a single game, including probable starting pitchers and their recent form for MLB. Results are cached briefly per game to limit AI usage.
+ * @summary Generate an AI analysis for a game
+ */
+export const GenerateGameAnalysisBody = zod.object({
+  "sport": zod.string(),
+  "gameId": zod.string(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "edges": zod.array(zod.object({
+  "gameId": zod.string(),
+  "sport": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "market": zod.enum(['h2h', 'spreads', 'totals']),
+  "selection": zod.string(),
+  "point": zod.number().nullable(),
+  "americanOdds": zod.number(),
+  "book": zod.string(),
+  "fairOdds": zod.number(),
+  "evPercent": zod.number()
+}))
+})
+
+export const GenerateGameAnalysisResponse = zod.object({
+  "gameId": zod.string(),
+  "generatedAt": zod.coerce.date(),
+  "model": zod.string(),
+  "summary": zod.string(),
+  "pitchingAnalysis": zod.string(),
+  "bettingAngle": zod.string(),
+  "keyFactors": zod.array(zod.string()),
+  "homePitcher": zod.union([zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "team": zod.string(),
+  "seasonEra": zod.string().nullable(),
+  "seasonRecord": zod.string().nullable(),
+  "seasonWhip": zod.string().nullable(),
+  "seasonStrikeouts": zod.number().nullable(),
+  "inningsPitched": zod.string().nullable(),
+  "gamesStarted": zod.number().nullable(),
+  "recentStarts": zod.array(zod.object({
+  "date": zod.string(),
+  "opponent": zod.string(),
+  "inningsPitched": zod.string(),
+  "earnedRuns": zod.number(),
+  "strikeOuts": zod.number(),
+  "walks": zod.number(),
+  "hits": zod.number(),
+  "decision": zod.string()
+}))
+}),zod.null()]),
+  "awayPitcher": zod.union([zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "team": zod.string(),
+  "seasonEra": zod.string().nullable(),
+  "seasonRecord": zod.string().nullable(),
+  "seasonWhip": zod.string().nullable(),
+  "seasonStrikeouts": zod.number().nullable(),
+  "inningsPitched": zod.string().nullable(),
+  "gamesStarted": zod.number().nullable(),
+  "recentStarts": zod.array(zod.object({
+  "date": zod.string(),
+  "opponent": zod.string(),
+  "inningsPitched": zod.string(),
+  "earnedRuns": zod.number(),
+  "strikeOuts": zod.number(),
+  "walks": zod.number(),
+  "hits": zod.number(),
+  "decision": zod.string()
+}))
+}),zod.null()])
+})
+
+

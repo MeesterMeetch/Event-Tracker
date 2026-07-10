@@ -145,6 +145,57 @@ export interface DashboardSummary {
   bySport: SportBreakdown[];
 }
 
+export interface PitcherStart {
+  date: string;
+  opponent: string;
+  inningsPitched: string;
+  earnedRuns: number;
+  strikeOuts: number;
+  walks: number;
+  hits: number;
+  decision: string;
+}
+
+export interface ProbablePitcher {
+  id: number;
+  name: string;
+  team: string;
+  /** @nullable */
+  seasonEra: string | null;
+  /** @nullable */
+  seasonRecord: string | null;
+  /** @nullable */
+  seasonWhip: string | null;
+  /** @nullable */
+  seasonStrikeouts: number | null;
+  /** @nullable */
+  inningsPitched: string | null;
+  /** @nullable */
+  gamesStarted: number | null;
+  recentStarts: PitcherStart[];
+}
+
+export interface GameAnalysisRequest {
+  sport: string;
+  gameId: string;
+  homeTeam: string;
+  awayTeam: string;
+  commenceTime: string;
+  edges: EdgeOpportunity[];
+}
+
+export interface GameAnalysisResponse {
+  gameId: string;
+  generatedAt: string;
+  model: string;
+  summary: string;
+  pitchingAnalysis: string;
+  bettingAngle: string;
+  keyFactors: string[];
+  homePitcher: ProbablePitcher | null;
+  awayPitcher: ProbablePitcher | null;
+}
+
 export type ListEdgesParams = {
 sport: string;
 minEdgePercent?: number;

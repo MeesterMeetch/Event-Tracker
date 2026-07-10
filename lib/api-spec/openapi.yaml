@@ -18,6 +18,8 @@ tags:
     description: Aggregate performance stats
   - name: sports
     description: Supported sports list
+  - name: analysis
+    description: AI game analysis and probable starters
 paths:
   /healthz:
     get:
@@ -215,6 +217,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
+  /analysis:
+    post:
+      operationId: generateGameAnalysis
+      tags: [analysis]
+      summary: Generate an AI analysis for a game
+      description: >
+        Produces an AI-written scouting and betting analysis for a single game,
+        including probable starting pitchers and their recent form for MLB.
+        Results are cached briefly per game to limit AI usage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameAnalysisRequest"
+      responses:
+        "200":
+          description: Generated analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameAnalysisResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: AI provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -470,3 +506,116 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/SportBreakdown"
+    PitcherStart:
+      type: object
+      required: [date, opponent, inningsPitched, earnedRuns, strikeOuts, walks, hits, decision]
+      properties:
+        date:
+          type: string
+        opponent:
+          type: string
+        inningsPitched:
+          type: string
+        earnedRuns:
+          type: integer
+        strikeOuts:
+          type: integer
+        walks:
+          type: integer
+        hits:
+          type: integer
+        decision:
+          type: string
+    ProbablePitcher:
+      type: object
+      required:
+        - id
+        - name
+        - team
+        - seasonEra
+        - seasonRecord
+        - seasonWhip
+        - seasonStrikeouts
+        - inningsPitched
+        - gamesStarted
+        - recentStarts
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        team:
+          type: string
+        seasonEra:
+          type: ["string", "null"]
+        seasonRecord:
+          type: ["string", "null"]
+        seasonWhip:
+          type: ["string", "null"]
+        seasonStrikeouts:
+          type: ["integer", "null"]
+        inningsPitched:
+          type: ["string", "null"]
+        gamesStarted:
+          type: ["integer", "null"]
+        recentStarts:
+          type: array
+          items:
+            $ref: "#/components/schemas/PitcherStart"
+    GameAnalysisRequest:
+      type: object
+      required: [sport, gameId, homeTeam, awayTeam, commenceTime, edges]
+      properties:
+        sport:
+          type: string
+        gameId:
+          type: string
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/EdgeOpportunity"
+    GameAnalysisResponse:
+      type: object
+      required:
+        - gameId
+        - generatedAt
+        - model
+        - summary
+        - pitchingAnalysis
+        - bettingAngle
+        - keyFactors
+        - homePitcher
+        - awayPitcher
+      properties:
+        gameId:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        model:
+          type: string
+        summary:
+          type: string
+        pitchingAnalysis:
+          type: string
+        bettingAngle:
+          type: string
+        keyFactors:
+          type: array
+          items:
+            type: string
+        homePitcher:
+          anyOf:
+            - $ref: "#/components/schemas/ProbablePitcher"
+            - type: "null"
+        awayPitcher:
+          anyOf:
+            - $ref: "#/components/schemas/ProbablePitcher"
+            - type: "null"

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useListSports, useListEdges, useCreateBet, getListEdgesQueryKey } from "@workspace/api-client-react";
+import { useState, useRef } from "react";
+import { useListSports, useListEdges, useCreateBet, useGenerateGameAnalysis, getListEdgesQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,13 +11,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatOdds, formatPercent, formatPoint } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Activity, Plus, Loader2 } from "lucide-react";
+import { Activity, Plus, Loader2, Sparkles } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import type { EdgeOpportunity } from "@workspace/api-client-react";
+import type { EdgeOpportunity, ProbablePitcher } from "@workspace/api-client-react";
 
 const logBetSchema = z.object({
   units: z.coerce.number().min(0.01, "Must wager at least 0.01 units"),
@@ -149,6 +149,170 @@ function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, children: Rea
   );
 }
 
+function decisionClass(d: string): string {
+  if (d === "W") return "text-positive";
+  if (d === "L") return "text-destructive";
+  return "text-muted-foreground";
+}
+
+function PitcherCard({ label, pitcher }: { label: string; pitcher: ProbablePitcher | null }) {
+  if (!pitcher) {
+    return (
+      <div className="rounded-md border border-border p-3">
+        <div className="text-[10px] uppercase text-muted-foreground mb-1">{label}</div>
+        <div className="text-sm text-muted-foreground">Probable starter not announced.</div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-md border border-border p-3 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
+          <div className="font-semibold leading-tight">{pitcher.name}</div>
+          <div className="text-xs text-muted-foreground">{pitcher.team}</div>
+        </div>
+        <Badge variant="outline" className="font-mono text-[10px]">{pitcher.seasonRecord ?? "—"}</Badge>
+      </div>
+      <div className="grid grid-cols-4 gap-2 text-center">
+        <div>
+          <div className="text-sm font-mono font-semibold">{pitcher.seasonEra ?? "—"}</div>
+          <div className="text-[10px] text-muted-foreground">ERA</div>
+        </div>
+        <div>
+          <div className="text-sm font-mono font-semibold">{pitcher.seasonWhip ?? "—"}</div>
+          <div className="text-[10px] text-muted-foreground">WHIP</div>
+        </div>
+        <div>
+          <div className="text-sm font-mono font-semibold">{pitcher.seasonStrikeouts ?? "—"}</div>
+          <div className="text-[10px] text-muted-foreground">K</div>
+        </div>
+        <div>
+          <div className="text-sm font-mono font-semibold">{pitcher.inningsPitched ?? "—"}</div>
+          <div className="text-[10px] text-muted-foreground">IP</div>
+        </div>
+      </div>
+      {pitcher.recentStarts.length > 0 && (
+        <div className="pt-2 border-t border-border space-y-1">
+          <div className="text-[10px] uppercase text-muted-foreground">Last {pitcher.recentStarts.length} Starts</div>
+          {pitcher.recentStarts.map((s, i) => (
+            <div key={i} className="flex items-center justify-between text-[11px] font-mono gap-2">
+              <span className="text-muted-foreground truncate">{s.date.slice(5)} · {s.opponent}</span>
+              <span className="whitespace-nowrap">
+                {s.inningsPitched} IP, {s.earnedRuns} ER, {s.strikeOuts} K{" "}
+                <span className={decisionClass(s.decision)}>{s.decision}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnalyzeGameDialog({ edge, gameEdges, children }: { edge: EdgeOpportunity; gameEdges: EdgeOpportunity[]; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const analyze = useGenerateGameAnalysis();
+  const started = useRef(false);
+
+  const run = () => {
+    analyze.mutate({
+      data: {
+        sport: edge.sport,
+        gameId: edge.gameId,
+        homeTeam: edge.homeTeam,
+        awayTeam: edge.awayTeam,
+        commenceTime: edge.commenceTime,
+        edges: gameEdges,
+      },
+    });
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next && !started.current) {
+      started.current = true;
+      run();
+    }
+  };
+
+  const data = analyze.data;
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <DialogTitle>AI Game Analysis</DialogTitle>
+          </div>
+          <DialogDescription>{edge.awayTeam} @ {edge.homeTeam}</DialogDescription>
+        </DialogHeader>
+
+        {analyze.isPending && (
+          <div className="flex flex-col items-center justify-center py-12 space-y-3 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-sm">Scouting matchup, pitchers, and market signals…</p>
+            <p className="text-xs opacity-70">This can take a few seconds.</p>
+          </div>
+        )}
+
+        {analyze.isError && (
+          <div className="rounded-md border border-destructive/20 bg-destructive/5 p-4 text-center">
+            <p className="text-destructive font-mono text-sm">ANALYSIS_FAILED</p>
+            <p className="text-xs text-muted-foreground mt-1">{analyze.error?.data?.error || "Could not generate analysis."}</p>
+            <Button size="sm" variant="secondary" className="mt-3" onClick={run}>Retry</Button>
+          </div>
+        )}
+
+        {data && (
+          <div className="space-y-5">
+            <p className="text-sm leading-relaxed">{data.summary}</p>
+
+            {data.keyFactors.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {data.keyFactors.map((f, i) => (
+                  <Badge key={i} variant="secondary" className="font-normal">{f}</Badge>
+                ))}
+              </div>
+            )}
+
+            {(data.homePitcher || data.awayPitcher) && (
+              <div>
+                <div className="text-xs font-semibold uppercase text-muted-foreground mb-2">Probable Starters</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <PitcherCard label={`Away — ${edge.awayTeam}`} pitcher={data.awayPitcher} />
+                  <PitcherCard label={`Home — ${edge.homeTeam}`} pitcher={data.homePitcher} />
+                </div>
+              </div>
+            )}
+
+            {data.pitchingAnalysis && (
+              <div>
+                <div className="text-xs font-semibold uppercase text-muted-foreground mb-1">Pitching / Form</div>
+                <p className="text-sm leading-relaxed text-foreground/90">{data.pitchingAnalysis}</p>
+              </div>
+            )}
+
+            {data.bettingAngle && (
+              <div>
+                <div className="text-xs font-semibold uppercase text-muted-foreground mb-1">Betting Angle</div>
+                <p className="text-sm leading-relaxed text-foreground/90">{data.bettingAngle}</p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-border text-[10px] text-muted-foreground">
+              <span>Model: {data.model}</span>
+              <span>AI-generated — verify before betting</span>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function LiveEdges() {
   const [selectedSport, setSelectedSport] = useState<string>("");
   
@@ -228,7 +392,7 @@ export default function LiveEdges() {
                   <TableHead className="text-right">Fair</TableHead>
                   <TableHead className="text-right">Odds</TableHead>
                   <TableHead className="text-right">EV%</TableHead>
-                  <TableHead className="w-[100px]"></TableHead>
+                  <TableHead className="w-[130px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -269,11 +433,19 @@ export default function LiveEdges() {
                         {formatPercent(edge.evPercent)}
                       </TableCell>
                       <TableCell>
-                        <LogBetDialog edge={edge}>
-                          <Button size="sm" variant="secondary" className="w-full">
-                            Log
-                          </Button>
-                        </LogBetDialog>
+                        <div className="flex flex-col gap-1">
+                          <AnalyzeGameDialog edge={edge} gameEdges={edges.filter((e) => e.gameId === edge.gameId)}>
+                            <Button size="sm" variant="outline" className="w-full">
+                              <Sparkles className="mr-1 h-3 w-3" />
+                              Analyze
+                            </Button>
+                          </AnalyzeGameDialog>
+                          <LogBetDialog edge={edge}>
+                            <Button size="sm" variant="secondary" className="w-full">
+                              Log
+                            </Button>
+                          </LogBetDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

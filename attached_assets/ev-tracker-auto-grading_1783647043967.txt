@@ -1,0 +1,321 @@
+diff --git a/artifacts/api-server/src/index.ts b/artifacts/api-server/src/index.ts
+index ce62a95..035977b 100644
+--- a/artifacts/api-server/src/index.ts
++++ b/artifacts/api-server/src/index.ts
+@@ -1,6 +1,7 @@
+ import app from "./app";
+ import { logger } from "./lib/logger";
+ import { startClvCapture } from "./lib/clv";
++import { startGrading } from "./lib/grading";
+ 
+ const rawPort = process.env["PORT"];
+ 
+@@ -25,4 +26,5 @@ app.listen(port, (err) => {
+ 
+   logger.info({ port }, "Server listening");
+   startClvCapture();
++  startGrading();
+ });
+diff --git a/artifacts/api-server/src/lib/grading-math.test.ts b/artifacts/api-server/src/lib/grading-math.test.ts
+new file mode 100644
+index 0000000..33cfea7
+--- /dev/null
++++ b/artifacts/api-server/src/lib/grading-math.test.ts
+@@ -0,0 +1,91 @@
++import { describe, it, expect } from "vitest";
++import { gradeBet, calcPnl } from "./grading-math";
++import type { ScoresGame } from "./odds";
++
++const makeGame = (home: number, away: number, completed = true): ScoresGame => ({
++  id: "g1",
++  sport_key: "baseball_mlb",
++  commence_time: new Date().toISOString(),
++  completed,
++  home_team: "TeamA",
++  away_team: "TeamB",
++  scores: [
++    { name: "TeamA", score: String(home) },
++    { name: "TeamB", score: String(away) },
++  ],
++});
++
++const bet = (overrides: Partial<Parameters<typeof gradeBet>[0]>) => ({
++  market: "h2h",
++  selection: "TeamA",
++  point: null,
++  homeTeam: "TeamA",
++  awayTeam: "TeamB",
++  ...overrides,
++});
++
++describe("gradeBet h2h", () => {
++  it("grades winner and loser", () => {
++    expect(gradeBet(bet({}), makeGame(5, 3))).toBe("won");
++    expect(gradeBet(bet({ selection: "TeamB" }), makeGame(5, 3))).toBe("lost");
++  });
++
++  it("pushes on a tie", () => {
++    expect(gradeBet(bet({}), makeGame(3, 3))).toBe("push");
++  });
++
++  it("returns null when selection matches neither team", () => {
++    expect(gradeBet(bet({ selection: "TeamC" }), makeGame(5, 3))).toBeNull();
++  });
++});
++
++describe("gradeBet spreads", () => {
++  it("covers, fails to cover, and pushes on the number", () => {
++    const g = makeGame(24, 20);
++    expect(gradeBet(bet({ market: "spreads", selection: "TeamB", point: 6.5 }), g)).toBe("won");
++    expect(gradeBet(bet({ market: "spreads", selection: "TeamB", point: 3.5 }), g)).toBe("lost");
++    expect(gradeBet(bet({ market: "spreads", selection: "TeamB", point: 4 }), g)).toBe("push");
++    expect(gradeBet(bet({ market: "spreads", selection: "TeamA", point: -3.5 }), g)).toBe("won");
++    expect(gradeBet(bet({ market: "spreads", selection: "TeamA", point: -4.5 }), g)).toBe("lost");
++  });
++
++  it("returns null without a point", () => {
++    expect(gradeBet(bet({ market: "spreads", point: null }), makeGame(24, 20))).toBeNull();
++  });
++});
++
++describe("gradeBet totals", () => {
++  it("grades over, under, and exact-landing pushes", () => {
++    const g = makeGame(5, 4); // total 9
++    expect(gradeBet(bet({ market: "totals", selection: "Over 8.5", point: 8.5 }), g)).toBe("won");
++    expect(gradeBet(bet({ market: "totals", selection: "Under 8.5", point: 8.5 }), g)).toBe("lost");
++    expect(gradeBet(bet({ market: "totals", selection: "Over 9", point: 9 }), g)).toBe("push");
++    expect(gradeBet(bet({ market: "totals", selection: "Under 9.5", point: 9.5 }), g)).toBe("won");
++  });
++});
++
++describe("gradeBet guards", () => {
++  it("returns null for incomplete games or missing scores", () => {
++    expect(gradeBet(bet({}), makeGame(5, 3, false))).toBeNull();
++    expect(gradeBet(bet({}), { ...makeGame(5, 3), scores: null })).toBeNull();
++  });
++
++  it("returns null for unknown markets", () => {
++    expect(gradeBet(bet({ market: "player_props" }), makeGame(5, 3))).toBeNull();
++  });
++});
++
++describe("calcPnl", () => {
++  it("pays positive American odds correctly", () => {
++    expect(calcPnl("won", 150, 1)).toBe(1.5);
++  });
++
++  it("pays negative American odds correctly", () => {
++    expect(calcPnl("won", -120, 1.2)).toBe(1);
++  });
++
++  it("loses the stake and refunds pushes", () => {
++    expect(calcPnl("lost", -110, 2)).toBe(-2);
++    expect(calcPnl("push", -110, 2)).toBe(0);
++  });
++});
+diff --git a/artifacts/api-server/src/lib/grading-math.ts b/artifacts/api-server/src/lib/grading-math.ts
+new file mode 100644
+index 0000000..70aad99
+--- /dev/null
++++ b/artifacts/api-server/src/lib/grading-math.ts
+@@ -0,0 +1,77 @@
++import { baseSelection } from "./clv-math";
++import type { ScoresGame } from "./odds";
++
++export type GradeResult = "won" | "lost" | "push";
++
++export interface BetForGrading {
++  market: string;
++  selection: string;
++  point: number | null;
++  homeTeam: string;
++  awayTeam: string;
++}
++
++/**
++ * Grades a settled game against a bet. Returns null when the bet can't be
++ * graded from the available data (unknown market, team name mismatch,
++ * missing point) so the caller can leave it for manual settlement rather
++ * than guess.
++ */
++export function gradeBet(bet: BetForGrading, game: ScoresGame): GradeResult | null {
++  if (!game.completed || !game.scores) return null;
++
++  const scoreFor = (team: string): number | null => {
++    const entry = game.scores!.find((s) => s.name === team);
++    if (!entry) return null;
++    const n = parseInt(entry.score, 10);
++    return Number.isNaN(n) ? null : n;
++  };
++
++  const homeScore = scoreFor(game.home_team);
++  const awayScore = scoreFor(game.away_team);
++  if (homeScore == null || awayScore == null) return null;
++
++  if (bet.market === "h2h") {
++    const myScore = bet.selection === game.home_team ? homeScore : bet.selection === game.away_team ? awayScore : null;
++    if (myScore == null) return null;
++    const oppScore = bet.selection === game.home_team ? awayScore : homeScore;
++    if (myScore > oppScore) return "won";
++    if (myScore < oppScore) return "lost";
++    return "push";
++  }
++
++  if (bet.market === "spreads") {
++    if (bet.point == null) return null;
++    const myScore = bet.selection === game.home_team ? homeScore : bet.selection === game.away_team ? awayScore : null;
++    if (myScore == null) return null;
++    const oppScore = bet.selection === game.home_team ? awayScore : homeScore;
++    const adjusted = myScore + bet.point;
++    if (adjusted > oppScore) return "won";
++    if (adjusted < oppScore) return "lost";
++    return "push";
++  }
++
++  if (bet.market === "totals") {
++    if (bet.point == null) return null;
++    const side = baseSelection("totals", bet.selection);
++    const total = homeScore + awayScore;
++    if (total === bet.point) return "push";
++    if (side === "Over") return total > bet.point ? "won" : "lost";
++    if (side === "Under") return total < bet.point ? "won" : "lost";
++    return null;
++  }
++
++  return null;
++}
++
++/**
++ * Profit/loss in units for a graded bet at American odds.
++ * Won at +150 for 1u returns +1.5; won at -120 for 1.2u returns +1.0;
++ * lost returns -units; push returns 0.
++ */
++export function calcPnl(result: GradeResult, americanOdds: number, units: number): number {
++  if (result === "push") return 0;
++  if (result === "lost") return -Math.round(units * 100) / 100;
++  const profit = americanOdds > 0 ? units * (americanOdds / 100) : units * (100 / Math.abs(americanOdds));
++  return Math.round(profit * 100) / 100;
++}
+diff --git a/artifacts/api-server/src/lib/grading.ts b/artifacts/api-server/src/lib/grading.ts
+new file mode 100644
+index 0000000..2adc43e
+--- /dev/null
++++ b/artifacts/api-server/src/lib/grading.ts
+@@ -0,0 +1,85 @@
++import { eq } from "drizzle-orm";
++import { db, betsTable } from "@workspace/db";
++import { fetchScores, type ScoresGame } from "./odds";
++import { gradeBet, calcPnl } from "./grading-math";
++import { logger } from "./logger";
++
++/**
++ * A game becomes eligible for grading this long after its scheduled start.
++ * Most slates finish inside 3.5 hours; the completed flag from the scores
++ * API is the real gate, this just avoids pointless fetches mid-game.
++ */
++const GRADE_AFTER_MS = 2.5 * 60 * 60 * 1000;
++
++/** Scores API lookback. Bets older than this need manual settlement. */
++const SCORES_DAYS_FROM = 3;
++
++let gradingRunning = false;
++
++export async function settlePendingBets(): Promise<void> {
++  if (gradingRunning) return;
++  gradingRunning = true;
++  try {
++    const pending = await db.select().from(betsTable).where(eq(betsTable.status, "pending"));
++
++    const now = Date.now();
++    const due = pending.filter((b) => now - new Date(b.commenceTime).getTime() >= GRADE_AFTER_MS);
++    if (due.length === 0) return;
++
++    const sports = Array.from(new Set(due.map((b) => b.sport)));
++    const scoresBySport = new Map<string, Map<string, ScoresGame>>();
++
++    for (const sport of sports) {
++      try {
++        const { data } = await fetchScores(sport, SCORES_DAYS_FROM);
++        scoresBySport.set(sport, new Map(data.map((g) => [g.id, g])));
++      } catch (err) {
++        logger.warn({ err, sport }, "grading: failed to fetch scores");
++      }
++    }
++
++    for (const bet of due) {
++      const game = scoresBySport.get(bet.sport)?.get(bet.gameId);
++      if (!game) continue;
++      if (!game.completed) continue;
++
++      const result = gradeBet(
++        {
++          market: bet.market,
++          selection: bet.selection,
++          point: bet.point != null ? parseFloat(bet.point) : null,
++          homeTeam: bet.homeTeam,
++          awayTeam: bet.awayTeam,
++        },
++        game,
++      );
++      if (result == null) {
++        logger.warn(
++          { betId: bet.id, market: bet.market, selection: bet.selection, gameId: bet.gameId },
++          "grading: could not grade bet from scores data, leaving for manual settlement",
++        );
++        continue;
++      }
++
++      const pnl = calcPnl(result, parseFloat(bet.americanOdds), parseFloat(bet.units));
++      await db.update(betsTable).set({ status: result, pnl: String(pnl) }).where(eq(betsTable.id, bet.id));
++      logger.info({ betId: bet.id, selection: bet.selection, result, pnl }, "grading: bet settled");
++    }
++  } catch (err) {
++    logger.error({ err }, "grading: run failed");
++  } finally {
++    gradingRunning = false;
++  }
++}
++
++const GRADING_INTERVAL_MS = 30 * 60 * 1000;
++
++export function startGrading(): void {
++  if (!process.env.ODDS_API_KEY_V2 && !process.env.ODDS_API_KEY) {
++    logger.warn("grading: ODDS_API_KEY not set, auto grading disabled");
++    return;
++  }
++  setInterval(() => void settlePendingBets(), GRADING_INTERVAL_MS);
++  setTimeout(() => void settlePendingBets(), 30 * 1000);
++  logger.info({ intervalMinutes: 30 }, "grading: scheduler started");
++}
+diff --git a/artifacts/api-server/src/lib/odds.ts b/artifacts/api-server/src/lib/odds.ts
+index a5ece31..57954e7 100644
+--- a/artifacts/api-server/src/lib/odds.ts
++++ b/artifacts/api-server/src/lib/odds.ts
+@@ -76,6 +76,27 @@ export async function fetchOdds(sportKey: string, markets = "h2h,spreads,totals"
+   });
+ }
+ 
++export interface ScoresGame {
++  id: string;
++  sport_key: string;
++  commence_time: string;
++  completed: boolean;
++  home_team: string;
++  away_team: string;
++  scores: Array<{ name: string; score: string }> | null;
++}
++
++/**
++ * Fetches final and in-progress scores. Costs 2 credits per call when
++ * daysFrom is supplied (needed to include recently completed games).
++ */
++export async function fetchScores(sportKey: string, daysFrom = 3): Promise<{ data: ScoresGame[]; requestsRemaining: number | null }> {
++  return oddsApiFetch<ScoresGame[]>(`/sports/${sportKey}/scores`, {
++    daysFrom: String(daysFrom),
++    dateFormat: "iso",
++  });
++}
++
+ /**
+  * Fetches odds for a single event. Much cheaper than a full sport scan when
+  * capturing closing lines: cost scales with markets requested, not with the

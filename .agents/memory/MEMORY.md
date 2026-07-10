@@ -1,0 +1,2 @@
+- [Orval query hooks with `enabled`](orval-query-enabled.md) — passing `{ query: { enabled } }` without `queryKey` fails typecheck; must include the generated `getXQueryKey()` too.
+- [Odds API devig/EV pattern](odds-api-ev-tracker.md) — per-bookmaker multiplicative devig averaged across books gives a fair consensus price for +EV scans.

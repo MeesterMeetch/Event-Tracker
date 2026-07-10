@@ -10,6 +10,14 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: bets
+    description: Bet logging, editing, and settlement
+  - name: edges
+    description: Live positive-EV opportunities
+  - name: dashboard
+    description: Aggregate performance stats
+  - name: sports
+    description: Supported sports list
 paths:
   /healthz:
     get:
@@ -24,6 +32,189 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /sports:
+    get:
+      operationId: listSports
+      tags: [sports]
+      summary: List supported sports
+      responses:
+        "200":
+          description: Supported sports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sport"
+  /edges:
+    get:
+      operationId: listEdges
+      tags: [edges]
+      summary: Scan a sport for live positive-EV opportunities
+      description: >
+        Fetches current odds for the given sport across books, devigs each
+        market to estimate a fair price, and returns outcomes where the best
+        available price beats the fair price. Costs live API credits, so a
+        sport must be specified explicitly.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: minEdgePercent
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Positive-EV opportunities found for the sport
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EdgeOpportunity"
+        "400":
+          description: Invalid or unsupported sport
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream odds provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bets:
+    get:
+      operationId: listBets
+      tags: [bets]
+      summary: List logged bets
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/BetStatus"
+      responses:
+        "200":
+          description: Bets, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bet"
+    post:
+      operationId: createBet
+      tags: [bets]
+      summary: Log a new bet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BetInput"
+      responses:
+        "201":
+          description: Bet logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bet"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bets/{id}:
+    get:
+      operationId: getBet
+      tags: [bets]
+      summary: Get a single bet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bet found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bet"
+        "404":
+          description: Bet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateBet
+      tags: [bets]
+      summary: Manually edit or settle a bet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BetUpdate"
+      responses:
+        "200":
+          description: Bet updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bet"
+        "404":
+          description: Bet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteBet
+      tags: [bets]
+      summary: Delete a logged bet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Bet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Overall and per-sport performance stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +224,249 @@ components:
           type: string
       required:
         - status
-
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    Sport:
+      type: object
+      required: [key, title, group]
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        group:
+          type: string
+    BetStatus:
+      type: string
+      enum: [pending, won, lost, push]
+    BetMarket:
+      type: string
+      enum: [h2h, spreads, totals]
+    EdgeOpportunity:
+      type: object
+      required:
+        - gameId
+        - sport
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - market
+        - selection
+        - point
+        - americanOdds
+        - book
+        - fairOdds
+        - evPercent
+      properties:
+        gameId:
+          type: string
+        sport:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        market:
+          $ref: "#/components/schemas/BetMarket"
+        selection:
+          type: string
+        point:
+          type: ["number", "null"]
+        americanOdds:
+          type: number
+        book:
+          type: string
+        fairOdds:
+          type: number
+        evPercent:
+          type: number
+    Bet:
+      type: object
+      required:
+        - id
+        - sport
+        - gameId
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - market
+        - selection
+        - point
+        - americanOdds
+        - units
+        - fairOdds
+        - evPercent
+        - book
+        - closingOdds
+        - clvPercent
+        - status
+        - pnl
+        - notes
+        - createdAt
+      properties:
+        id:
+          type: integer
+        sport:
+          type: string
+        gameId:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        market:
+          $ref: "#/components/schemas/BetMarket"
+        selection:
+          type: string
+        point:
+          type: ["number", "null"]
+        americanOdds:
+          type: number
+        units:
+          type: number
+        fairOdds:
+          type: ["number", "null"]
+        evPercent:
+          type: ["number", "null"]
+        book:
+          type: ["string", "null"]
+        closingOdds:
+          type: ["number", "null"]
+        clvPercent:
+          type: ["number", "null"]
+        status:
+          $ref: "#/components/schemas/BetStatus"
+        pnl:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+    BetInput:
+      type: object
+      required:
+        - sport
+        - gameId
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - market
+        - selection
+        - point
+        - americanOdds
+        - units
+      properties:
+        sport:
+          type: string
+        gameId:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        market:
+          $ref: "#/components/schemas/BetMarket"
+        selection:
+          type: string
+        point:
+          type: ["number", "null"]
+        americanOdds:
+          type: number
+        units:
+          type: number
+          minimum: 0
+        fairOdds:
+          type: ["number", "null"]
+        evPercent:
+          type: ["number", "null"]
+        book:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+    BetUpdate:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/BetStatus"
+        americanOdds:
+          type: number
+        units:
+          type: number
+          minimum: 0
+        pnl:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+    SportBreakdown:
+      type: object
+      required: [sport, bets, won, lost, push, pending, roiPercent, pnl]
+      properties:
+        sport:
+          type: string
+        bets:
+          type: integer
+        won:
+          type: integer
+        lost:
+          type: integer
+        push:
+          type: integer
+        pending:
+          type: integer
+        roiPercent:
+          type: number
+        pnl:
+          type: number
+    DashboardSummary:
+      type: object
+      required:
+        - totalBets
+        - won
+        - lost
+        - push
+        - pending
+        - totalUnits
+        - totalPnl
+        - roiPercent
+        - avgClvPercent
+        - clvSampleSize
+        - bySport
+      properties:
+        totalBets:
+          type: integer
+        won:
+          type: integer
+        lost:
+          type: integer
+        push:
+          type: integer
+        pending:
+          type: integer
+        totalUnits:
+          type: number
+        totalPnl:
+          type: number
+        roiPercent:
+          type: number
+        avgClvPercent:
+          type: ["number", "null"]
+        clvSampleSize:
+          type: integer
+        bySport:
+          type: array
+          items:
+            $ref: "#/components/schemas/SportBreakdown"

@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "EV Tracker"
+version = "1.0.0"
+id = "artifacts/ev-tracker"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 25718
+
+[services.development]
+run = "pnpm --filter @workspace/ev-tracker run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/ev-tracker", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/ev-tracker/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "25718"
+BASE_PATH = "/"

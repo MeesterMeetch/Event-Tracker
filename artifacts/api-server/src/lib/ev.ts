@@ -20,8 +20,9 @@ const MARKETS = ["h2h", "spreads", "totals"] as const;
 
 /**
  * Scans a sport's live odds for positive-EV opportunities. For each event and
- * market, every bookmaker's own two-sided line is used to remove the vig
- * (multiplicative devig) and produce a fair probability per outcome; fair
+ * market, every bookmaker's own line (2-way, or 3-way like soccer h2h) is used
+ * to remove the vig (multiplicative devig) and produce a fair probability per
+ * outcome; fair
  * probabilities for the same outcome are then averaged across bookmakers to
  * get a consensus "true" price. Any outcome where the best available price
  * beats that consensus by at least `minEdgePercent` is returned.
@@ -40,7 +41,7 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
 
       for (const bookmaker of event.bookmakers) {
         const m = bookmaker.markets.find((mk) => mk.key === market);
-        if (!m || m.outcomes.length !== 2) continue;
+        if (!m || m.outcomes.length < 2) continue;
 
         const impliedProbs = m.outcomes.map((o) => ({ outcome: o, prob: americanToImpliedProb(o.price) }));
         const overround = impliedProbs.reduce((sum, o) => sum + o.prob, 0);

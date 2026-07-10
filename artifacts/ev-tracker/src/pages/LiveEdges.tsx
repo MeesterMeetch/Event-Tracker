@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useListSports, useListEdges, useCreateBet, useGenerateGameAnalysis, getListEdgesQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -322,6 +322,13 @@ export default function LiveEdges() {
     { query: { enabled: !!selectedSport, queryKey: getListEdgesQueryKey({ sport: selectedSport }) } }
   );
 
+  const sportsByGroup = new Map<string, NonNullable<typeof sports>>();
+  for (const sport of sports ?? []) {
+    const list = sportsByGroup.get(sport.group) ?? [];
+    list.push(sport);
+    sportsByGroup.set(sport.group, list);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -337,10 +344,15 @@ export default function LiveEdges() {
               <SelectValue placeholder={loadingSports ? "Loading markets..." : "Choose a sport"} />
             </SelectTrigger>
             <SelectContent>
-              {sports?.map(sport => (
-                <SelectItem key={sport.key} value={sport.key}>
-                  {sport.title}
-                </SelectItem>
+              {Array.from(sportsByGroup.entries()).map(([group, items]) => (
+                <SelectGroup key={group}>
+                  <SelectLabel>{group}</SelectLabel>
+                  {items.map(sport => (
+                    <SelectItem key={sport.key} value={sport.key}>
+                      {sport.title}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
           </Select>

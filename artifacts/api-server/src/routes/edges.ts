@@ -16,7 +16,7 @@ router.get("/edges", async (req, res): Promise<void> => {
   }
 
   const { sport, minEdgePercent } = parsed.data;
-  if (!isSupportedSport(sport)) {
+  if (!(await isSupportedSport(sport))) {
     res.status(400).json({ error: `Unsupported sport: ${sport}` });
     return;
   }

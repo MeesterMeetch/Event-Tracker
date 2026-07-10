@@ -1,3 +1,3 @@
 - [Orval query hooks with `enabled`](orval-query-enabled.md) — passing `{ query: { enabled } }` without `queryKey` fails typecheck; must include the generated `getXQueryKey()` too.
-- [Odds API devig/EV pattern](odds-api-ev-tracker.md) — per-bookmaker multiplicative devig averaged across books gives a fair consensus price for +EV scans.
+- [Odds API devig/EV pattern](odds-api-ev-tracker.md) — multiplicative devig (N-way, not just 2-way) averaged across books; `/sports?all=false` is free so source the picker live and filter `has_outrights`.
 - [shadcn select one-row clamp](shadcn-select-clamp.md) — Select showing only one option / no scroll = height-clamp class on the popper Viewport; remove it.

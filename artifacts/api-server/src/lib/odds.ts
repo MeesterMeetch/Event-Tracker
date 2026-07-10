@@ -60,6 +60,24 @@ export async function fetchOdds(sportKey: string, markets = "h2h,spreads,totals"
   });
 }
 
+export interface OddsSport {
+  key: string;
+  group: string;
+  title: string;
+  description: string;
+  active: boolean;
+  has_outrights: boolean;
+}
+
+/**
+ * Lists in-season sports/leagues. The /sports endpoint is free — it does not
+ * count against the API request quota.
+ */
+export async function fetchSports(): Promise<OddsSport[]> {
+  const { data } = await oddsApiFetch<OddsSport[]>("/sports", { all: "false" });
+  return data;
+}
+
 export interface ScoresGame {
   id: string;
   sport_key: string;

@@ -103,6 +103,65 @@ export const ListPropEdgesResponse = zod.array(ListPropEdgesResponseItem)
 
 
 /**
+ * Sports that have a standings source configured. Independent of the odds in-season list, so leagues keep their standings during the off-season.
+ * @summary List sports with standings available
+ */
+export const ListRankingsSportsResponseItem = zod.object({
+  "key": zod.string(),
+  "title": zod.string(),
+  "group": zod.string()
+})
+export const ListRankingsSportsResponse = zod.array(ListRankingsSportsResponseItem)
+
+
+/**
+ * Current standings grouped by league/conference/division, sourced from free public feeds and cached server-side for a few hours.
+ * @summary League standings for a sport
+ */
+export const ListStandingsQueryParams = zod.object({
+  "sport": zod.coerce.string()
+})
+
+export const ListStandingsResponseItem = zod.object({
+  "name": zod.string(),
+  "teams": zod.array(zod.object({
+  "rank": zod.number(),
+  "team": zod.string(),
+  "record": zod.string().describe('Compact W-L(-T\/OTL) record, e.g. \"45-38\" or \"10-5-1\".'),
+  "wins": zod.number(),
+  "losses": zod.number(),
+  "ties": zod.number().nullable().describe('Ties, draws, or OT losses depending on the league; null when the league has none.'),
+  "winPct": zod.string().nullable(),
+  "gamesBack": zod.string().nullable(),
+  "points": zod.number().nullable().describe('Table points where the league uses them (soccer, NHL).'),
+  "streak": zod.string().nullable()
+}))
+})
+export const ListStandingsResponse = zod.array(ListStandingsResponseItem)
+
+
+/**
+ * Top players per stat category. Returns an empty array for sports that have standings but no leaders feed. Cached server-side.
+ * @summary Stat leaders for a sport
+ */
+export const ListLeadersQueryParams = zod.object({
+  "sport": zod.coerce.string()
+})
+
+export const ListLeadersResponseItem = zod.object({
+  "key": zod.string(),
+  "label": zod.string(),
+  "leaders": zod.array(zod.object({
+  "rank": zod.number(),
+  "player": zod.string(),
+  "team": zod.string().nullable(),
+  "value": zod.string()
+}))
+})
+export const ListLeadersResponse = zod.array(ListLeadersResponseItem)
+
+
+/**
  * @summary List logged bets
  */
 export const ListBetsQueryParams = zod.object({

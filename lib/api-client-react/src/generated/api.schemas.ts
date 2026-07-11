@@ -29,6 +29,56 @@ export interface GameEvent {
   awayTeam: string;
 }
 
+export interface RankingsSport {
+  key: string;
+  title: string;
+  group: string;
+}
+
+export interface TeamStanding {
+  rank: number;
+  team: string;
+  /** Compact W-L(-T/OTL) record, e.g. "45-38" or "10-5-1". */
+  record: string;
+  wins: number;
+  losses: number;
+  /**
+     * Ties, draws, or OT losses depending on the league; null when the league has none.
+     * @nullable
+     */
+  ties: number | null;
+  /** @nullable */
+  winPct: string | null;
+  /** @nullable */
+  gamesBack: string | null;
+  /**
+     * Table points where the league uses them (soccer, NHL).
+     * @nullable
+     */
+  points: number | null;
+  /** @nullable */
+  streak: string | null;
+}
+
+export interface StandingsGroup {
+  name: string;
+  teams: TeamStanding[];
+}
+
+export interface LeaderEntry {
+  rank: number;
+  player: string;
+  /** @nullable */
+  team: string | null;
+  value: string;
+}
+
+export interface LeaderCategory {
+  key: string;
+  label: string;
+  leaders: LeaderEntry[];
+}
+
 export type BetStatus = typeof BetStatus[keyof typeof BetStatus];
 
 
@@ -215,6 +265,14 @@ export type ListPropEdgesParams = {
 sport: string;
 eventId: string;
 minEdgePercent?: number;
+};
+
+export type ListStandingsParams = {
+sport: string;
+};
+
+export type ListLeadersParams = {
+sport: string;
 };
 
 export type ListBetsParams = {

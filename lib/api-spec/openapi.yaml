@@ -16,6 +16,8 @@ tags:
     description: Live positive-EV opportunities
   - name: events
     description: Upcoming games for a sport
+  - name: rankings
+    description: League standings and stat leaders
   - name: dashboard
     description: Aggregate performance stats
   - name: sports
@@ -171,6 +173,94 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "502":
           description: Upstream odds provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rankings-sports:
+    get:
+      operationId: listRankingsSports
+      tags: [rankings]
+      summary: List sports with standings available
+      description: >
+        Sports that have a standings source configured. Independent of the
+        odds in-season list, so leagues keep their standings during the
+        off-season.
+      responses:
+        "200":
+          description: Rankings-capable sports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RankingsSport"
+  /standings:
+    get:
+      operationId: listStandings
+      tags: [rankings]
+      summary: League standings for a sport
+      description: >
+        Current standings grouped by league/conference/division, sourced from
+        free public feeds and cached server-side for a few hours.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Standings groups in feed order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StandingsGroup"
+        "400":
+          description: Sport has no standings source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream standings feed error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /leaders:
+    get:
+      operationId: listLeaders
+      tags: [rankings]
+      summary: Stat leaders for a sport
+      description: >
+        Top players per stat category. Returns an empty array for sports that
+        have standings but no leaders feed. Cached server-side.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Leader categories, empty when no leaders feed exists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderCategory"
+        "400":
+          description: Sport has no standings source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream leaders feed error
           content:
             application/json:
               schema:
@@ -379,6 +469,77 @@ components:
           type: string
         awayTeam:
           type: string
+    RankingsSport:
+      type: object
+      required: [key, title, group]
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        group:
+          type: string
+    TeamStanding:
+      type: object
+      required: [rank, team, record, wins, losses, ties, winPct, gamesBack, points, streak]
+      properties:
+        rank:
+          type: integer
+        team:
+          type: string
+        record:
+          description: Compact W-L(-T/OTL) record, e.g. "45-38" or "10-5-1".
+          type: string
+        wins:
+          type: number
+        losses:
+          type: number
+        ties:
+          description: Ties, draws, or OT losses depending on the league; null when the league has none.
+          type: ["number", "null"]
+        winPct:
+          type: ["string", "null"]
+        gamesBack:
+          type: ["string", "null"]
+        points:
+          description: Table points where the league uses them (soccer, NHL).
+          type: ["number", "null"]
+        streak:
+          type: ["string", "null"]
+    StandingsGroup:
+      type: object
+      required: [name, teams]
+      properties:
+        name:
+          type: string
+        teams:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamStanding"
+    LeaderEntry:
+      type: object
+      required: [rank, player, team, value]
+      properties:
+        rank:
+          type: integer
+        player:
+          type: string
+        team:
+          type: ["string", "null"]
+        value:
+          type: string
+    LeaderCategory:
+      type: object
+      required: [key, label, leaders]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        leaders:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderEntry"
     BetStatus:
       type: string
       enum: [pending, won, lost, push]

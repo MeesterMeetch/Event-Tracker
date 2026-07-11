@@ -1,5 +1,5 @@
-import { useState, useRef } from "react";
-import { useListSports, useListEdges, useListEvents, useListPropEdges, useCreateBet, useGenerateGameAnalysis, getListEdgesQueryKey, getListEventsQueryKey, getListPropEdgesQueryKey } from "@workspace/api-client-react";
+import { useState, useRef, useMemo } from "react";
+import { useListSports, useListEdges, useListEvents, useListPropEdges, useListRankingsSports, useListStandings, useCreateBet, useGenerateGameAnalysis, getListEdgesQueryKey, getListEventsQueryKey, getListPropEdgesQueryKey, getListStandingsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -346,6 +346,27 @@ export default function LiveEdges() {
     { query: { enabled: !!selectedSport && !!selectedEventId && tab === "props", queryKey: getListPropEdgesQueryKey({ sport: selectedSport, eventId: selectedEventId }) } }
   );
 
+  // Standings are free and cached server-side; they only decorate matchups
+  // with team records. Variant keys (e.g. NFL preseason) share the base
+  // league's standings, so match on the base-key prefix too.
+  const { data: rankingsSports } = useListRankingsSports();
+  const recordsAvailable = !!rankingsSports?.some(
+    (s) => selectedSport === s.key || selectedSport.startsWith(`${s.key}_`),
+  );
+  const { data: sportStandings } = useListStandings(
+    { sport: selectedSport },
+    { query: { enabled: !!selectedSport && recordsAvailable, queryKey: getListStandingsQueryKey({ sport: selectedSport }), staleTime: 10 * 60 * 1000 } }
+  );
+  const teamRecords = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const group of sportStandings ?? []) {
+      for (const t of group.teams) map.set(t.team.trim().toLowerCase(), t.record);
+    }
+    return map;
+  }, [sportStandings]);
+  // Exact normalized name match only — a missing record beats a wrong one.
+  const recordFor = (team: string) => teamRecords.get(team.trim().toLowerCase());
+
   const handleSportChange = (value: string) => {
     setSelectedSport(value);
     setSelectedEventId("");
@@ -462,8 +483,14 @@ export default function LiveEdges() {
                       <TableCell>
                         <div className="font-sans font-medium text-xs whitespace-nowrap">
                           {edge.homeTeam}
+                          {recordFor(edge.homeTeam) && (
+                            <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">{recordFor(edge.homeTeam)}</span>
+                          )}
                           <br/>
                           {edge.awayTeam}
+                          {recordFor(edge.awayTeam) && (
+                            <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">{recordFor(edge.awayTeam)}</span>
+                          )}
                         </div>
                         <div className="mt-1 font-mono text-[10px] text-muted-foreground whitespace-nowrap">
                           {formatGameTime(edge.commenceTime)}
@@ -543,7 +570,7 @@ export default function LiveEdges() {
                     <SelectContent>
                       {(events ?? []).map((ev) => (
                         <SelectItem key={ev.id} value={ev.id}>
-                          {ev.awayTeam} @ {ev.homeTeam} — {formatGameTime(ev.commenceTime)}
+                          {ev.awayTeam}{recordFor(ev.awayTeam) ? ` (${recordFor(ev.awayTeam)})` : ""} @ {ev.homeTeam}{recordFor(ev.homeTeam) ? ` (${recordFor(ev.homeTeam)})` : ""} — {formatGameTime(ev.commenceTime)}
                         </SelectItem>
                       ))}
                     </SelectContent>

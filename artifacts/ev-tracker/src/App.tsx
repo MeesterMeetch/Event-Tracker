@@ -4,6 +4,7 @@ import { Route, Switch, Router as WouterRouter } from 'wouter';
 import { AppLayout } from '@/components/layout/AppLayout';
 import Dashboard from '@/pages/Dashboard';
 import LiveEdges from '@/pages/LiveEdges';
+import Rankings from '@/pages/Rankings';
 import BetLog from '@/pages/BetLog';
 
 // Odds-backed queries cost live API credits, so never refetch just because
@@ -33,6 +34,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Dashboard} />
         <Route path="/edges" component={LiveEdges} />
+        <Route path="/rankings" component={Rankings} />
         <Route path="/bets" component={BetLog} />
         <Route component={NotFound} />
       </Switch>

@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Activity, LayoutDashboard, ListTodo, X } from "lucide-react";
+import { Activity, LayoutDashboard, ListTodo, Trophy, X } from "lucide-react";
 
 export function Sidebar({
   open,
@@ -15,6 +15,7 @@ export function Sidebar({
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/edges", label: "Live Edges", icon: Activity },
+    { href: "/rankings", label: "Rankings", icon: Trophy },
     { href: "/bets", label: "Bet Log", icon: ListTodo },
   ];
 

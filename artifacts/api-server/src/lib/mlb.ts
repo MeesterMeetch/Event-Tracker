@@ -239,3 +239,83 @@ export async function getMatchupPitchers(
 
   return result;
 }
+
+// ---- League stat leaders ----
+
+export interface MlbLeaderEntry {
+  rank: number;
+  player: string;
+  team: string | null;
+  value: string;
+}
+
+export interface MlbLeaderCategory {
+  key: string;
+  label: string;
+  leaders: MlbLeaderEntry[];
+}
+
+interface LeagueLeadersResponse {
+  leagueLeaders?: Array<{
+    leaderCategory?: string;
+    leaders?: Array<{
+      rank?: number;
+      value?: string | number;
+      person?: { fullName?: string };
+      team?: { name?: string };
+    }>;
+  }>;
+}
+
+// Strikeouts exists in both hitting and pitching groups, so categories are
+// requested per stat group to disambiguate.
+const MLB_LEADER_GROUPS: Array<{ statGroup: string; categories: string[] }> = [
+  { statGroup: "hitting", categories: ["homeRuns", "battingAverage", "runsBattedIn"] },
+  { statGroup: "pitching", categories: ["earnedRunAverage", "strikeouts"] },
+];
+
+const MLB_LEADER_LABELS: Record<string, string> = {
+  homeRuns: "Home Runs",
+  battingAverage: "Batting Avg",
+  runsBattedIn: "RBI",
+  earnedRunAverage: "ERA",
+  strikeouts: "Strikeouts (P)",
+};
+
+/** Current-season MLB stat leaders across core hitting/pitching categories. */
+export async function fetchMlbLeaders(season: number): Promise<MlbLeaderCategory[]> {
+  const out: MlbLeaderCategory[] = [];
+  const seen = new Set<string>();
+
+  for (const grp of MLB_LEADER_GROUPS) {
+    const data = await mlbFetch<LeagueLeadersResponse>(
+      `/stats/leaders?leaderCategories=${grp.categories.join(",")}&statGroup=${grp.statGroup}&sportId=${MLB_SPORT_ID}&season=${season}&limit=5`,
+    );
+
+    for (const cat of data.leagueLeaders ?? []) {
+      const key = cat.leaderCategory ?? "";
+      if (!grp.categories.includes(key) || seen.has(key)) continue;
+
+      const leaders = (cat.leaders ?? [])
+        .slice(0, 5)
+        .map((l, i): MlbLeaderEntry | null => {
+          const player = l.person?.fullName?.trim();
+          if (!player || l.value === null || l.value === undefined) return null;
+          return {
+            rank: l.rank ?? i + 1,
+            player,
+            team: l.team?.name ?? null,
+            value: String(l.value),
+          };
+        })
+        .filter((l): l is MlbLeaderEntry => l !== null);
+
+      if (leaders.length > 0) {
+        seen.add(key);
+        out.push({ key, label: MLB_LEADER_LABELS[key] ?? key, leaders });
+      }
+    }
+  }
+
+  return out;
+}

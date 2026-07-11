@@ -30,11 +30,16 @@ import type {
   GameAnalysisResponse,
   GameEvent,
   HealthStatus,
+  LeaderCategory,
   ListBetsParams,
   ListEdgesParams,
   ListEventsParams,
+  ListLeadersParams,
   ListPropEdgesParams,
-  Sport
+  ListStandingsParams,
+  RankingsSport,
+  Sport,
+  StandingsGroup
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -462,6 +467,254 @@ export function useListPropEdges<TData = Awaited<ReturnType<typeof listPropEdges
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListPropEdgesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListRankingsSportsUrl = () => {
+
+
+
+
+  return `/api/rankings-sports`
+}
+
+/**
+ * Sports that have a standings source configured. Independent of the odds in-season list, so leagues keep their standings during the off-season.
+ * @summary List sports with standings available
+ */
+export const listRankingsSports = async ( options?: RequestInit): Promise<RankingsSport[]> => {
+
+  return customFetch<RankingsSport[]>(getListRankingsSportsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListRankingsSportsQueryKey = () => {
+    return [
+    `/api/rankings-sports`
+    ] as const;
+    }
+
+
+export const getListRankingsSportsQueryOptions = <TData = Awaited<ReturnType<typeof listRankingsSports>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRankingsSports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListRankingsSportsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listRankingsSports>>> = ({ signal }) => listRankingsSports({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listRankingsSports>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListRankingsSportsQueryResult = NonNullable<Awaited<ReturnType<typeof listRankingsSports>>>
+export type ListRankingsSportsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List sports with standings available
+ */
+
+export function useListRankingsSports<TData = Awaited<ReturnType<typeof listRankingsSports>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listRankingsSports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListRankingsSportsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListStandingsUrl = (params: ListStandingsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/standings?${stringifiedParams}` : `/api/standings`
+}
+
+/**
+ * Current standings grouped by league/conference/division, sourced from free public feeds and cached server-side for a few hours.
+ * @summary League standings for a sport
+ */
+export const listStandings = async (params: ListStandingsParams, options?: RequestInit): Promise<StandingsGroup[]> => {
+
+  return customFetch<StandingsGroup[]>(getListStandingsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStandingsQueryKey = (params?: ListStandingsParams,) => {
+    return [
+    `/api/standings`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListStandingsQueryOptions = <TData = Awaited<ReturnType<typeof listStandings>>, TError = ErrorType<ErrorResponse>>(params: ListStandingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStandings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStandingsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStandings>>> = ({ signal }) => listStandings(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStandings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStandingsQueryResult = NonNullable<Awaited<ReturnType<typeof listStandings>>>
+export type ListStandingsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary League standings for a sport
+ */
+
+export function useListStandings<TData = Awaited<ReturnType<typeof listStandings>>, TError = ErrorType<ErrorResponse>>(
+ params: ListStandingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStandings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStandingsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListLeadersUrl = (params: ListLeadersParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/leaders?${stringifiedParams}` : `/api/leaders`
+}
+
+/**
+ * Top players per stat category. Returns an empty array for sports that have standings but no leaders feed. Cached server-side.
+ * @summary Stat leaders for a sport
+ */
+export const listLeaders = async (params: ListLeadersParams, options?: RequestInit): Promise<LeaderCategory[]> => {
+
+  return customFetch<LeaderCategory[]>(getListLeadersUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLeadersQueryKey = (params?: ListLeadersParams,) => {
+    return [
+    `/api/leaders`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListLeadersQueryOptions = <TData = Awaited<ReturnType<typeof listLeaders>>, TError = ErrorType<ErrorResponse>>(params: ListLeadersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeaders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLeadersQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLeaders>>> = ({ signal }) => listLeaders(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLeaders>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLeadersQueryResult = NonNullable<Awaited<ReturnType<typeof listLeaders>>>
+export type ListLeadersQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Stat leaders for a sport
+ */
+
+export function useListLeaders<TData = Awaited<ReturnType<typeof listLeaders>>, TError = ErrorType<ErrorResponse>>(
+ params: ListLeadersParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLeaders>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLeadersQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

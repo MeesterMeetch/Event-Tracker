@@ -14,6 +14,14 @@ const GRADE_AFTER_MS = 2.5 * 60 * 60 * 1000;
 /** Scores API lookback. Bets older than this need manual settlement. */
 const SCORES_DAYS_FROM = 3;
 
+/**
+ * Markets gradable from the scores endpoint (final team scores). Player
+ * props would need per-player stat feeds we don't have, so prop bets are
+ * excluded up front and left for manual settlement instead of warning on
+ * every run.
+ */
+const AUTO_GRADABLE_MARKETS = new Set(["h2h", "spreads", "totals"]);
+
 let gradingRunning = false;
 
 export async function settlePendingBets(): Promise<void> {
@@ -23,7 +31,7 @@ export async function settlePendingBets(): Promise<void> {
     const pending = await db.select().from(betsTable).where(eq(betsTable.status, "pending"));
 
     const now = Date.now();
-    const due = pending.filter((b) => now - new Date(b.commenceTime).getTime() >= GRADE_AFTER_MS);
+    const due = pending.filter((b) => AUTO_GRADABLE_MARKETS.has(b.market) && now - new Date(b.commenceTime).getTime() >= GRADE_AFTER_MS);
     if (due.length === 0) return;
 
     const sports = Array.from(new Set(due.map((b) => b.sport)));

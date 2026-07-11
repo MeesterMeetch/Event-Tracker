@@ -1,14 +1,15 @@
 import { useState, useRef } from "react";
-import { useListSports, useListEdges, useCreateBet, useGenerateGameAnalysis, getListEdgesQueryKey } from "@workspace/api-client-react";
+import { useListSports, useListEdges, useListEvents, useListPropEdges, useCreateBet, useGenerateGameAnalysis, getListEdgesQueryKey, getListEventsQueryKey, getListPropEdgesQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formatOdds, formatPercent, formatPoint, formatGameTime } from "@/lib/utils";
+import { formatOdds, formatPercent, formatPoint, formatGameTime, formatMarketLabel } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, Plus, Loader2, Sparkles } from "lucide-react";
@@ -40,6 +41,9 @@ function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, children: Rea
   });
 
   const onSubmit = (data: LogBetFormValues) => {
+    // Prop bets carry the player in the logged selection so the bet log
+    // reads "Aaron Judge Over 1.5", not just "Over 1.5".
+    const selectionLabel = edge.player ? `${edge.player} ${edge.selection}` : edge.selection;
     createBet.mutate({
       data: {
         sport: edge.sport,
@@ -48,7 +52,7 @@ function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, children: Rea
         homeTeam: edge.homeTeam,
         awayTeam: edge.awayTeam,
         market: edge.market,
-        selection: edge.selection,
+        selection: selectionLabel,
         point: edge.point,
         americanOdds: edge.americanOdds,
         units: data.units,
@@ -61,7 +65,7 @@ function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, children: Rea
       onSuccess: () => {
         toast({
           title: "Bet Logged",
-          description: `Successfully logged ${data.units}u on ${edge.selection}.`,
+          description: `Successfully logged ${data.units}u on ${selectionLabel}.`,
         });
         setOpen(false);
         form.reset();
@@ -95,11 +99,11 @@ function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, children: Rea
             <Badge variant="outline" className="uppercase font-mono text-[10px]">{edge.sport}</Badge>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">{edge.market.toUpperCase()}</span>
+            <span className="text-muted-foreground">{formatMarketLabel(edge.market).toUpperCase()}</span>
             <span className="font-mono">{edge.book}</span>
           </div>
           <div className="flex justify-between items-center text-lg mt-2">
-            <span className="font-bold">{edge.selection} {formatPoint(edge.point, edge.market)}</span>
+            <span className="font-bold">{edge.player ? `${edge.player} · ` : ""}{edge.selection} {formatPoint(edge.point, edge.market)}</span>
             <span className="font-mono text-primary">{formatOdds(edge.americanOdds)}</span>
           </div>
           <div className="flex justify-between text-xs mt-2 pt-2 border-t border-border">
@@ -315,12 +319,37 @@ function AnalyzeGameDialog({ edge, gameEdges, children }: { edge: EdgeOpportunit
 
 export default function LiveEdges() {
   const [selectedSport, setSelectedSport] = useState<string>("");
-  
+  const [tab, setTab] = useState<"games" | "props">("games");
+  const [selectedEventId, setSelectedEventId] = useState<string>("");
+
   const { data: sports, isLoading: loadingSports } = useListSports();
+  // Paid scans are gated on the active tab, so browsing props never triggers
+  // a sport-wide game-lines scan (and vice versa). With focus refetches off
+  // and a 60s staleTime, flipping tabs only re-scans once data is stale.
   const { data: edges, isLoading: loadingEdges, isFetching: fetchingEdges, isError } = useListEdges(
     { sport: selectedSport },
-    { query: { enabled: !!selectedSport, queryKey: getListEdgesQueryKey({ sport: selectedSport }) } }
+    { query: { enabled: !!selectedSport && tab === "games", queryKey: getListEdgesQueryKey({ sport: selectedSport }) } }
   );
+
+  const currentSport = sports?.find((s) => s.key === selectedSport);
+  const propsSupported = !!currentSport?.supportsProps;
+
+  // The events listing is free on the Odds API, so it can prefetch as soon
+  // as a props-capable sport is chosen. Scanning a game's props costs
+  // credits, so that only fires once a specific game is picked.
+  const { data: events, isLoading: loadingEvents, isError: eventsError } = useListEvents(
+    { sport: selectedSport },
+    { query: { enabled: !!selectedSport && propsSupported, queryKey: getListEventsQueryKey({ sport: selectedSport }) } }
+  );
+  const { data: propEdges, isLoading: loadingPropEdges, isFetching: fetchingPropEdges, isError: propEdgesError } = useListPropEdges(
+    { sport: selectedSport, eventId: selectedEventId },
+    { query: { enabled: !!selectedSport && !!selectedEventId && tab === "props", queryKey: getListPropEdgesQueryKey({ sport: selectedSport, eventId: selectedEventId }) } }
+  );
+
+  const handleSportChange = (value: string) => {
+    setSelectedSport(value);
+    setSelectedEventId("");
+  };
 
   const sportsByGroup = new Map<string, NonNullable<typeof sports>>();
   for (const sport of sports ?? []) {
@@ -339,7 +368,7 @@ export default function LiveEdges() {
         
         <div className="w-full sm:w-64">
           <Label className="mb-2 block">Select Market</Label>
-          <Select value={selectedSport} onValueChange={setSelectedSport} disabled={loadingSports}>
+          <Select value={selectedSport} onValueChange={handleSportChange} disabled={loadingSports}>
             <SelectTrigger>
               <SelectValue placeholder={loadingSports ? "Loading markets..." : "Choose a sport"} />
             </SelectTrigger>
@@ -350,6 +379,7 @@ export default function LiveEdges() {
                   {items.map(sport => (
                     <SelectItem key={sport.key} value={sport.key}>
                       {sport.title}
+                      {sport.supportsProps && <span className="ml-2 font-mono text-[9px] uppercase text-primary/70">props</span>}
                     </SelectItem>
                   ))}
                 </SelectGroup>
@@ -358,6 +388,14 @@ export default function LiveEdges() {
           </Select>
         </div>
       </div>
+
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "games" | "props")}>
+        <TabsList className="grid w-full grid-cols-2 sm:w-80">
+          <TabsTrigger value="games">Game Lines</TabsTrigger>
+          <TabsTrigger value="props">Player Props</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="games" className="mt-4 space-y-6">
 
       {!selectedSport && (
         <Card className="border-dashed">
@@ -470,6 +508,173 @@ export default function LiveEdges() {
           </Card>
         </div>
       )}
+
+        </TabsContent>
+
+        <TabsContent value="props" className="mt-4 space-y-4">
+          {!selectedSport && (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center h-64 text-muted-foreground space-y-4">
+                <Activity className="h-8 w-8 opacity-50" />
+                <p>Select a sport to browse player props</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {selectedSport && sports && !propsSupported && (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center h-64 text-muted-foreground space-y-2 text-center px-6">
+                <Activity className="h-8 w-8 opacity-50" />
+                <p>Player props aren't available for this sport.</p>
+                <p className="text-xs opacity-70">Props cover the major US leagues — look for the <span className="font-mono uppercase text-primary/70">props</span> tag in the sport picker.</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {selectedSport && propsSupported && (
+            <>
+              <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+                <div className="w-full sm:w-96">
+                  <Label className="mb-2 block">Select Game</Label>
+                  <Select value={selectedEventId} onValueChange={setSelectedEventId} disabled={loadingEvents}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingEvents ? "Loading games..." : "Choose a game"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(events ?? []).map((ev) => (
+                        <SelectItem key={ev.id} value={ev.id}>
+                          {ev.awayTeam} @ {ev.homeTeam} — {formatGameTime(ev.commenceTime)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="font-mono text-[10px] text-muted-foreground">Each game scan uses a few odds-API credits.</p>
+              </div>
+
+              {eventsError && (
+                <div className="flex flex-col items-center justify-center h-40 border border-destructive/20 bg-destructive/5 rounded-lg space-y-2">
+                  <p className="text-destructive font-mono">GAMES_UNAVAILABLE</p>
+                  <p className="text-sm text-muted-foreground">Could not load upcoming games.</p>
+                </div>
+              )}
+
+              {!eventsError && events && events.length === 0 && (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center h-40 text-muted-foreground">
+                    <p>No upcoming games listed for this sport.</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {!selectedEventId && !eventsError && (events?.length ?? 0) > 0 && (
+                <Card className="border-dashed">
+                  <CardContent className="flex flex-col items-center justify-center h-64 text-muted-foreground space-y-4">
+                    <Activity className="h-8 w-8 opacity-50" />
+                    <p>Pick a game to scan its player props</p>
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedEventId && loadingPropEdges && (
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="p-4 space-y-4">
+                      {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedEventId && propEdgesError && (
+                <div className="flex flex-col items-center justify-center h-64 border border-destructive/20 bg-destructive/5 rounded-lg space-y-2">
+                  <p className="text-destructive font-mono">SCAN_FAILED</p>
+                  <p className="text-sm text-muted-foreground">Could not retrieve player prop odds.</p>
+                </div>
+              )}
+
+              {selectedEventId && !loadingPropEdges && !propEdgesError && propEdges && (
+                <div className="space-y-4">
+                  {fetchingPropEdges && (
+                    <div className="flex items-center text-xs text-primary animate-pulse">
+                      <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating props...
+                    </div>
+                  )}
+
+                  <Card className="overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Player</TableHead>
+                          <TableHead>Market</TableHead>
+                          <TableHead>Selection</TableHead>
+                          <TableHead>Book</TableHead>
+                          <TableHead className="text-right">Fair</TableHead>
+                          <TableHead className="text-right">Odds</TableHead>
+                          <TableHead className="text-right">EV%</TableHead>
+                          <TableHead className="w-[130px]"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {propEdges.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                              <div className="flex flex-col items-center justify-center space-y-2">
+                                <Activity className="h-6 w-6 opacity-30" />
+                                <p>No +EV player props found for this game.</p>
+                                <p className="text-xs opacity-70">Books are aligned. Try another game or check back closer to start.</p>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          propEdges.map((edge, idx) => (
+                            <TableRow key={`${edge.gameId}-${edge.market}-${edge.player}-${edge.selection}-${edge.book}-${idx}`}>
+                              <TableCell>
+                                <div className="font-sans font-medium text-xs whitespace-nowrap">{edge.player}</div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="text-[10px] uppercase font-mono">{formatMarketLabel(edge.market)}</Badge>
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                {edge.selection} {formatPoint(edge.point, edge.market)}
+                              </TableCell>
+                              <TableCell className="text-muted-foreground">{edge.book}</TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                {formatOdds(edge.fairOdds)}
+                              </TableCell>
+                              <TableCell className="text-right text-primary font-bold">
+                                {formatOdds(edge.americanOdds)}
+                              </TableCell>
+                              <TableCell className="text-right text-positive font-bold">
+                                {formatPercent(edge.evPercent)}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-col gap-1">
+                                  <AnalyzeGameDialog edge={edge} gameEdges={propEdges}>
+                                    <Button size="sm" variant="outline" className="w-full">
+                                      <Sparkles className="mr-1 h-3 w-3" />
+                                      Analyze
+                                    </Button>
+                                  </AnalyzeGameDialog>
+                                  <LogBetDialog edge={edge}>
+                                    <Button size="sm" variant="secondary" className="w-full">
+                                      Log
+                                    </Button>
+                                  </LogBetDialog>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </Card>
+                </div>
+              )}
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

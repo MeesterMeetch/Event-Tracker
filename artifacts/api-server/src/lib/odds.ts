@@ -29,6 +29,8 @@ export interface OddsOutcome {
   name: string;
   price: number;
   point?: number;
+  /** Player-prop markets carry the player name here; absent on team markets. */
+  description?: string;
 }
 
 export interface OddsMarket {
@@ -76,6 +78,33 @@ export interface OddsSport {
 export async function fetchSports(): Promise<OddsSport[]> {
   const { data } = await oddsApiFetch<OddsSport[]>("/sports", { all: "false" });
   return data;
+}
+
+export interface EventStub {
+  id: string;
+  sport_key: string;
+  commence_time: string;
+  home_team: string;
+  away_team: string;
+}
+
+/** Lists upcoming events for a sport. Free — does not consume the request quota. */
+export async function fetchEvents(sportKey: string): Promise<EventStub[]> {
+  const { data } = await oddsApiFetch<EventStub[]>(`/sports/${sportKey}/events`);
+  return data;
+}
+
+/**
+ * Fetches odds for a single event — the only way to access player-prop
+ * markets. Unlike the bulk odds endpoint, this is charged per market (x
+ * regions) on every call, so callers keep the market list tight.
+ */
+export async function fetchEventOdds(sportKey: string, eventId: string, markets: string[]): Promise<{ data: OddsEvent; requestsRemaining: number | null }> {
+  return oddsApiFetch<OddsEvent>(`/sports/${sportKey}/events/${encodeURIComponent(eventId)}/odds`, {
+    regions: "us",
+    markets: markets.join(","),
+    oddsFormat: "american",
+  });
 }
 
 export interface ScoresGame {

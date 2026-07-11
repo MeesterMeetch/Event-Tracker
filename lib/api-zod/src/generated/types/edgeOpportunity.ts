@@ -5,7 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { BetMarket } from './betMarket';
 
 export interface EdgeOpportunity {
   gameId: string;
@@ -13,10 +12,15 @@ export interface EdgeOpportunity {
   commenceTime: Date;
   homeTeam: string;
   awayTeam: string;
-  market: BetMarket;
+  market: string;
   selection: string;
   /** @nullable */
   point: number | null;
+  /**
+     * Player name for player-prop edges; null for team markets.
+     * @nullable
+     */
+  player: string | null;
   americanOdds: number;
   book: string;
   fairOdds: number;

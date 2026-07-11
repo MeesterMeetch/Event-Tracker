@@ -10,6 +10,14 @@ const CLV_WINDOW_BEFORE_MS = 30 * 60 * 1000;
 /** Stop trying to capture a closing line this long after kickoff (odds are usually pulled once the game goes live). */
 const CLV_GIVE_UP_AFTER_MS = 3 * 60 * 60 * 1000;
 
+/**
+ * Closing lines come from the bulk odds feed, which only carries team
+ * markets. Player-prop closers would need a per-event call every capture
+ * cycle — not worth the credits — so prop bets are skipped and their CLV
+ * stays null.
+ */
+const CLV_MARKETS = new Set(["h2h", "spreads", "totals"]);
+
 function findClosingOdds(event: OddsEvent, market: string, selection: string, point: number | null): number | null {
   const prices: number[] = [];
   for (const bookmaker of event.bookmakers) {
@@ -36,6 +44,7 @@ export async function captureClosingLines(): Promise<void> {
 
     const now = Date.now();
     const due = candidates.filter((b) => {
+      if (!CLV_MARKETS.has(b.market)) return false;
       const startsAt = new Date(b.commenceTime).getTime();
       return now >= startsAt - CLV_WINDOW_BEFORE_MS && now <= startsAt + CLV_GIVE_UP_AFTER_MS;
     });

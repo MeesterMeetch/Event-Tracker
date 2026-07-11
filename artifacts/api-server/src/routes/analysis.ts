@@ -54,7 +54,10 @@ router.post("/analysis", async (req, res): Promise<void> => {
     return;
   }
 
-  const cacheKey = `${sport}:${gameId}:${homeTeam}:${awayTeam}`;
+  // Game-line and player-prop analyses cache separately: same game, but the
+  // edge sets (and therefore the useful analysis) differ per tab.
+  const kind = edges.some((e) => e.player != null) ? "props" : "lines";
+  const cacheKey = `${sport}:${gameId}:${homeTeam}:${awayTeam}:${kind}`;
   const cached = cache.get(cacheKey);
   if (cached && cached.expires > Date.now()) {
     res.json(cached.data);
@@ -74,6 +77,7 @@ router.post("/analysis", async (req, res): Promise<void> => {
       market: e.market,
       selection: e.selection,
       point: e.point,
+      player: e.player,
       book: e.book,
       americanOdds: e.americanOdds,
       fairOdds: e.fairOdds,

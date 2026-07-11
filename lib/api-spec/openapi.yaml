@@ -14,6 +14,8 @@ tags:
     description: Bet logging, editing, and settlement
   - name: edges
     description: Live positive-EV opportunities
+  - name: events
+    description: Upcoming games for a sport
   - name: dashboard
     description: Aggregate performance stats
   - name: sports
@@ -80,6 +82,89 @@ paths:
                   $ref: "#/components/schemas/EdgeOpportunity"
         "400":
           description: Invalid or unsupported sport
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream odds provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List upcoming games for a sport
+      description: >
+        Lists upcoming games so a single game can be drilled into for player
+        props. Backed by the free Odds API events endpoint — costs no credits.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Upcoming games, soonest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GameEvent"
+        "400":
+          description: Invalid or unsupported sport
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream odds provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /prop-edges:
+    get:
+      operationId: listPropEdges
+      tags: [edges]
+      summary: Scan one game's player props for positive-EV opportunities
+      description: >
+        Fetches player prop odds for a single event across US books, devigs
+        each book's over/under pair per player and line, and returns props
+        where the best available price beats the consensus fair price. Player
+        props are only available per event and each market scanned costs API
+        credits, which is why props are scanned one game at a time.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: eventId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: minEdgePercent
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Positive-EV player props found for the game
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EdgeOpportunity"
+        "400":
+          description: Invalid sport, or player props not supported for it
           content:
             application/json:
               schema:
@@ -268,7 +353,7 @@ components:
           type: string
     Sport:
       type: object
-      required: [key, title, group]
+      required: [key, title, group, supportsProps]
       properties:
         key:
           type: string
@@ -276,12 +361,27 @@ components:
           type: string
         group:
           type: string
+        supportsProps:
+          description: Whether per-game player-prop scanning is available for this sport.
+          type: boolean
+    GameEvent:
+      type: object
+      required: [id, sport, commenceTime, homeTeam, awayTeam]
+      properties:
+        id:
+          type: string
+        sport:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
     BetStatus:
       type: string
       enum: [pending, won, lost, push]
-    BetMarket:
-      type: string
-      enum: [h2h, spreads, totals]
     EdgeOpportunity:
       type: object
       required:
@@ -293,6 +393,7 @@ components:
         - market
         - selection
         - point
+        - player
         - americanOdds
         - book
         - fairOdds
@@ -310,11 +411,14 @@ components:
         awayTeam:
           type: string
         market:
-          $ref: "#/components/schemas/BetMarket"
+          type: string
         selection:
           type: string
         point:
           type: ["number", "null"]
+        player:
+          description: Player name for player-prop edges; null for team markets.
+          type: ["string", "null"]
         americanOdds:
           type: number
         book:
@@ -361,7 +465,7 @@ components:
         awayTeam:
           type: string
         market:
-          $ref: "#/components/schemas/BetMarket"
+          type: string
         selection:
           type: string
         point:
@@ -415,7 +519,7 @@ components:
         awayTeam:
           type: string
         market:
-          $ref: "#/components/schemas/BetMarket"
+          type: string
         selection:
           type: string
         point:

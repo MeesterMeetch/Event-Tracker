@@ -13,6 +13,8 @@ export interface AnalysisEdge {
   market: string;
   selection: string;
   point: number | null;
+  /** Player name for prop edges; null for team markets. */
+  player: string | null;
   book: string;
   americanOdds: number;
   fairOdds: number;
@@ -65,7 +67,7 @@ function buildPrompt(input: AnalysisInput): string {
       ? input.edges
           .map(
             (e) =>
-              `- ${e.market.toUpperCase()} | ${e.selection}${
+              `- ${e.market.toUpperCase()} | ${e.player ? `${e.player} ` : ""}${e.selection}${
                 e.point != null ? ` ${e.point}` : ""
               } @ ${fmtOdds(e.americanOdds)} (${e.book}); fair ${fmtOdds(
                 e.fairOdds,

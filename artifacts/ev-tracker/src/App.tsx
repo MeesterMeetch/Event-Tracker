@@ -6,7 +6,17 @@ import Dashboard from '@/pages/Dashboard';
 import LiveEdges from '@/pages/LiveEdges';
 import BetLog from '@/pages/BetLog';
 
-const queryClient = new QueryClient();
+// Odds-backed queries cost live API credits, so never refetch just because
+// the window regained focus, and treat results as fresh for a minute.
+// Mutations still invalidate their queries explicitly, which bypasses both.
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      staleTime: 60 * 1000,
+    },
+  },
+});
 
 function NotFound() {
   return (

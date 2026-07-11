@@ -23,7 +23,8 @@ export const HealthCheckResponse = zod.object({
 export const ListSportsResponseItem = zod.object({
   "key": zod.string(),
   "title": zod.string(),
-  "group": zod.string()
+  "group": zod.string(),
+  "supportsProps": zod.boolean().describe('Whether per-game player-prop scanning is available for this sport.')
 })
 export const ListSportsResponse = zod.array(ListSportsResponseItem)
 
@@ -43,15 +44,62 @@ export const ListEdgesResponseItem = zod.object({
   "commenceTime": zod.coerce.date(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
-  "market": zod.enum(['h2h', 'spreads', 'totals']),
+  "market": zod.string(),
   "selection": zod.string(),
   "point": zod.number().nullable(),
+  "player": zod.string().nullable().describe('Player name for player-prop edges; null for team markets.'),
   "americanOdds": zod.number(),
   "book": zod.string(),
   "fairOdds": zod.number(),
   "evPercent": zod.number()
 })
 export const ListEdgesResponse = zod.array(ListEdgesResponseItem)
+
+
+/**
+ * Lists upcoming games so a single game can be drilled into for player props. Backed by the free Odds API events endpoint — costs no credits.
+ * @summary List upcoming games for a sport
+ */
+export const ListEventsQueryParams = zod.object({
+  "sport": zod.coerce.string()
+})
+
+export const ListEventsResponseItem = zod.object({
+  "id": zod.string(),
+  "sport": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string()
+})
+export const ListEventsResponse = zod.array(ListEventsResponseItem)
+
+
+/**
+ * Fetches player prop odds for a single event across US books, devigs each book's over/under pair per player and line, and returns props where the best available price beats the consensus fair price. Player props are only available per event and each market scanned costs API credits, which is why props are scanned one game at a time.
+ * @summary Scan one game's player props for positive-EV opportunities
+ */
+export const ListPropEdgesQueryParams = zod.object({
+  "sport": zod.coerce.string(),
+  "eventId": zod.coerce.string(),
+  "minEdgePercent": zod.coerce.number().optional()
+})
+
+export const ListPropEdgesResponseItem = zod.object({
+  "gameId": zod.string(),
+  "sport": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "market": zod.string(),
+  "selection": zod.string(),
+  "point": zod.number().nullable(),
+  "player": zod.string().nullable().describe('Player name for player-prop edges; null for team markets.'),
+  "americanOdds": zod.number(),
+  "book": zod.string(),
+  "fairOdds": zod.number(),
+  "evPercent": zod.number()
+})
+export const ListPropEdgesResponse = zod.array(ListPropEdgesResponseItem)
 
 
 /**
@@ -68,7 +116,7 @@ export const ListBetsResponseItem = zod.object({
   "commenceTime": zod.coerce.date(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
-  "market": zod.enum(['h2h', 'spreads', 'totals']),
+  "market": zod.string(),
   "selection": zod.string(),
   "point": zod.number().nullable(),
   "americanOdds": zod.number(),
@@ -99,7 +147,7 @@ export const CreateBetBody = zod.object({
   "commenceTime": zod.coerce.date(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
-  "market": zod.enum(['h2h', 'spreads', 'totals']),
+  "market": zod.string(),
   "selection": zod.string(),
   "point": zod.number().nullable(),
   "americanOdds": zod.number(),
@@ -117,7 +165,7 @@ export const CreateBetResponse = zod.object({
   "commenceTime": zod.coerce.date(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
-  "market": zod.enum(['h2h', 'spreads', 'totals']),
+  "market": zod.string(),
   "selection": zod.string(),
   "point": zod.number().nullable(),
   "americanOdds": zod.number(),
@@ -148,7 +196,7 @@ export const GetBetResponse = zod.object({
   "commenceTime": zod.coerce.date(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
-  "market": zod.enum(['h2h', 'spreads', 'totals']),
+  "market": zod.string(),
   "selection": zod.string(),
   "point": zod.number().nullable(),
   "americanOdds": zod.number(),
@@ -191,7 +239,7 @@ export const UpdateBetResponse = zod.object({
   "commenceTime": zod.coerce.date(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
-  "market": zod.enum(['h2h', 'spreads', 'totals']),
+  "market": zod.string(),
   "selection": zod.string(),
   "point": zod.number().nullable(),
   "americanOdds": zod.number(),
@@ -261,9 +309,10 @@ export const GenerateGameAnalysisBody = zod.object({
   "commenceTime": zod.coerce.date(),
   "homeTeam": zod.string(),
   "awayTeam": zod.string(),
-  "market": zod.enum(['h2h', 'spreads', 'totals']),
+  "market": zod.string(),
   "selection": zod.string(),
   "point": zod.number().nullable(),
+  "player": zod.string().nullable().describe('Player name for player-prop edges; null for team markets.'),
   "americanOdds": zod.number(),
   "book": zod.string(),
   "fairOdds": zod.number(),

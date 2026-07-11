@@ -10,6 +10,8 @@ export interface EdgeOpportunity {
   market: string;
   selection: string;
   point: number | null;
+  /** Player name for player-prop edges; null for team markets. */
+  player: string | null;
   americanOdds: number;
   book: string;
   fairOdds: number;
@@ -84,6 +86,7 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
             market,
             selection: info.name,
             point: info.point,
+            player: null,
             americanOdds: bestForKey.americanOdds,
             book: bestForKey.book,
             fairOdds: probToAmerican(avgFairProb),

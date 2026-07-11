@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useListBets, useUpdateBet, useDeleteBet, getListBetsQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatOdds, formatPercent, formatPoint, formatCurrency } from "@/lib/utils";
+import { formatOdds, formatPercent, formatPoint, formatCurrency, formatMarketLabel } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -309,7 +309,7 @@ export default function BetLog() {
                   </TableCell>
                   <TableCell>
                     <div className="font-medium text-sm">{bet.selection} {formatPoint(bet.point, bet.market)}</div>
-                    <div className="text-[10px] text-muted-foreground font-mono uppercase">{bet.market} • {bet.book}</div>
+                    <div className="text-[10px] text-muted-foreground font-mono uppercase">{formatMarketLabel(bet.market)} • {bet.book}</div>
                   </TableCell>
                   <TableCell className="text-right font-bold text-primary">
                     {formatOdds(bet.americanOdds)}

@@ -17,6 +17,16 @@ export interface Sport {
   key: string;
   title: string;
   group: string;
+  /** Whether per-game player-prop scanning is available for this sport. */
+  supportsProps: boolean;
+}
+
+export interface GameEvent {
+  id: string;
+  sport: string;
+  commenceTime: string;
+  homeTeam: string;
+  awayTeam: string;
 }
 
 export type BetStatus = typeof BetStatus[keyof typeof BetStatus];
@@ -29,25 +39,21 @@ export const BetStatus = {
   push: 'push',
 } as const;
 
-export type BetMarket = typeof BetMarket[keyof typeof BetMarket];
-
-
-export const BetMarket = {
-  h2h: 'h2h',
-  spreads: 'spreads',
-  totals: 'totals',
-} as const;
-
 export interface EdgeOpportunity {
   gameId: string;
   sport: string;
   commenceTime: string;
   homeTeam: string;
   awayTeam: string;
-  market: BetMarket;
+  market: string;
   selection: string;
   /** @nullable */
   point: number | null;
+  /**
+     * Player name for player-prop edges; null for team markets.
+     * @nullable
+     */
+  player: string | null;
   americanOdds: number;
   book: string;
   fairOdds: number;
@@ -61,7 +67,7 @@ export interface Bet {
   commenceTime: string;
   homeTeam: string;
   awayTeam: string;
-  market: BetMarket;
+  market: string;
   selection: string;
   /** @nullable */
   point: number | null;
@@ -91,7 +97,7 @@ export interface BetInput {
   commenceTime: string;
   homeTeam: string;
   awayTeam: string;
-  market: BetMarket;
+  market: string;
   selection: string;
   /** @nullable */
   point: number | null;
@@ -198,6 +204,16 @@ export interface GameAnalysisResponse {
 
 export type ListEdgesParams = {
 sport: string;
+minEdgePercent?: number;
+};
+
+export type ListEventsParams = {
+sport: string;
+};
+
+export type ListPropEdgesParams = {
+sport: string;
+eventId: string;
 minEdgePercent?: number;
 };
 

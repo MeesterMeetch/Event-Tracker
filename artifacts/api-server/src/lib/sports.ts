@@ -1,10 +1,12 @@
 import { fetchSports } from "./odds";
+import { sportSupportsProps } from "./props";
 import { logger } from "./logger";
 
 export interface SupportedSport {
   key: string;
   title: string;
   group: string;
+  supportsProps: boolean;
 }
 
 /**
@@ -20,7 +22,7 @@ const FALLBACK_SPORTS: SupportedSport[] = [
   { key: "soccer_epl", title: "EPL", group: "Soccer" },
   { key: "soccer_usa_mls", title: "MLS", group: "Soccer" },
   { key: "mma_mixed_martial_arts", title: "MMA", group: "Mixed Martial Arts" },
-];
+].map((s) => ({ ...s, supportsProps: sportSupportsProps(s.key) }));
 
 // The Odds API /sports endpoint is free (it does not consume the request
 // quota), but the in-season set changes slowly, so cache it to avoid needless
@@ -41,7 +43,7 @@ export async function getSupportedSports(): Promise<SupportedSport[]> {
     const raw = await fetchSports();
     const list = raw
       .filter((s) => s.active && !s.has_outrights)
-      .map((s) => ({ key: s.key, title: s.title, group: s.group }))
+      .map((s) => ({ key: s.key, title: s.title, group: s.group, supportsProps: sportSupportsProps(s.key) }))
       .sort((a, b) => a.group.localeCompare(b.group) || a.title.localeCompare(b.title));
 
     if (list.length > 0) {

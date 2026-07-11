@@ -34,6 +34,27 @@ export function formatCurrency(amount: number) {
   }).format(amount);
 }
 
+const MARKET_LABELS: Record<string, string> = {
+  h2h: "H2H",
+  spreads: "Spreads",
+  totals: "Totals",
+};
+
+/**
+ * Human label for a market key: "totals" → "Totals",
+ * "batter_total_bases" → "Batter Total Bases", "player_pass_yds" → "Pass Yds"
+ * (the "player_" prefix is dropped — it's redundant next to a player name).
+ */
+export function formatMarketLabel(market: string) {
+  const known = MARKET_LABELS[market];
+  if (known) return known;
+  const cleaned = market.startsWith("player_") ? market.slice("player_".length) : market;
+  return cleaned
+    .split("_")
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
 /** "Jul 11 · 7:05 PM" in the viewer's local timezone. */
 export function formatGameTime(iso: string) {
   const d = new Date(iso);

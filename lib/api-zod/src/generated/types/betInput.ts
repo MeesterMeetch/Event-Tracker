@@ -5,7 +5,6 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { BetMarket } from './betMarket';
 
 export interface BetInput {
   sport: string;
@@ -13,7 +12,7 @@ export interface BetInput {
   commenceTime: Date;
   homeTeam: string;
   awayTeam: string;
-  market: BetMarket;
+  market: string;
   selection: string;
   /** @nullable */
   point: number | null;

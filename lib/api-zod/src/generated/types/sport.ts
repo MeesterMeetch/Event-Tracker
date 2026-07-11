@@ -10,4 +10,6 @@ export interface Sport {
   key: string;
   title: string;
   group: string;
+  /** Whether per-game player-prop scanning is available for this sport. */
+  supportsProps: boolean;
 }

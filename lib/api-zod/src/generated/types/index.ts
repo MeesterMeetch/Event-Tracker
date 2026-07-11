@@ -8,7 +8,6 @@
 
 export * from './bet';
 export * from './betInput';
-export * from './betMarket';
 export * from './betStatus';
 export * from './betUpdate';
 export * from './dashboardSummary';
@@ -16,9 +15,12 @@ export * from './edgeOpportunity';
 export * from './errorResponse';
 export * from './gameAnalysisRequest';
 export * from './gameAnalysisResponse';
+export * from './gameEvent';
 export * from './healthStatus';
 export * from './listBetsParams';
 export * from './listEdgesParams';
+export * from './listEventsParams';
+export * from './listPropEdgesParams';
 export * from './pitcherStart';
 export * from './probablePitcher';
 export * from './sport';

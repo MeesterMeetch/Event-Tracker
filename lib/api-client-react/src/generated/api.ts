@@ -28,9 +28,12 @@ import type {
   ErrorResponse,
   GameAnalysisRequest,
   GameAnalysisResponse,
+  GameEvent,
   HealthStatus,
   ListBetsParams,
   ListEdgesParams,
+  ListEventsParams,
+  ListPropEdgesParams,
   Sport
 } from './api.schemas';
 
@@ -289,6 +292,176 @@ export function useListEdges<TData = Awaited<ReturnType<typeof listEdges>>, TErr
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListEdgesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListEventsUrl = (params: ListEventsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/events?${stringifiedParams}` : `/api/events`
+}
+
+/**
+ * Lists upcoming games so a single game can be drilled into for player props. Backed by the free Odds API events endpoint — costs no credits.
+ * @summary List upcoming games for a sport
+ */
+export const listEvents = async (params: ListEventsParams, options?: RequestInit): Promise<GameEvent[]> => {
+
+  return customFetch<GameEvent[]>(getListEventsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListEventsQueryKey = (params?: ListEventsParams,) => {
+    return [
+    `/api/events`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListEventsQueryOptions = <TData = Awaited<ReturnType<typeof listEvents>>, TError = ErrorType<ErrorResponse>>(params: ListEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListEventsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listEvents>>> = ({ signal }) => listEvents(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listEvents>>>
+export type ListEventsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List upcoming games for a sport
+ */
+
+export function useListEvents<TData = Awaited<ReturnType<typeof listEvents>>, TError = ErrorType<ErrorResponse>>(
+ params: ListEventsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListEventsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListPropEdgesUrl = (params: ListPropEdgesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/prop-edges?${stringifiedParams}` : `/api/prop-edges`
+}
+
+/**
+ * Fetches player prop odds for a single event across US books, devigs each book's over/under pair per player and line, and returns props where the best available price beats the consensus fair price. Player props are only available per event and each market scanned costs API credits, which is why props are scanned one game at a time.
+ * @summary Scan one game's player props for positive-EV opportunities
+ */
+export const listPropEdges = async (params: ListPropEdgesParams, options?: RequestInit): Promise<EdgeOpportunity[]> => {
+
+  return customFetch<EdgeOpportunity[]>(getListPropEdgesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPropEdgesQueryKey = (params?: ListPropEdgesParams,) => {
+    return [
+    `/api/prop-edges`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPropEdgesQueryOptions = <TData = Awaited<ReturnType<typeof listPropEdges>>, TError = ErrorType<ErrorResponse>>(params: ListPropEdgesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPropEdges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPropEdgesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPropEdges>>> = ({ signal }) => listPropEdges(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPropEdges>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPropEdgesQueryResult = NonNullable<Awaited<ReturnType<typeof listPropEdges>>>
+export type ListPropEdgesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Scan one game's player props for positive-EV opportunities
+ */
+
+export function useListPropEdges<TData = Awaited<ReturnType<typeof listPropEdges>>, TError = ErrorType<ErrorResponse>>(
+ params: ListPropEdgesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPropEdges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPropEdgesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

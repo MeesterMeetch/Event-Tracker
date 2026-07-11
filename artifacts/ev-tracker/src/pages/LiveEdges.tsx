@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formatOdds, formatPercent, formatPoint } from "@/lib/utils";
+import { formatOdds, formatPercent, formatPoint, formatGameTime } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, Plus, Loader2, Sparkles } from "lucide-react";
@@ -247,7 +247,7 @@ function AnalyzeGameDialog({ edge, gameEdges, children }: { edge: EdgeOpportunit
             <Sparkles className="h-4 w-4 text-primary" />
             <DialogTitle>AI Game Analysis</DialogTitle>
           </div>
-          <DialogDescription>{edge.awayTeam} @ {edge.homeTeam}</DialogDescription>
+          <DialogDescription>{edge.awayTeam} @ {edge.homeTeam} · {formatGameTime(edge.commenceTime)}</DialogDescription>
         </DialogHeader>
 
         {analyze.isPending && (
@@ -426,6 +426,9 @@ export default function LiveEdges() {
                           {edge.homeTeam}
                           <br/>
                           {edge.awayTeam}
+                        </div>
+                        <div className="mt-1 font-mono text-[10px] text-muted-foreground whitespace-nowrap">
+                          {formatGameTime(edge.commenceTime)}
                         </div>
                       </TableCell>
                       <TableCell>

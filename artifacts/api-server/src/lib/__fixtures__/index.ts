@@ -16,11 +16,15 @@ interface Route {
   payload: unknown;
   /** Optional override for a non-OK response, to exercise error handling. */
   status?: number;
+  /** Optional value for the `x-requests-remaining` response header (Odds API). */
+  requestsRemaining?: number;
 }
 
 /**
  * Installs a `fetch` stub that answers by URL substring from the given routes.
  * Lets the tests run the real parsers against fixtures without a network call.
+ * The returned object mimics enough of `Response` (json/text/headers) for both
+ * the ESPN/MLB parsers and the Odds API client, which reads response headers.
  */
 export function stubFetchRoutes(routes: Route[]): void {
   vi.stubGlobal(
@@ -33,12 +37,20 @@ export function stubFetchRoutes(routes: Route[]): void {
         throw new Error(`No fixture route matched fetch URL: ${url}`);
       }
       const status = route.status ?? 200;
+      const headers = new Map<string, string>();
+      if (route.requestsRemaining != null) {
+        headers.set("x-requests-remaining", String(route.requestsRemaining));
+      }
+      const bodyText =
+        typeof route.payload === "string" ? route.payload : JSON.stringify(route.payload);
       return {
         ok: status >= 200 && status < 300,
         status,
         statusText: status === 200 ? "OK" : "Error",
+        headers: { get: (name: string) => headers.get(name.toLowerCase()) ?? null },
         json: async () => route.payload,
-      } as Response;
+        text: async () => bodyText,
+      } as unknown as Response;
     }),
   );
 }

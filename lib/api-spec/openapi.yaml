@@ -24,6 +24,10 @@ tags:
     description: Supported sports list
   - name: analysis
     description: AI game analysis and probable starters
+  - name: model
+    description: Fundamental pitcher-strikeout projection model
+  - name: paper-trades
+    description: Model paper trades and closing-line-value validation
 paths:
   /healthz:
     get:
@@ -426,8 +430,413 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /model-edges:
+    get:
+      operationId: listModelEdges
+      tags: [model]
+      summary: Project pitcher strikeouts for one game and compare to the market
+      description: >
+        Runs the fundamental strikeout-projection model on both probable
+        starters in an MLB game (free MLB Stats API) and compares the model's
+        over/under probabilities against the de-vigged pitcher-strikeout market
+        for that event. Fetching the market costs per-event API credits, so a
+        single event is scanned at a time. MLB only.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: eventId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: minEdgePercent
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: kellyMultiplier
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Per-pitcher projections with model-vs-market lines
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModelPitcherProjection"
+        "400":
+          description: Invalid or unsupported sport
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream odds provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /paper-trades:
+    get:
+      operationId: listPaperTrades
+      tags: [paper-trades]
+      summary: List model paper trades
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/PaperTradeStatus"
+      responses:
+        "200":
+          description: Paper trades, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaperTrade"
+    post:
+      operationId: createPaperTrade
+      tags: [paper-trades]
+      summary: Log a model flag as a paper trade
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaperTradeInput"
+      responses:
+        "201":
+          description: Paper trade logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperTrade"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /paper-trades/summary:
+    get:
+      operationId: getPaperTradeSummary
+      tags: [paper-trades]
+      summary: Model validation summary (CLV and beat-the-close rate)
+      responses:
+        "200":
+          description: Aggregate validation stats over paper trades
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperTradeSummary"
+  /paper-trades/{id}:
+    delete:
+      operationId: deletePaperTrade
+      tags: [paper-trades]
+      summary: Delete a paper trade
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Paper trade not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
+    ModelKLine:
+      type: object
+      required:
+        - point
+        - selection
+        - americanOdds
+        - book
+        - marketProb
+        - modelProb
+        - edgePercent
+        - fullKellyFraction
+        - recommendedUnits
+        - isFlagged
+      properties:
+        point:
+          type: number
+        selection:
+          type: string
+        americanOdds:
+          type: number
+        book:
+          type: string
+        marketProb:
+          description: De-vigged market consensus for this side; null when fewer than 2 books quote it.
+          type: ["number", "null"]
+        modelProb:
+          type: number
+        edgePercent:
+          type: ["number", "null"]
+        fullKellyFraction:
+          type: number
+        recommendedUnits:
+          type: number
+        isFlagged:
+          type: boolean
+    ModelPitcherProjection:
+      type: object
+      required:
+        - gameId
+        - sport
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - pitcher
+        - team
+        - opponent
+        - throws
+        - projectedBattersFaced
+        - expectedStrikeouts
+        - ratePerBF
+        - opponentFactor
+        - sampleStarts
+        - sampleBattersFaced
+        - opponentDataAvailable
+        - lines
+      properties:
+        gameId:
+          type: string
+        sport:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        pitcher:
+          type: string
+        team:
+          type: string
+        opponent:
+          type: string
+        throws:
+          type: ["string", "null"]
+        projectedBattersFaced:
+          type: number
+        expectedStrikeouts:
+          type: number
+        ratePerBF:
+          type: number
+        opponentFactor:
+          type: number
+        sampleStarts:
+          type: integer
+        sampleBattersFaced:
+          type: integer
+        opponentDataAvailable:
+          type: boolean
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelKLine"
+    PaperTradeStatus:
+      type: string
+      enum: [open, closed, expired]
+    PaperTrade:
+      type: object
+      required:
+        - id
+        - sport
+        - gameId
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - pitcher
+        - pitcherId
+        - team
+        - opponent
+        - selection
+        - point
+        - book
+        - americanOdds
+        - modelProb
+        - marketProb
+        - edgePercent
+        - expectedStrikeouts
+        - projectedBattersFaced
+        - recommendedUnits
+        - kellyMultiplier
+        - closingOdds
+        - closingProb
+        - clvPercent
+        - beatClose
+        - status
+        - createdAt
+      properties:
+        id:
+          type: integer
+        sport:
+          type: string
+        gameId:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        pitcher:
+          type: string
+        pitcherId:
+          type: ["integer", "null"]
+        team:
+          type: string
+        opponent:
+          type: string
+        selection:
+          type: string
+        point:
+          type: number
+        book:
+          type: string
+        americanOdds:
+          type: number
+        modelProb:
+          type: number
+        marketProb:
+          type: ["number", "null"]
+        edgePercent:
+          type: ["number", "null"]
+        expectedStrikeouts:
+          type: number
+        projectedBattersFaced:
+          type: number
+        recommendedUnits:
+          type: number
+        kellyMultiplier:
+          type: number
+        closingOdds:
+          type: ["number", "null"]
+        closingProb:
+          type: ["number", "null"]
+        clvPercent:
+          type: ["number", "null"]
+        beatClose:
+          type: ["boolean", "null"]
+        status:
+          $ref: "#/components/schemas/PaperTradeStatus"
+        createdAt:
+          type: string
+          format: date-time
+    PaperTradeInput:
+      type: object
+      required:
+        - sport
+        - gameId
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - pitcher
+        - team
+        - opponent
+        - selection
+        - point
+        - book
+        - americanOdds
+        - modelProb
+        - expectedStrikeouts
+        - projectedBattersFaced
+        - recommendedUnits
+        - kellyMultiplier
+      properties:
+        sport:
+          type: string
+        gameId:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        pitcher:
+          type: string
+        pitcherId:
+          type: ["integer", "null"]
+        team:
+          type: string
+        opponent:
+          type: string
+        selection:
+          type: string
+        point:
+          type: number
+        book:
+          type: string
+        americanOdds:
+          type: number
+        modelProb:
+          type: number
+        marketProb:
+          type: ["number", "null"]
+        edgePercent:
+          type: ["number", "null"]
+        expectedStrikeouts:
+          type: number
+        projectedBattersFaced:
+          type: number
+        recommendedUnits:
+          type: number
+        kellyMultiplier:
+          type: number
+    PaperTradeSummary:
+      type: object
+      required:
+        - total
+        - open
+        - closed
+        - expired
+        - gradedCount
+        - beatCloseCount
+        - beatCloseRate
+        - avgClvPercent
+        - avgEdgePercent
+      properties:
+        total:
+          type: integer
+        open:
+          type: integer
+        closed:
+          type: integer
+        expired:
+          type: integer
+        gradedCount:
+          description: Closed trades that have a captured closing line (CLV computed).
+          type: integer
+        beatCloseCount:
+          type: integer
+        beatCloseRate:
+          type: ["number", "null"]
+        avgClvPercent:
+          type: ["number", "null"]
+        avgEdgePercent:
+          type: ["number", "null"]
     HealthStatus:
       type: object
       properties:

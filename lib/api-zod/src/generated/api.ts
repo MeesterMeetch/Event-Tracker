@@ -432,3 +432,169 @@ export const GenerateGameAnalysisResponse = zod.object({
 })
 
 
+/**
+ * Runs the fundamental strikeout-projection model on both probable starters in an MLB game (free MLB Stats API) and compares the model's over/under probabilities against the de-vigged pitcher-strikeout market for that event. Fetching the market costs per-event API credits, so a single event is scanned at a time. MLB only.
+ * @summary Project pitcher strikeouts for one game and compare to the market
+ */
+export const ListModelEdgesQueryParams = zod.object({
+  "sport": zod.coerce.string(),
+  "eventId": zod.coerce.string(),
+  "minEdgePercent": zod.coerce.number().optional(),
+  "kellyMultiplier": zod.coerce.number().optional()
+})
+
+export const ListModelEdgesResponseItem = zod.object({
+  "gameId": zod.string(),
+  "sport": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "pitcher": zod.string(),
+  "team": zod.string(),
+  "opponent": zod.string(),
+  "throws": zod.string().nullable(),
+  "projectedBattersFaced": zod.number(),
+  "expectedStrikeouts": zod.number(),
+  "ratePerBF": zod.number(),
+  "opponentFactor": zod.number(),
+  "sampleStarts": zod.number(),
+  "sampleBattersFaced": zod.number(),
+  "opponentDataAvailable": zod.boolean(),
+  "lines": zod.array(zod.object({
+  "point": zod.number(),
+  "selection": zod.string(),
+  "americanOdds": zod.number(),
+  "book": zod.string(),
+  "marketProb": zod.number().nullable().describe('De-vigged market consensus for this side; null when fewer than 2 books quote it.'),
+  "modelProb": zod.number(),
+  "edgePercent": zod.number().nullable(),
+  "fullKellyFraction": zod.number(),
+  "recommendedUnits": zod.number(),
+  "isFlagged": zod.boolean()
+}))
+})
+export const ListModelEdgesResponse = zod.array(ListModelEdgesResponseItem)
+
+
+/**
+ * @summary List model paper trades
+ */
+export const ListPaperTradesQueryParams = zod.object({
+  "status": zod.enum(['open', 'closed', 'expired']).optional()
+})
+
+export const ListPaperTradesResponseItem = zod.object({
+  "id": zod.number(),
+  "sport": zod.string(),
+  "gameId": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "pitcher": zod.string(),
+  "pitcherId": zod.number().nullable(),
+  "team": zod.string(),
+  "opponent": zod.string(),
+  "selection": zod.string(),
+  "point": zod.number(),
+  "book": zod.string(),
+  "americanOdds": zod.number(),
+  "modelProb": zod.number(),
+  "marketProb": zod.number().nullable(),
+  "edgePercent": zod.number().nullable(),
+  "expectedStrikeouts": zod.number(),
+  "projectedBattersFaced": zod.number(),
+  "recommendedUnits": zod.number(),
+  "kellyMultiplier": zod.number(),
+  "closingOdds": zod.number().nullable(),
+  "closingProb": zod.number().nullable(),
+  "clvPercent": zod.number().nullable(),
+  "beatClose": zod.boolean().nullable(),
+  "status": zod.enum(['open', 'closed', 'expired']),
+  "createdAt": zod.coerce.date()
+})
+export const ListPaperTradesResponse = zod.array(ListPaperTradesResponseItem)
+
+
+/**
+ * @summary Log a model flag as a paper trade
+ */
+export const CreatePaperTradeBody = zod.object({
+  "sport": zod.string(),
+  "gameId": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "pitcher": zod.string(),
+  "pitcherId": zod.number().nullish(),
+  "team": zod.string(),
+  "opponent": zod.string(),
+  "selection": zod.string(),
+  "point": zod.number(),
+  "book": zod.string(),
+  "americanOdds": zod.number(),
+  "modelProb": zod.number(),
+  "marketProb": zod.number().nullish(),
+  "edgePercent": zod.number().nullish(),
+  "expectedStrikeouts": zod.number(),
+  "projectedBattersFaced": zod.number(),
+  "recommendedUnits": zod.number(),
+  "kellyMultiplier": zod.number()
+})
+
+export const CreatePaperTradeResponse = zod.object({
+  "id": zod.number(),
+  "sport": zod.string(),
+  "gameId": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "pitcher": zod.string(),
+  "pitcherId": zod.number().nullable(),
+  "team": zod.string(),
+  "opponent": zod.string(),
+  "selection": zod.string(),
+  "point": zod.number(),
+  "book": zod.string(),
+  "americanOdds": zod.number(),
+  "modelProb": zod.number(),
+  "marketProb": zod.number().nullable(),
+  "edgePercent": zod.number().nullable(),
+  "expectedStrikeouts": zod.number(),
+  "projectedBattersFaced": zod.number(),
+  "recommendedUnits": zod.number(),
+  "kellyMultiplier": zod.number(),
+  "closingOdds": zod.number().nullable(),
+  "closingProb": zod.number().nullable(),
+  "clvPercent": zod.number().nullable(),
+  "beatClose": zod.boolean().nullable(),
+  "status": zod.enum(['open', 'closed', 'expired']),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Model validation summary (CLV and beat-the-close rate)
+ */
+export const GetPaperTradeSummaryResponse = zod.object({
+  "total": zod.number(),
+  "open": zod.number(),
+  "closed": zod.number(),
+  "expired": zod.number(),
+  "gradedCount": zod.number().describe('Closed trades that have a captured closing line (CLV computed).'),
+  "beatCloseCount": zod.number(),
+  "beatCloseRate": zod.number().nullable(),
+  "avgClvPercent": zod.number().nullable(),
+  "avgEdgePercent": zod.number().nullable()
+})
+
+
+/**
+ * @summary Delete a paper trade
+ */
+export const DeletePaperTradeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeletePaperTradeResponse = zod.void()
+
+

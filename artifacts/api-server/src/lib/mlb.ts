@@ -240,6 +240,262 @@ export async function getMatchupPitchers(
   return result;
 }
 
+// ---- Pitcher strikeout projection inputs ----
+
+export interface PitcherKStats {
+  id: number;
+  name: string;
+  team: string;
+  throws: "L" | "R" | null;
+  rollingStrikeouts: number;
+  rollingBattersFaced: number;
+  rollingStarts: number;
+  rollingBfPerStart: number | null;
+  seasonStrikeouts: number | null;
+  seasonBattersFaced: number | null;
+  seasonGamesStarted: number | null;
+  careerStrikeouts: number | null;
+  careerBattersFaced: number | null;
+}
+
+export interface OpponentKProfile {
+  team: string;
+  /** Opponent lineup strikeouts / plate appearances vs LHP. */
+  kPctVsLhp: number | null;
+  /** Opponent lineup strikeouts / plate appearances vs RHP. */
+  kPctVsRhp: number | null;
+}
+
+export interface PitcherKMatchupSide {
+  pitcher: PitcherKStats | null;
+  /** The lineup this pitcher faces (i.e. the *other* team). */
+  opponent: OpponentKProfile | null;
+}
+
+export interface MatchupKInputs {
+  home: PitcherKMatchupSide;
+  away: PitcherKMatchupSide;
+}
+
+interface PeopleKResponse {
+  people?: Array<{
+    pitchHand?: { code?: string };
+    stats?: Array<{
+      type?: { displayName?: string };
+      group?: { displayName?: string };
+      splits?: Array<StatSplit>;
+    }>;
+  }>;
+}
+
+interface TeamSplitsResponse {
+  stats?: Array<{
+    splits?: Array<{
+      split?: { code?: string };
+      stat?: Record<string, unknown>;
+    }>;
+  }>;
+}
+
+/** Parses an innings-pitched string like "6.2" into total outs (20). */
+function ipToOuts(ip: string | null): number | null {
+  if (!ip) return null;
+  const [wholeRaw, fracRaw = "0"] = ip.split(".");
+  const whole = Number(wholeRaw);
+  const frac = Number(fracRaw);
+  if (!Number.isFinite(whole) || !Number.isFinite(frac)) return null;
+  return whole * 3 + frac;
+}
+
+/** Batters faced for one start, falling back to outs+hits+walks+HBP if absent. */
+function battersFacedFrom(stat: Record<string, unknown>): number | null {
+  const bf = int(stat.battersFaced);
+  if (bf != null && bf > 0) return bf;
+  const outs = int(stat.outs) ?? ipToOuts(str(stat.inningsPitched));
+  if (outs == null) return null;
+  const hits = int(stat.hits) ?? 0;
+  const walks = int(stat.baseOnBalls) ?? 0;
+  const hbp = int(stat.hitByPitch) ?? 0;
+  return outs + hits + walks + hbp;
+}
+
+/** How many recent starts feed the rolling strikeout-rate window. */
+const ROLLING_START_WINDOW = 10;
+
+async function fetchPitcherKStats(personId: number, name: string, team: string, season: number): Promise<PitcherKStats> {
+  const stats: PitcherKStats = {
+    id: personId,
+    name,
+    team,
+    throws: null,
+    rollingStrikeouts: 0,
+    rollingBattersFaced: 0,
+    rollingStarts: 0,
+    rollingBfPerStart: null,
+    seasonStrikeouts: null,
+    seasonBattersFaced: null,
+    seasonGamesStarted: null,
+    careerStrikeouts: null,
+    careerBattersFaced: null,
+  };
+
+  try {
+    const data = await mlbFetch<PeopleKResponse>(
+      `/people/${personId}?hydrate=stats(group=[pitching],type=[season,career,gameLog],season=${season})`,
+    );
+    const person = data.people?.[0];
+    const hand = person?.pitchHand?.code;
+    stats.throws = hand === "L" ? "L" : hand === "R" ? "R" : null;
+
+    for (const group of person?.stats ?? []) {
+      const type = group.type?.displayName;
+      const splits = group.splits ?? [];
+
+      if (type === "season" && splits[0]?.stat) {
+        const s = splits[0].stat;
+        stats.seasonStrikeouts = int(s.strikeOuts);
+        stats.seasonBattersFaced = int(s.battersFaced);
+        stats.seasonGamesStarted = int(s.gamesStarted);
+      }
+
+      if (type === "career" && splits[0]?.stat) {
+        const s = splits[0].stat;
+        stats.careerStrikeouts = int(s.strikeOuts);
+        stats.careerBattersFaced = int(s.battersFaced);
+      }
+
+      if (type === "gameLog") {
+        const starts = splits.filter((sp) => int(sp.stat?.gamesStarted) === 1).slice(-ROLLING_START_WINDOW);
+        let so = 0;
+        let bf = 0;
+        let n = 0;
+        for (const sp of starts) {
+          const st = sp.stat ?? {};
+          const b = battersFacedFrom(st);
+          if (b == null) continue;
+          so += int(st.strikeOuts) ?? 0;
+          bf += b;
+          n += 1;
+        }
+        stats.rollingStrikeouts = so;
+        stats.rollingBattersFaced = bf;
+        stats.rollingStarts = n;
+        stats.rollingBfPerStart = n > 0 ? bf / n : null;
+      }
+    }
+  } catch (err) {
+    logger.warn({ err, personId }, "mlb: failed to fetch pitcher K stats");
+  }
+
+  return stats;
+}
+
+async function fetchTeamKProfile(teamId: number, teamName: string, season: number): Promise<OpponentKProfile> {
+  const profile: OpponentKProfile = { team: teamName, kPctVsLhp: null, kPctVsRhp: null };
+
+  try {
+    const data = await mlbFetch<TeamSplitsResponse>(
+      `/teams/${teamId}/stats?stats=statSplits&group=hitting&sitCodes=vl,vr&season=${season}&sportId=${MLB_SPORT_ID}`,
+    );
+    for (const g of data.stats ?? []) {
+      for (const sp of g.splits ?? []) {
+        const code = sp.split?.code;
+        const so = int(sp.stat?.strikeOuts);
+        const pa = int(sp.stat?.plateAppearances);
+        if (so == null || pa == null || pa <= 0) continue;
+        if (code === "vl") profile.kPctVsLhp = so / pa;
+        if (code === "vr") profile.kPctVsRhp = so / pa;
+      }
+    }
+  } catch (err) {
+    logger.warn({ err, teamId }, "mlb: failed to fetch team K profile");
+  }
+
+  return profile;
+}
+
+// Projection inputs change slowly (probable starters + season splits), so cache
+// per game for a few minutes to avoid re-fetching on repeated model scans.
+const K_INPUTS_CACHE_TTL_MS = 10 * 60 * 1000;
+const kInputsCache = new Map<string, { data: MatchupKInputs; expires: number }>();
+
+/**
+ * Assembles the strikeout-projection inputs for both probable starters in an
+ * MLB matchup: each pitcher's rolling/season/career K rate and workload, plus
+ * the opposing lineup's handedness strikeout tendency. Returns nulls for any
+ * side that can't be resolved (no probable starter announced, etc.).
+ */
+export async function getMatchupKInputs(homeTeam: string, awayTeam: string, commenceTime: string): Promise<MatchupKInputs> {
+  const empty: MatchupKInputs = { home: { pitcher: null, opponent: null }, away: { pitcher: null, opponent: null } };
+
+  try {
+    const date = easternDate(commenceTime);
+    // Include the event's start time in the key: doubleheaders share the same
+    // date + team names, so keying on date alone would serve game 1's starters
+    // for game 2 within the TTL. The projection below already resolves the
+    // nearest game by time — the key just has to preserve that distinction.
+    const cacheKey = `${date}|${norm(homeTeam)}|${norm(awayTeam)}|${new Date(commenceTime).getTime()}`;
+    const cached = kInputsCache.get(cacheKey);
+    if (cached && cached.expires > Date.now()) return cached.data;
+
+    const season = Number(date.slice(0, 4));
+    const schedule = await mlbFetch<ScheduleResponse>(`/schedule?sportId=${MLB_SPORT_ID}&date=${date}&hydrate=probablePitcher`);
+    const games = schedule.dates?.flatMap((d) => d.games ?? []) ?? [];
+    const wanted = new Set([norm(homeTeam), norm(awayTeam)]);
+
+    const matches = games.filter((g) => {
+      const h = norm(g.teams?.home?.team?.name ?? "");
+      const a = norm(g.teams?.away?.team?.name ?? "");
+      return wanted.has(h) && wanted.has(a);
+    });
+    if (matches.length === 0) return empty;
+
+    const target = new Date(commenceTime).getTime();
+    const timeDelta = (g: (typeof matches)[number]) =>
+      g.gameDate ? Math.abs(new Date(g.gameDate).getTime() - target) : Number.POSITIVE_INFINITY;
+    const game = matches.reduce((best, g) => (timeDelta(g) < timeDelta(best) ? g : best));
+
+    const slots = (["home", "away"] as const).map((side) => {
+      const td = game.teams?.[side];
+      return {
+        teamId: td?.team?.id ?? null,
+        teamName: td?.team?.name ?? "",
+        pitcherId: td?.probablePitcher?.id ?? null,
+        pitcherName: td?.probablePitcher?.fullName ?? null,
+      };
+    });
+
+    const built = await Promise.all(
+      slots.map(async (slot, i) => {
+        const opp = slots[1 - i];
+        const [pitcher, opponent] = await Promise.all([
+          slot.pitcherId && slot.pitcherName
+            ? fetchPitcherKStats(slot.pitcherId, slot.pitcherName, slot.teamName, season)
+            : Promise.resolve(null),
+          opp.teamId ? fetchTeamKProfile(opp.teamId, opp.teamName, season) : Promise.resolve(null),
+        ]);
+        return { teamName: slot.teamName, side: { pitcher, opponent } satisfies PitcherKMatchupSide };
+      }),
+    );
+
+    const result: MatchupKInputs = { home: { pitcher: null, opponent: null }, away: { pitcher: null, opponent: null } };
+    for (const b of built) {
+      const target2 = norm(b.teamName) === norm(homeTeam) ? "home" : "away";
+      result[target2] = b.side;
+    }
+
+    kInputsCache.set(cacheKey, { data: result, expires: Date.now() + K_INPUTS_CACHE_TTL_MS });
+    if (kInputsCache.size > 200) {
+      const now = Date.now();
+      for (const [k, v] of kInputsCache) if (v.expires <= now) kInputsCache.delete(k);
+    }
+    return result;
+  } catch (err) {
+    logger.warn({ err, homeTeam, awayTeam }, "mlb: failed to assemble matchup K inputs");
+    return empty;
+  }
+}
+
 // ---- League stat leaders ----
 
 export interface MlbLeaderEntry {

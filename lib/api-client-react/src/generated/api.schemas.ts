@@ -5,6 +5,133 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface ModelKLine {
+  point: number;
+  selection: string;
+  americanOdds: number;
+  book: string;
+  /**
+     * De-vigged market consensus for this side; null when fewer than 2 books quote it.
+     * @nullable
+     */
+  marketProb: number | null;
+  modelProb: number;
+  /** @nullable */
+  edgePercent: number | null;
+  fullKellyFraction: number;
+  recommendedUnits: number;
+  isFlagged: boolean;
+}
+
+export interface ModelPitcherProjection {
+  gameId: string;
+  sport: string;
+  commenceTime: string;
+  homeTeam: string;
+  awayTeam: string;
+  pitcher: string;
+  team: string;
+  opponent: string;
+  /** @nullable */
+  throws: string | null;
+  projectedBattersFaced: number;
+  expectedStrikeouts: number;
+  ratePerBF: number;
+  opponentFactor: number;
+  sampleStarts: number;
+  sampleBattersFaced: number;
+  opponentDataAvailable: boolean;
+  lines: ModelKLine[];
+}
+
+export type PaperTradeStatus = typeof PaperTradeStatus[keyof typeof PaperTradeStatus];
+
+
+export const PaperTradeStatus = {
+  open: 'open',
+  closed: 'closed',
+  expired: 'expired',
+} as const;
+
+export interface PaperTrade {
+  id: number;
+  sport: string;
+  gameId: string;
+  commenceTime: string;
+  homeTeam: string;
+  awayTeam: string;
+  pitcher: string;
+  /** @nullable */
+  pitcherId: number | null;
+  team: string;
+  opponent: string;
+  selection: string;
+  point: number;
+  book: string;
+  americanOdds: number;
+  modelProb: number;
+  /** @nullable */
+  marketProb: number | null;
+  /** @nullable */
+  edgePercent: number | null;
+  expectedStrikeouts: number;
+  projectedBattersFaced: number;
+  recommendedUnits: number;
+  kellyMultiplier: number;
+  /** @nullable */
+  closingOdds: number | null;
+  /** @nullable */
+  closingProb: number | null;
+  /** @nullable */
+  clvPercent: number | null;
+  /** @nullable */
+  beatClose: boolean | null;
+  status: PaperTradeStatus;
+  createdAt: string;
+}
+
+export interface PaperTradeInput {
+  sport: string;
+  gameId: string;
+  commenceTime: string;
+  homeTeam: string;
+  awayTeam: string;
+  pitcher: string;
+  /** @nullable */
+  pitcherId?: number | null;
+  team: string;
+  opponent: string;
+  selection: string;
+  point: number;
+  book: string;
+  americanOdds: number;
+  modelProb: number;
+  /** @nullable */
+  marketProb?: number | null;
+  /** @nullable */
+  edgePercent?: number | null;
+  expectedStrikeouts: number;
+  projectedBattersFaced: number;
+  recommendedUnits: number;
+  kellyMultiplier: number;
+}
+
+export interface PaperTradeSummary {
+  total: number;
+  open: number;
+  closed: number;
+  expired: number;
+  /** Closed trades that have a captured closing line (CLV computed). */
+  gradedCount: number;
+  beatCloseCount: number;
+  /** @nullable */
+  beatCloseRate: number | null;
+  /** @nullable */
+  avgClvPercent: number | null;
+  /** @nullable */
+  avgEdgePercent: number | null;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -277,5 +404,16 @@ sport: string;
 
 export type ListBetsParams = {
 status?: BetStatus;
+};
+
+export type ListModelEdgesParams = {
+sport: string;
+eventId: string;
+minEdgePercent?: number;
+kellyMultiplier?: number;
+};
+
+export type ListPaperTradesParams = {
+status?: PaperTradeStatus;
 };
 

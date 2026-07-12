@@ -35,8 +35,14 @@ import type {
   ListEdgesParams,
   ListEventsParams,
   ListLeadersParams,
+  ListModelEdgesParams,
+  ListPaperTradesParams,
   ListPropEdgesParams,
   ListStandingsParams,
+  ModelPitcherProjection,
+  PaperTrade,
+  PaperTradeInput,
+  PaperTradeSummary,
   RankingsSport,
   Sport,
   StandingsGroup
@@ -1249,5 +1255,393 @@ export const useGenerateGameAnalysis = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getGenerateGameAnalysisMutationOptions(options));
+    }
+
+export const getListModelEdgesUrl = (params: ListModelEdgesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/model-edges?${stringifiedParams}` : `/api/model-edges`
+}
+
+/**
+ * Runs the fundamental strikeout-projection model on both probable starters in an MLB game (free MLB Stats API) and compares the model's over/under probabilities against the de-vigged pitcher-strikeout market for that event. Fetching the market costs per-event API credits, so a single event is scanned at a time. MLB only.
+ * @summary Project pitcher strikeouts for one game and compare to the market
+ */
+export const listModelEdges = async (params: ListModelEdgesParams, options?: RequestInit): Promise<ModelPitcherProjection[]> => {
+
+  return customFetch<ModelPitcherProjection[]>(getListModelEdgesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListModelEdgesQueryKey = (params?: ListModelEdgesParams,) => {
+    return [
+    `/api/model-edges`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListModelEdgesQueryOptions = <TData = Awaited<ReturnType<typeof listModelEdges>>, TError = ErrorType<ErrorResponse>>(params: ListModelEdgesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listModelEdges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListModelEdgesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listModelEdges>>> = ({ signal }) => listModelEdges(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listModelEdges>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListModelEdgesQueryResult = NonNullable<Awaited<ReturnType<typeof listModelEdges>>>
+export type ListModelEdgesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Project pitcher strikeouts for one game and compare to the market
+ */
+
+export function useListModelEdges<TData = Awaited<ReturnType<typeof listModelEdges>>, TError = ErrorType<ErrorResponse>>(
+ params: ListModelEdgesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listModelEdges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListModelEdgesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListPaperTradesUrl = (params?: ListPaperTradesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/paper-trades?${stringifiedParams}` : `/api/paper-trades`
+}
+
+/**
+ * @summary List model paper trades
+ */
+export const listPaperTrades = async (params?: ListPaperTradesParams, options?: RequestInit): Promise<PaperTrade[]> => {
+
+  return customFetch<PaperTrade[]>(getListPaperTradesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPaperTradesQueryKey = (params?: ListPaperTradesParams,) => {
+    return [
+    `/api/paper-trades`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPaperTradesQueryOptions = <TData = Awaited<ReturnType<typeof listPaperTrades>>, TError = ErrorType<unknown>>(params?: ListPaperTradesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPaperTrades>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPaperTradesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPaperTrades>>> = ({ signal }) => listPaperTrades(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPaperTrades>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPaperTradesQueryResult = NonNullable<Awaited<ReturnType<typeof listPaperTrades>>>
+export type ListPaperTradesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List model paper trades
+ */
+
+export function useListPaperTrades<TData = Awaited<ReturnType<typeof listPaperTrades>>, TError = ErrorType<unknown>>(
+ params?: ListPaperTradesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPaperTrades>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPaperTradesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreatePaperTradeUrl = () => {
+
+
+
+
+  return `/api/paper-trades`
+}
+
+/**
+ * @summary Log a model flag as a paper trade
+ */
+export const createPaperTrade = async (paperTradeInput: PaperTradeInput, options?: RequestInit): Promise<PaperTrade> => {
+
+  return customFetch<PaperTrade>(getCreatePaperTradeUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(paperTradeInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePaperTradeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPaperTrade>>, TError,{data: BodyType<PaperTradeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPaperTrade>>, TError,{data: BodyType<PaperTradeInput>}, TContext> => {
+
+const mutationKey = ['createPaperTrade'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPaperTrade>>, {data: BodyType<PaperTradeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPaperTrade(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePaperTradeMutationResult = NonNullable<Awaited<ReturnType<typeof createPaperTrade>>>
+    export type CreatePaperTradeMutationBody = BodyType<PaperTradeInput>
+    export type CreatePaperTradeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Log a model flag as a paper trade
+ */
+export const useCreatePaperTrade = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPaperTrade>>, TError,{data: BodyType<PaperTradeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPaperTrade>>,
+        TError,
+        {data: BodyType<PaperTradeInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePaperTradeMutationOptions(options));
+    }
+
+export const getGetPaperTradeSummaryUrl = () => {
+
+
+
+
+  return `/api/paper-trades/summary`
+}
+
+/**
+ * @summary Model validation summary (CLV and beat-the-close rate)
+ */
+export const getPaperTradeSummary = async ( options?: RequestInit): Promise<PaperTradeSummary> => {
+
+  return customFetch<PaperTradeSummary>(getGetPaperTradeSummaryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPaperTradeSummaryQueryKey = () => {
+    return [
+    `/api/paper-trades/summary`
+    ] as const;
+    }
+
+
+export const getGetPaperTradeSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getPaperTradeSummary>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaperTradeSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPaperTradeSummaryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPaperTradeSummary>>> = ({ signal }) => getPaperTradeSummary({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPaperTradeSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPaperTradeSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getPaperTradeSummary>>>
+export type GetPaperTradeSummaryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Model validation summary (CLV and beat-the-close rate)
+ */
+
+export function useGetPaperTradeSummary<TData = Awaited<ReturnType<typeof getPaperTradeSummary>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaperTradeSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPaperTradeSummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getDeletePaperTradeUrl = (id: number,) => {
+
+
+
+
+  return `/api/paper-trades/${id}`
+}
+
+/**
+ * @summary Delete a paper trade
+ */
+export const deletePaperTrade = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeletePaperTradeUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePaperTradeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePaperTrade>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePaperTrade>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deletePaperTrade'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePaperTrade>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deletePaperTrade(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePaperTradeMutationResult = NonNullable<Awaited<ReturnType<typeof deletePaperTrade>>>
+
+    export type DeletePaperTradeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a paper trade
+ */
+export const useDeletePaperTrade = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePaperTrade>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePaperTrade>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeletePaperTradeMutationOptions(options));
     }
 

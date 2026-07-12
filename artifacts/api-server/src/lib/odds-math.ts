@@ -8,6 +8,12 @@ export function americanToImpliedProb(american: number): number {
   return american > 0 ? 100 / (american + 100) : Math.abs(american) / (Math.abs(american) + 100);
 }
 
+/** Converts decimal odds back to American odds (e.g. 2.5 -> +150, 1.8333 -> -120). */
+export function decimalToAmerican(decimal: number): number {
+  if (decimal <= 1) return 0;
+  return decimal >= 2 ? Math.round((decimal - 1) * 100) : Math.round(-100 / (decimal - 1));
+}
+
 /** Converts a fair (no-vig) probability back to American odds. */
 export function probToAmerican(prob: number): number {
   const clamped = Math.min(Math.max(prob, 1e-6), 1 - 1e-6);

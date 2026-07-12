@@ -8,6 +8,8 @@ import rankingsRouter from "./rankings";
 import betsRouter from "./bets";
 import dashboardRouter from "./dashboard";
 import analysisRouter from "./analysis";
+import modelEdgesRouter from "./model-edges";
+import paperTradesRouter from "./paper-trades";
 
 const router: IRouter = Router();
 
@@ -20,5 +22,7 @@ router.use(rankingsRouter);
 router.use(betsRouter);
 router.use(dashboardRouter);
 router.use(analysisRouter);
+router.use(modelEdgesRouter);
+router.use(paperTradesRouter);
 
 export default router;

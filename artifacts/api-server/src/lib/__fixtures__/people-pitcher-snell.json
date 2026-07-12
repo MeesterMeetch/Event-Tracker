@@ -1,0 +1,132 @@
+{
+  "people": [
+    {
+      "id": 605483,
+      "fullName": "Blake Snell",
+      "pitchHand": { "code": "L" },
+      "stats": [
+        {
+          "type": { "displayName": "season" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "stat": {
+                "era": "2.50",
+                "whip": "1.10",
+                "strikeOuts": 200,
+                "inningsPitched": "180.0",
+                "gamesStarted": 30,
+                "wins": 15,
+                "losses": 5
+              }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "gameLog" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "date": "2025-06-01",
+              "opponent": { "name": "San Diego Padres" },
+              "stat": {
+                "gamesStarted": 1,
+                "inningsPitched": "6.0",
+                "earnedRuns": 2,
+                "strikeOuts": 8,
+                "baseOnBalls": 2,
+                "hits": 5,
+                "wins": 1,
+                "losses": 0
+              }
+            },
+            {
+              "date": "2025-06-07",
+              "opponent": { "name": "Colorado Rockies" },
+              "stat": {
+                "gamesStarted": 1,
+                "inningsPitched": "7.0",
+                "earnedRuns": 1,
+                "strikeOuts": 10,
+                "baseOnBalls": 1,
+                "hits": 3,
+                "wins": 0,
+                "losses": 0
+              }
+            },
+            {
+              "date": "2025-06-10",
+              "opponent": { "name": "Arizona Diamondbacks" },
+              "stat": {
+                "gamesStarted": 0,
+                "inningsPitched": "1.0",
+                "earnedRuns": 0,
+                "strikeOuts": 2,
+                "baseOnBalls": 0,
+                "hits": 0,
+                "wins": 0,
+                "losses": 0
+              }
+            },
+            {
+              "date": "2025-06-13",
+              "opponent": { "name": "New York Mets" },
+              "stat": {
+                "gamesStarted": 1,
+                "inningsPitched": "5.0",
+                "earnedRuns": 4,
+                "strikeOuts": 4,
+                "baseOnBalls": 3,
+                "hits": 7,
+                "wins": 0,
+                "losses": 1
+              }
+            },
+            {
+              "date": "2025-06-19",
+              "opponent": { "name": "Chicago Cubs" },
+              "stat": {
+                "gamesStarted": 1,
+                "inningsPitched": "6.1",
+                "earnedRuns": 2,
+                "strikeOuts": 7,
+                "baseOnBalls": 2,
+                "hits": 5,
+                "wins": 1,
+                "losses": 0
+              }
+            },
+            {
+              "date": "2025-06-25",
+              "opponent": { "name": "Atlanta Braves" },
+              "stat": {
+                "gamesStarted": 1,
+                "inningsPitched": "8.0",
+                "earnedRuns": 0,
+                "strikeOuts": 11,
+                "baseOnBalls": 0,
+                "hits": 2,
+                "wins": 1,
+                "losses": 0
+              }
+            },
+            {
+              "date": "2025-07-01",
+              "opponent": { "name": "Philadelphia Phillies" },
+              "stat": {
+                "gamesStarted": 1,
+                "inningsPitched": "7.0",
+                "earnedRuns": 1,
+                "strikeOuts": 9,
+                "baseOnBalls": 1,
+                "hits": 4,
+                "wins": 1,
+                "losses": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

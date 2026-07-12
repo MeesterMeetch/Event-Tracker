@@ -1,0 +1,62 @@
+{
+  "people": [
+    {
+      "id": 657277,
+      "fullName": "Logan Webb",
+      "pitchHand": { "code": "R" },
+      "stats": [
+        {
+          "type": { "displayName": "season" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "stat": {
+                "era": "3.25",
+                "whip": "1.18",
+                "strikeOuts": 165,
+                "inningsPitched": "150.1",
+                "gamesStarted": 22,
+                "wins": 9,
+                "losses": 8
+              }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "gameLog" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "date": "2025-06-20",
+              "opponent": { "name": "Los Angeles Dodgers" },
+              "stat": {
+                "gamesStarted": 1,
+                "inningsPitched": "6.2",
+                "earnedRuns": 3,
+                "strikeOuts": 7,
+                "baseOnBalls": 1,
+                "hits": 6,
+                "wins": 0,
+                "losses": 1
+              }
+            },
+            {
+              "date": "2025-06-26",
+              "opponent": { "name": "Miami Marlins" },
+              "stat": {
+                "gamesStarted": 1,
+                "inningsPitched": "7.0",
+                "earnedRuns": 2,
+                "strikeOuts": 9,
+                "baseOnBalls": 0,
+                "hits": 5,
+                "wins": 1,
+                "losses": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

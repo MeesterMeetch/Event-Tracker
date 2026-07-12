@@ -1,0 +1,41 @@
+{
+  "dates": [
+    {
+      "date": "2025-07-04",
+      "games": [
+        {
+          "gamePk": 740001,
+          "gameNumber": 1,
+          "doubleHeader": "Y",
+          "gameDate": "2025-07-04T17:10:00Z",
+          "teams": {
+            "away": {
+              "team": { "id": 137, "name": "San Francisco Giants" },
+              "probablePitcher": { "id": 657277, "fullName": "Logan Webb" }
+            },
+            "home": {
+              "team": { "id": 119, "name": "Los Angeles Dodgers" },
+              "probablePitcher": { "id": 605483, "fullName": "Blake Snell" }
+            }
+          }
+        },
+        {
+          "gamePk": 740002,
+          "gameNumber": 2,
+          "doubleHeader": "Y",
+          "gameDate": "2025-07-04T23:40:00Z",
+          "teams": {
+            "away": {
+              "team": { "id": 137, "name": "San Francisco Giants" },
+              "probablePitcher": { "id": 592791, "fullName": "Robbie Ray" }
+            },
+            "home": {
+              "team": { "id": 119, "name": "Los Angeles Dodgers" },
+              "probablePitcher": { "id": 477132, "fullName": "Clayton Kershaw" }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

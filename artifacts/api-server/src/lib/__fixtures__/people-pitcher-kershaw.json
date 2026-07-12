@@ -1,0 +1,48 @@
+{
+  "people": [
+    {
+      "id": 477132,
+      "fullName": "Clayton Kershaw",
+      "pitchHand": { "code": "L" },
+      "stats": [
+        {
+          "type": { "displayName": "season" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "stat": {
+                "era": "3.00",
+                "whip": "1.05",
+                "strikeOuts": 120,
+                "inningsPitched": "110.0",
+                "gamesStarted": 18,
+                "wins": 8,
+                "losses": 4
+              }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "gameLog" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "date": "2025-06-28",
+              "opponent": { "name": "San Francisco Giants" },
+              "stat": {
+                "gamesStarted": 1,
+                "inningsPitched": "6.0",
+                "earnedRuns": 2,
+                "strikeOuts": 6,
+                "baseOnBalls": 1,
+                "hits": 5,
+                "wins": 1,
+                "losses": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

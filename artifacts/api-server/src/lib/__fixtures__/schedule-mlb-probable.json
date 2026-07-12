@@ -1,0 +1,37 @@
+{
+  "dates": [
+    {
+      "date": "2025-07-01",
+      "games": [
+        {
+          "gamePk": 700001,
+          "gameDate": "2025-07-02T02:10:00Z",
+          "teams": {
+            "away": {
+              "team": { "id": 137, "name": "San Francisco Giants" },
+              "probablePitcher": { "id": 657277, "fullName": "Logan Webb" }
+            },
+            "home": {
+              "team": { "id": 119, "name": "Los Angeles Dodgers" },
+              "probablePitcher": { "id": 605483, "fullName": "Blake Snell" }
+            }
+          }
+        },
+        {
+          "gamePk": 700099,
+          "gameDate": "2025-07-02T23:10:00Z",
+          "teams": {
+            "away": {
+              "team": { "id": 133, "name": "Athletics" },
+              "probablePitcher": { "id": 111111, "fullName": "Someone Else" }
+            },
+            "home": {
+              "team": { "id": 108, "name": "Los Angeles Angels" },
+              "probablePitcher": { "id": 222222, "fullName": "Another Guy" }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

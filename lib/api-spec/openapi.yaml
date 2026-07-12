@@ -614,6 +614,7 @@ components:
         - sampleStarts
         - sampleBattersFaced
         - opponentDataAvailable
+        - insufficientData
         - lines
       properties:
         gameId:
@@ -648,6 +649,13 @@ components:
         sampleBattersFaced:
           type: integer
         opponentDataAvailable:
+          type: boolean
+        insufficientData:
+          description: >
+            True when the pitcher's strikeout-rate inputs were missing or
+            degraded (no rolling starts and no season/career sample). The model
+            abstains from projecting rather than emit a confident number off
+            zeroed inputs; numeric fields are placeholders and lines is empty.
           type: boolean
         lines:
           type: array

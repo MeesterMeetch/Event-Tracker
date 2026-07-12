@@ -460,6 +460,7 @@ export const ListModelEdgesResponseItem = zod.object({
   "sampleStarts": zod.number(),
   "sampleBattersFaced": zod.number(),
   "opponentDataAvailable": zod.boolean(),
+  "insufficientData": zod.boolean().describe('True when the pitcher\'s strikeout-rate inputs were missing or degraded (no rolling starts and no season\/career sample). The model abstains from projecting rather than emit a confident number off zeroed inputs; numeric fields are placeholders and lines is empty.\n'),
   "lines": zod.array(zod.object({
   "point": zod.number(),
   "selection": zod.string(),

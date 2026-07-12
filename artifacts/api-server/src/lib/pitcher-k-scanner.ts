@@ -1,5 +1,5 @@
 import type { OddsEvent } from "./odds";
-import type { MatchupKInputs, PitcherKMatchupSide } from "./mlb";
+import type { MatchupKInputs, PitcherKMatchupSide, PitcherKStats } from "./mlb";
 import { americanToDecimal, americanToImpliedProb, decimalToAmerican } from "./odds-math";
 import { projectPitcherK, lineProbabilities, kellyFraction, recommendedKellyUnits, DEFAULT_KELLY_MULTIPLIER } from "./pitcher-k-model";
 
@@ -42,7 +42,30 @@ export interface ModelPitcherProjection {
   sampleBattersFaced: number;
   /** Whether opponent handedness K% data was available for the adjustment. */
   opponentDataAvailable: boolean;
+  /**
+   * True when the pitcher's strikeout-rate inputs were missing or degraded (no
+   * rolling starts and no season/career sample). The model abstains from
+   * projecting rather than emit a confident number off zeroed inputs, so the
+   * numeric fields are placeholders and `lines` is empty.
+   */
+  insufficientData: boolean;
   lines: ModelKLine[];
+}
+
+/**
+ * A pitcher has a usable strikeout-rate signal when at least one of the model's
+ * rate sources — the rolling window, the season aggregate, or the career
+ * aggregate — carries real batters-faced data. When all three are empty (which
+ * is what `getMatchupKInputs` returns after an MLB feed failure or an
+ * unannounced starter), `projectPitcherK` would silently fall back to the league
+ * average and emit a confident-looking projection off nothing. Detect that here
+ * so the model can abstain instead.
+ */
+function hasUsableKRate(p: PitcherKStats): boolean {
+  const rolling = p.rollingBattersFaced > 0;
+  const season = (p.seasonBattersFaced ?? 0) > 0 && p.seasonStrikeouts != null;
+  const career = (p.careerBattersFaced ?? 0) > 0 && p.careerStrikeouts != null;
+  return rolling || season || career;
 }
 
 function normName(name: string): string {
@@ -123,6 +146,32 @@ function projectSide(
   const pitcher = side.pitcher;
   if (!pitcher) return null;
 
+  // Abstain when the K-rate inputs are missing/degraded: a projection off zeroed
+  // rolling stats and null season/career would just be the league average
+  // dressed up as a precise number. Surface it as insufficient data instead.
+  if (!hasUsableKRate(pitcher)) {
+    return {
+      gameId: event.id,
+      sport,
+      commenceTime: event.commence_time,
+      homeTeam: event.home_team,
+      awayTeam: event.away_team,
+      pitcher: pitcher.name,
+      team: pitcher.team,
+      opponent: side.opponent?.team ?? "",
+      throws: pitcher.throws,
+      projectedBattersFaced: 0,
+      expectedStrikeouts: 0,
+      ratePerBF: 0,
+      opponentFactor: 1,
+      sampleStarts: pitcher.rollingStarts,
+      sampleBattersFaced: pitcher.rollingBattersFaced,
+      opponentDataAvailable: false,
+      insufficientData: true,
+      lines: [],
+    };
+  }
+
   const projection = projectPitcherK(
     {
       throws: pitcher.throws,
@@ -198,6 +247,7 @@ function projectSide(
     sampleBattersFaced: projection.sampleBattersFaced,
     opponentDataAvailable:
       side.opponent != null && (pitcher.throws === "L" ? side.opponent.kPctVsLhp : side.opponent.kPctVsRhp) != null,
+    insufficientData: false,
     lines,
   };
 }
@@ -217,7 +267,10 @@ export function computeModelEdges(
   const projections: ModelPitcherProjection[] = [];
   for (const side of [inputs.home, inputs.away]) {
     const projection = projectSide(event, sport, side, agg, minEdgePercent, kellyMultiplier);
-    if (projection && projection.lines.length > 0) projections.push(projection);
+    if (!projection) continue;
+    // Surface insufficient-data sides so the UI can say so; otherwise only keep
+    // sides that actually produced market lines to compare against.
+    if (projection.insufficientData || projection.lines.length > 0) projections.push(projection);
   }
   // Pitchers with a flagged edge first, then by their best edge.
   projections.sort((a, b) => {

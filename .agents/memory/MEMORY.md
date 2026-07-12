@@ -2,3 +2,4 @@
 - [Odds API devig/EV pattern](odds-api-ev-tracker.md) — multiplicative devig (N-way, not just 2-way) averaged across books; `/sports?all=false` is free so source the picker live and filter `has_outrights`.
 - [Player props via per-event endpoint](odds-api-ev-tracker.md) — props cost credits per market×region per game (game list is free) → drill-down UX; pair (player,point) per book to devig; props stay out of auto-grade/CLV.
 - [shadcn select one-row clamp](shadcn-select-clamp.md) — Select showing only one option / no scroll = height-clamp class on the popper Viewport; remove it.
+- [MLB K inputs degrade silently](mlb-k-inputs-degrade-silently.md) — getMatchupKInputs returns zeroed/null stats (not an error) on feed failure; consumers must abstain, or projectPitcherK emits a league-average number off nothing.

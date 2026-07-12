@@ -41,6 +41,8 @@ export interface ModelPitcherProjection {
   sampleStarts: number;
   sampleBattersFaced: number;
   opponentDataAvailable: boolean;
+  /** True when the pitcher's strikeout-rate inputs were missing or degraded (no rolling starts and no season/career sample). The model abstains from projecting rather than emit a confident number off zeroed inputs; numeric fields are placeholders and lines is empty. */
+  insufficientData: boolean;
   lines: ModelKLine[];
 }
 

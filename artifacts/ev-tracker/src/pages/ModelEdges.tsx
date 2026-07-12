@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Brain, Loader2, Plus, Target, Trash2, TrendingUp } from "lucide-react";
+import { AlertTriangle, Brain, Loader2, Plus, Target, Trash2, TrendingUp } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { formatOdds, formatPercent, formatGameTime, cn } from "@/lib/utils";
 
@@ -93,6 +93,29 @@ function ProjectionCard({ projection }: { projection: ModelPitcherProjection }) 
       },
     );
   };
+
+  if (projection.insufficientData) {
+    return (
+      <Card className="overflow-hidden border-amber-500/30 bg-amber-500/5">
+        <CardContent className="p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-base">{projection.pitcher}</span>
+            {projection.throws && (
+              <Badge variant="outline" className="font-mono text-[10px]">{projection.throws}HP</Badge>
+            )}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {projection.team}
+            {projection.opponent ? ` · vs ${projection.opponent}` : ""}
+          </div>
+          <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-500">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>Insufficient data — no recent or season strikeout inputs, so the model won't project this start.</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="overflow-hidden">

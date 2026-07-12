@@ -1,0 +1,81 @@
+{
+  "name": "National Hockey League",
+  "children": [
+    {
+      "name": "Eastern Conference",
+      "children": [
+        {
+          "name": "Atlantic Division",
+          "standings": {
+            "entries": [
+              {
+                "team": { "displayName": "Toronto Maple Leafs" },
+                "stats": [
+                  { "name": "wins", "value": 50, "displayValue": "50" },
+                  { "name": "losses", "value": 23, "displayValue": "23" },
+                  { "name": "otLosses", "value": 9, "displayValue": "9" },
+                  { "name": "points", "value": 109, "displayValue": "109" },
+                  { "name": "gamesBehind", "value": 0, "displayValue": "-" },
+                  { "name": "streak", "value": -1, "displayValue": "L1" },
+                  { "name": "overall", "value": null, "displayValue": "50-23-9, 109 PTS" }
+                ]
+              },
+              {
+                "team": { "displayName": "Tampa Bay Lightning" },
+                "stats": [
+                  { "name": "wins", "value": 45, "displayValue": "45" },
+                  { "name": "losses", "value": 27, "displayValue": "27" },
+                  { "name": "otLosses", "value": 10, "displayValue": "10" },
+                  { "name": "points", "value": 100, "displayValue": "100" },
+                  { "name": "gamesBehind", "value": 9, "displayValue": "9" },
+                  { "name": "streak", "value": 2, "displayValue": "W2" }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "Metropolitan Division",
+          "standings": {
+            "entries": [
+              {
+                "team": { "displayName": "New York Rangers" },
+                "stats": [
+                  { "name": "wins", "value": 48, "displayValue": "48" },
+                  { "name": "losses", "value": 26, "displayValue": "26" },
+                  { "name": "otLosses", "value": 8, "displayValue": "8" },
+                  { "name": "points", "value": 104, "displayValue": "104" },
+                  { "name": "gamesBehind", "value": 0, "displayValue": "-" },
+                  { "name": "streak", "value": 3, "displayValue": "W3" }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Western Conference",
+      "children": [
+        {
+          "name": "Central Division",
+          "standings": {
+            "entries": [
+              {
+                "team": { "displayName": "Dallas Stars" },
+                "stats": [
+                  { "name": "wins", "value": 52, "displayValue": "52" },
+                  { "name": "losses", "value": 21, "displayValue": "21" },
+                  { "name": "otLosses", "value": 9, "displayValue": "9" },
+                  { "name": "points", "value": 113, "displayValue": "113" },
+                  { "name": "gamesBehind", "value": 0, "displayValue": "-" },
+                  { "name": "streak", "value": 1, "displayValue": "W1" }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

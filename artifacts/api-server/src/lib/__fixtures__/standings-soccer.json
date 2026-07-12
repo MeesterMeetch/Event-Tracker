@@ -1,0 +1,43 @@
+{
+  "name": "English Premier League",
+  "children": [
+    {
+      "name": "2025-26 English Premier League",
+      "standings": {
+        "entries": [
+          {
+            "team": { "displayName": "Manchester City" },
+            "stats": [
+              { "name": "wins", "value": 24, "displayValue": "24" },
+              { "name": "losses", "value": 4, "displayValue": "4" },
+              { "name": "ties", "value": 6, "displayValue": "6" },
+              { "name": "points", "value": 78, "displayValue": "78" },
+              { "name": "rank", "value": 1, "displayValue": "1" },
+              { "name": "overall", "value": null, "displayValue": "24-4-6" }
+            ]
+          },
+          {
+            "team": { "displayName": "Arsenal" },
+            "stats": [
+              { "name": "wins", "value": 23, "displayValue": "23" },
+              { "name": "losses", "value": 5, "displayValue": "5" },
+              { "name": "ties", "value": 6, "displayValue": "6" },
+              { "name": "points", "value": 75, "displayValue": "75" },
+              { "name": "rank", "value": 2, "displayValue": "2" }
+            ]
+          },
+          {
+            "team": { "displayName": "Liverpool" },
+            "stats": [
+              { "name": "wins", "value": 22, "displayValue": "22" },
+              { "name": "losses", "value": 6, "displayValue": "6" },
+              { "name": "ties", "value": 6, "displayValue": "6" },
+              { "name": "points", "value": 72, "displayValue": "72" },
+              { "name": "rank", "value": 3, "displayValue": "3" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

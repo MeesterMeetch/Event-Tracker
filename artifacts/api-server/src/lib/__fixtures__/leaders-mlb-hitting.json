@@ -1,0 +1,23 @@
+{
+  "leagueLeaders": [
+    {
+      "leaderCategory": "homeRuns",
+      "leaders": [
+        { "rank": 1, "value": "60", "person": { "fullName": "Cal Raleigh" }, "team": { "name": "Seattle Mariners" } },
+        { "rank": 2, "value": "53", "person": { "fullName": "Shohei Ohtani" }, "team": { "name": "Los Angeles Dodgers" } }
+      ]
+    },
+    {
+      "leaderCategory": "battingAverage",
+      "leaders": [
+        { "rank": 1, "value": ".331", "person": { "fullName": "Aaron Judge" }, "team": { "name": "New York Yankees" } }
+      ]
+    },
+    {
+      "leaderCategory": "runsBattedIn",
+      "leaders": [
+        { "rank": 1, "value": "132", "person": { "fullName": "Kyle Schwarber" }, "team": { "name": "Philadelphia Phillies" } }
+      ]
+    }
+  ]
+}

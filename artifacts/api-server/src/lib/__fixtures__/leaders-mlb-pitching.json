@@ -1,0 +1,17 @@
+{
+  "leagueLeaders": [
+    {
+      "leaderCategory": "earnedRunAverage",
+      "leaders": [
+        { "rank": 1, "value": "2.14", "person": { "fullName": "Tarik Skubal" }, "team": { "name": "Detroit Tigers" } }
+      ]
+    },
+    {
+      "leaderCategory": "strikeouts",
+      "leaders": [
+        { "rank": 1, "value": "241", "person": { "fullName": "Tarik Skubal" }, "team": { "name": "Detroit Tigers" } },
+        { "rank": 2, "value": "220", "person": { "fullName": "Garrett Crochet" }, "team": { "name": "Boston Red Sox" } }
+      ]
+    }
+  ]
+}

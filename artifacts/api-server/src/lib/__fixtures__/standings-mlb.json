@@ -1,0 +1,49 @@
+{
+  "name": "Major League Baseball",
+  "children": [
+    {
+      "name": "American League East",
+      "standings": {
+        "entries": [
+          {
+            "team": { "displayName": "New York Yankees" },
+            "stats": [
+              { "name": "wins", "value": 58, "displayValue": "58" },
+              { "name": "losses", "value": 35, "displayValue": "35" },
+              { "name": "leagueWinPercent", "value": 0.624, "displayValue": ".624" },
+              { "name": "gamesBehind", "value": 0, "displayValue": "-" },
+              { "name": "streak", "value": 2, "displayValue": "W2" }
+            ]
+          },
+          {
+            "team": { "displayName": "Tampa Bay Rays" },
+            "stats": [
+              { "name": "wins", "value": 56, "displayValue": "56" },
+              { "name": "losses", "value": 37, "displayValue": "37" },
+              { "name": "leagueWinPercent", "value": 0.602, "displayValue": ".602" },
+              { "name": "gamesBehind", "value": 2, "displayValue": "2.0" },
+              { "name": "streak", "value": -1, "displayValue": "L1" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "National League West",
+      "standings": {
+        "entries": [
+          {
+            "team": { "displayName": "Los Angeles Dodgers" },
+            "stats": [
+              { "name": "wins", "value": 60, "displayValue": "60" },
+              { "name": "losses", "value": 33, "displayValue": "33" },
+              { "name": "leagueWinPercent", "value": 0.645, "displayValue": ".645" },
+              { "name": "gamesBehind", "value": 0, "displayValue": "-" },
+              { "name": "streak", "value": 4, "displayValue": "W4" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

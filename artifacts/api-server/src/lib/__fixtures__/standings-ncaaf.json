@@ -1,0 +1,46 @@
+{
+  "name": "FBS (I-A)",
+  "children": [
+    {
+      "name": "Southeastern Conference",
+      "standings": {
+        "entries": [
+          {
+            "team": { "displayName": "Georgia Bulldogs" },
+            "stats": [
+              { "name": "wins", "value": 12, "displayValue": "12" },
+              { "name": "leagueWinPercent", "value": 0.857, "displayValue": ".857" },
+              { "name": "streak", "value": 5, "displayValue": "W5" },
+              { "name": "overall", "value": null, "displayValue": "12-2" }
+            ]
+          },
+          {
+            "team": { "displayName": "Alabama Crimson Tide" },
+            "stats": [
+              { "name": "wins", "value": 10, "displayValue": "10" },
+              { "name": "leagueWinPercent", "value": 0.769, "displayValue": ".769" },
+              { "name": "streak", "value": 1, "displayValue": "W1" },
+              { "name": "overall", "value": null, "displayValue": "10-2-1" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "Big Ten Conference",
+      "standings": {
+        "entries": [
+          {
+            "team": { "displayName": "Michigan Wolverines" },
+            "stats": [
+              { "name": "wins", "value": 11, "displayValue": "11" },
+              { "name": "leagueWinPercent", "value": 0.786, "displayValue": ".786" },
+              { "name": "streak", "value": 3, "displayValue": "W3" },
+              { "name": "overall", "value": null, "displayValue": "11-3" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

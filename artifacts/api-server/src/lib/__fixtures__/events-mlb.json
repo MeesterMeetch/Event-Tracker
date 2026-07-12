@@ -1,0 +1,23 @@
+[
+  {
+    "id": "evt-mlb-2",
+    "sport_key": "baseball_mlb",
+    "commence_time": "2026-07-13T02:10:00Z",
+    "home_team": "Los Angeles Dodgers",
+    "away_team": "San Francisco Giants"
+  },
+  {
+    "id": "evt-mlb-1",
+    "sport_key": "baseball_mlb",
+    "commence_time": "2026-07-12T23:05:00Z",
+    "home_team": "New York Yankees",
+    "away_team": "Boston Red Sox"
+  },
+  {
+    "id": "evt-mlb-3",
+    "sport_key": "baseball_mlb",
+    "commence_time": "2026-07-13T17:35:00Z",
+    "home_team": "Chicago Cubs",
+    "away_team": "St. Louis Cardinals"
+  }
+]

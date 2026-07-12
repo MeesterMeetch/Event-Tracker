@@ -1,0 +1,72 @@
+[
+  {
+    "id": "evt-mlb-1",
+    "sport_key": "baseball_mlb",
+    "commence_time": "2026-07-12T23:05:00Z",
+    "home_team": "New York Yankees",
+    "away_team": "Boston Red Sox",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "title": "DraftKings",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              { "name": "New York Yankees", "price": -110 },
+              { "name": "Boston Red Sox", "price": -110 }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "fanduel",
+        "title": "FanDuel",
+        "markets": [
+          {
+            "key": "h2h",
+            "outcomes": [
+              { "name": "New York Yankees", "price": 120 },
+              { "name": "Boston Red Sox", "price": -140 }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "evt-mlb-2",
+    "sport_key": "baseball_mlb",
+    "commence_time": "2026-07-13T02:10:00Z",
+    "home_team": "Los Angeles Dodgers",
+    "away_team": "San Francisco Giants",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "title": "DraftKings",
+        "markets": [
+          {
+            "key": "totals",
+            "outcomes": [
+              { "name": "Over", "point": 8.5, "price": -110 },
+              { "name": "Under", "point": 8.5, "price": -110 }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "fanduel",
+        "title": "FanDuel",
+        "markets": [
+          {
+            "key": "totals",
+            "outcomes": [
+              { "name": "Over", "point": 8.5, "price": 115 },
+              { "name": "Under", "point": 8.5, "price": -135 }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

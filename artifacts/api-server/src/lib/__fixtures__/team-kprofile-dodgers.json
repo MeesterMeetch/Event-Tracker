@@ -1,0 +1,16 @@
+{
+  "stats": [
+    {
+      "splits": [
+        {
+          "split": { "code": "vl", "description": "vs Left" },
+          "stat": { "strikeOuts": 240, "plateAppearances": 1000 }
+        },
+        {
+          "split": { "code": "vr", "description": "vs Right" },
+          "stat": { "strikeOuts": 330, "plateAppearances": 1500 }
+        }
+      ]
+    }
+  ]
+}

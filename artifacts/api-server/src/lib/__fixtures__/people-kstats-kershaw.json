@@ -1,0 +1,36 @@
+{
+  "people": [
+    {
+      "id": 477132,
+      "fullName": "Clayton Kershaw",
+      "pitchHand": { "code": "L" },
+      "stats": [
+        {
+          "type": { "displayName": "season" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            { "stat": { "strikeOuts": 120, "battersFaced": 480, "gamesStarted": 20 } }
+          ]
+        },
+        {
+          "type": { "displayName": "career" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            { "stat": { "strikeOuts": 2900, "battersFaced": 9500, "gamesStarted": 420 } }
+          ]
+        },
+        {
+          "type": { "displayName": "gameLog" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "date": "2025-06-28",
+              "opponent": { "name": "Colorado Rockies" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 6, "battersFaced": 22 }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+{
+  "people": [
+    {
+      "id": 657277,
+      "fullName": "Logan Webb",
+      "pitchHand": { "code": "R" },
+      "stats": [
+        {
+          "type": { "displayName": "season" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "stat": {
+                "strikeOuts": 180,
+                "battersFaced": 690,
+                "gamesStarted": 28
+              }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "career" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "stat": {
+                "strikeOuts": 900,
+                "battersFaced": 4000,
+                "gamesStarted": 160
+              }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "gameLog" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "date": "2025-06-08",
+              "opponent": { "name": "By Innings Pitched" },
+              "stat": {
+                "gamesStarted": 1,
+                "strikeOuts": 8,
+                "inningsPitched": "6.0",
+                "hits": 5,
+                "baseOnBalls": 2,
+                "hitByPitch": 1
+              }
+            },
+            {
+              "date": "2025-06-14",
+              "opponent": { "name": "By Innings Pitched Frac" },
+              "stat": {
+                "gamesStarted": 1,
+                "strikeOuts": 9,
+                "inningsPitched": "7.2",
+                "hits": 4,
+                "baseOnBalls": 1
+              }
+            },
+            {
+              "date": "2025-06-20",
+              "opponent": { "name": "By Outs Field" },
+              "stat": {
+                "gamesStarted": 1,
+                "strikeOuts": 6,
+                "outs": 21,
+                "hits": 6,
+                "baseOnBalls": 3
+              }
+            },
+            {
+              "date": "2025-06-26",
+              "opponent": { "name": "Unusable No Ip No Outs" },
+              "stat": {
+                "gamesStarted": 1,
+                "strikeOuts": 5
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

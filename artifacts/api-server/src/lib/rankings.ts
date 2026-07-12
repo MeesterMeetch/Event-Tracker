@@ -140,6 +140,12 @@ export function listRankingsSports(): RankingsSport[] {
 // instant without hammering the public feeds.
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
 
+// A leaders-enabled league that comes back empty is almost always a transient
+// upstream hiccup (partial/empty-but-valid ESPN or MLB response), not real
+// "no leaders" data. Cache such empties only briefly so the page recovers
+// within minutes once the feed does, instead of serving nothing for hours.
+const EMPTY_LEADERS_TTL_MS = 5 * 60 * 1000;
+
 interface CacheSlot<T> {
   data: T;
   expires: number;
@@ -342,6 +348,10 @@ export async function getLeaders(sportKey: string): Promise<LeaderCategory[]> {
     categories = parseEspnLeaders(data, src.leaders.categories);
   }
 
-  leadersCache.set(key, { data: categories, expires: Date.now() + CACHE_TTL_MS });
+  // Empty results for a leaders-enabled league are treated as transient and
+  // cached only briefly, so a temporary ESPN/MLB hiccup can't pin an empty
+  // response for hours after the feed recovers.
+  const ttl = categories.length > 0 ? CACHE_TTL_MS : EMPTY_LEADERS_TTL_MS;
+  leadersCache.set(key, { data: categories, expires: Date.now() + ttl });
   return categories;
 }

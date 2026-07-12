@@ -188,4 +188,66 @@ describe("getLeaders", () => {
     ]);
     expect(cats[0].leaders[0].player).toBe("Matthew Stafford");
   });
+
+  it("caches a transient empty leaders response only briefly so it recovers fast", async () => {
+    vi.useFakeTimers();
+    try {
+      // ESPN hiccups with an empty-but-valid payload for a league that should
+      // have leaders.
+      stubFetchRoutes([{ contains: "football/nfl/leaders", payload: { leaders: { categories: [] } } }]);
+      const { getLeaders } = await importRankings();
+
+      expect(await getLeaders("americanfootball_nfl")).toEqual([]);
+
+      // Feed recovers with real data.
+      stubFetchRoutes([{ contains: "football/nfl/leaders", payload: loadFixture("leaders-espn-nfl.json") }]);
+
+      // Within the short empty-TTL the cached empty is still served, so a
+      // flurry of requests can't hammer ESPN while it's down.
+      vi.advanceTimersByTime(60 * 1000);
+      expect(await getLeaders("americanfootball_nfl")).toEqual([]);
+
+      // But well before the 3h standings TTL, the empty expires and the real
+      // leaders come back — no hours-long stale-empty window.
+      vi.advanceTimersByTime(5 * 60 * 1000);
+      const cats = await getLeaders("americanfootball_nfl");
+      expect(cats.map((c) => c.key)).toEqual([
+        "passingYards",
+        "rushingYards",
+        "receivingYards",
+        "sacks",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps caching a non-empty leaders response for the full TTL", async () => {
+    vi.useFakeTimers();
+    try {
+      const calls = { n: 0 };
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => {
+          calls.n += 1;
+          return {
+            ok: true,
+            status: 200,
+            statusText: "OK",
+            json: async () => loadFixture("leaders-espn-nfl.json"),
+          } as Response;
+        }),
+      );
+      const { getLeaders } = await importRankings();
+
+      await getLeaders("americanfootball_nfl");
+      // Past the short empty-TTL but within the 3h TTL: a populated result is
+      // still served from cache, so we don't re-fetch on the short cadence.
+      vi.advanceTimersByTime(10 * 60 * 1000);
+      await getLeaders("americanfootball_nfl");
+      expect(calls.n).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

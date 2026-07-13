@@ -106,6 +106,9 @@ router.post("/analysis", async (req, res): Promise<void> => {
       awayPitcher: pitchers.away,
     });
 
+    // Only complete analyses reach this point: generateAnalysis throws on a
+    // non-JSON or partial model response, so a half-empty report is never
+    // cached — it takes the catch below and surfaces as a 502.
     pruneCache();
     cache.set(cacheKey, { data, expires: Date.now() + CACHE_TTL_MS });
     res.json(data);

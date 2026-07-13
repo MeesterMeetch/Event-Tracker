@@ -111,22 +111,65 @@ Respond with a single JSON object with exactly these keys:
 }
 Output only the JSON object, no markdown fences.`;
 
-function coerceContent(raw: unknown): AnalysisContent {
-  const obj = (raw ?? {}) as Record<string, unknown>;
-  const asStr = (v: unknown, fallback = ""): string =>
-    typeof v === "string" ? v : fallback;
-  const factors = Array.isArray(obj.keyFactors)
-    ? obj.keyFactors.filter((x): x is string => typeof x === "string")
-    : [];
-  return {
-    summary: asStr(obj.summary),
-    pitchingAnalysis: asStr(obj.pitchingAnalysis),
-    bettingAngle: asStr(obj.bettingAngle),
-    keyFactors: factors,
-  };
+/**
+ * Raised when the model's output can't be parsed into a complete analysis
+ * (non-JSON, or missing/wrong-typed required fields). The route catches this
+ * and returns a 502 rather than serving — or caching — a half-empty report.
+ */
+export class AnalysisFormatError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AnalysisFormatError";
+  }
 }
 
-/** Calls the LLM to produce a structured scouting/betting analysis for one game. */
+/**
+ * Validate a parsed model response into a complete AnalysisContent, or throw
+ * AnalysisFormatError. Every field is required: a missing or wrong-typed key
+ * means the report would render half-empty, which we treat as a failure the
+ * caller must surface — not something to paper over with empty strings/arrays.
+ */
+function coerceContent(raw: unknown): AnalysisContent {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new AnalysisFormatError("model response was not a JSON object");
+  }
+  const obj = raw as Record<string, unknown>;
+
+  const missing: string[] = [];
+  const reqStr = (key: keyof AnalysisContent): string => {
+    const v = obj[key];
+    if (typeof v !== "string" || v.trim() === "") {
+      missing.push(key);
+      return "";
+    }
+    return v;
+  };
+
+  const summary = reqStr("summary");
+  const pitchingAnalysis = reqStr("pitchingAnalysis");
+  const bettingAngle = reqStr("bettingAngle");
+
+  const factors =
+    Array.isArray(obj.keyFactors) &&
+    obj.keyFactors.every((x): x is string => typeof x === "string");
+  const keyFactors = factors ? (obj.keyFactors as string[]).filter((x) => x.trim() !== "") : [];
+  if (!factors || keyFactors.length === 0) missing.push("keyFactors");
+
+  if (missing.length > 0) {
+    throw new AnalysisFormatError(
+      `model response missing or invalid required field(s): ${missing.join(", ")}`,
+    );
+  }
+
+  return { summary, pitchingAnalysis, bettingAngle, keyFactors };
+}
+
+/**
+ * Calls the LLM to produce a structured scouting/betting analysis for one game.
+ * Throws AnalysisFormatError if the model returns non-JSON or an incomplete
+ * object, so the caller can fail loudly (502) instead of surfacing/caching a
+ * partially-empty report.
+ */
 export async function generateAnalysis(input: AnalysisInput): Promise<AnalysisContent> {
   const completion = await openai.chat.completions.create({
     model: ANALYSIS_MODEL,
@@ -144,13 +187,7 @@ export async function generateAnalysis(input: AnalysisInput): Promise<AnalysisCo
     parsed = JSON.parse(text);
   } catch (err) {
     logger.warn({ err, text: text.slice(0, 200) }, "analysis: model returned non-JSON");
-    // Fall back to putting the raw text in the summary so the user still sees something.
-    return {
-      summary: text || "Analysis could not be generated.",
-      pitchingAnalysis: "",
-      bettingAngle: "",
-      keyFactors: [],
-    };
+    throw new AnalysisFormatError("model returned non-JSON output");
   }
 
   return coerceContent(parsed);

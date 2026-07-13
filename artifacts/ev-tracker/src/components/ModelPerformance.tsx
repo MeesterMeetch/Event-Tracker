@@ -187,19 +187,38 @@ type Filters = { from: string; to: string; pitcher: string; selection: string };
 
 const EMPTY_FILTERS: Filters = { from: "", to: "", pitcher: "all", selection: "all" };
 
-function StatBlock({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" }) {
+function StatBlock({
+  label,
+  value,
+  tone,
+  lowConfidence,
+  hint,
+}: {
+  label: string;
+  value: string;
+  tone?: "pos" | "neg";
+  // When true the stat is drawn from too few graded trades to trust, so we
+  // strip the confident pos/neg coloring, mute the number, and show a hint so a
+  // 1–2 trade sample can't read as a proven edge at a glance.
+  lowConfidence?: boolean;
+  hint?: string;
+}) {
   return (
-    <div>
+    <div className={cn(lowConfidence && "opacity-60")}>
       <div
         className={cn(
           "font-mono font-bold text-lg",
-          tone === "pos" && "text-positive",
-          tone === "neg" && "text-destructive",
+          lowConfidence
+            ? "text-muted-foreground"
+            : cn(tone === "pos" && "text-positive", tone === "neg" && "text-destructive"),
         )}
       >
         {value}
       </div>
       <div className="text-[10px] uppercase text-muted-foreground">{label}</div>
+      {lowConfidence && hint && (
+        <div className="mt-0.5 text-[10px] leading-tight text-muted-foreground/80">{hint}</div>
+      )}
     </div>
   );
 }
@@ -406,6 +425,12 @@ export default function ModelPerformance() {
     };
   }, [filtered, graded]);
 
+  // The headline Beat Close / Avg CLV blocks summarize only the graded set, so a
+  // single lucky close on a 1–2 trade sample can make the model look proven.
+  // Below the same threshold used elsewhere, mute them and annotate the count.
+  const lowGradedSample = headline.graded > 0 && headline.graded < MIN_GRADED_SAMPLE;
+  const lowSampleHint = `${headline.graded} graded — too few to trust`;
+
   if (isLoading) {
     return (
       <Card>
@@ -444,11 +469,18 @@ export default function ModelPerformance() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 pt-1">
             <StatBlock label="Trades" value={String(headline.total)} />
             <StatBlock label="Graded" value={String(headline.graded)} />
-            <StatBlock label="Beat Close" value={fmtRate(headline.beatClose)} />
+            <StatBlock
+              label="Beat Close"
+              value={fmtRate(headline.beatClose)}
+              lowConfidence={lowGradedSample}
+              hint={lowSampleHint}
+            />
             <StatBlock
               label="Avg CLV"
               value={headline.avgClv == null ? "—" : formatPercent(headline.avgClv)}
               tone={headline.avgClv == null ? undefined : headline.avgClv > 0 ? "pos" : "neg"}
+              lowConfidence={lowGradedSample}
+              hint={lowSampleHint}
             />
             <StatBlock
               label="Avg Edge"

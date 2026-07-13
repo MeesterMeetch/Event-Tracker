@@ -1,0 +1,23 @@
+[
+  {
+    "id": "evt-mlb-1",
+    "sport_key": "baseball_mlb",
+    "commence_time": "2026-07-10T18:00:00Z",
+    "completed": true,
+    "home_team": "New York Yankees",
+    "away_team": "Boston Red Sox",
+    "scores": [
+      { "name": "New York Yankees", "score": "5" },
+      { "name": "Boston Red Sox", "score": "3" }
+    ]
+  },
+  {
+    "id": "evt-mlb-2",
+    "sport_key": "baseball_mlb",
+    "commence_time": "2026-07-10T20:00:00Z",
+    "completed": false,
+    "home_team": "Chicago Cubs",
+    "away_team": "St. Louis Cardinals",
+    "scores": null
+  }
+]

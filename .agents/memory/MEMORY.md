@@ -3,3 +3,4 @@
 - [Player props via per-event endpoint](odds-api-ev-tracker.md) — props cost credits per market×region per game (game list is free) → drill-down UX; pair (player,point) per book to devig; props stay out of auto-grade/CLV.
 - [shadcn select one-row clamp](shadcn-select-clamp.md) — Select showing only one option / no scroll = height-clamp class on the popper Viewport; remove it.
 - [MLB K inputs degrade silently](mlb-k-inputs-degrade-silently.md) — getMatchupKInputs returns zeroed/null stats (not an error) on feed failure; consumers must abstain, or projectPitcherK emits a league-average number off nothing.
+- [CLV closing-line jobs](clv-jobs.md) — game-line closer averages RAW American odds (wrong math, but tested as-is); paper-trade closer needs ≥2 books and only expires past the give-up window.

@@ -71,7 +71,11 @@ const PAPER_COLS = [
 ] as const;
 
 type Row = Record<string, unknown>;
-type Cond = { __op: "eq"; col: string; val: unknown } | null;
+type Cond =
+  | { __op: "eq"; col: string; val: unknown }
+  | { __op: "isNull"; col: string }
+  | { __op: "and"; conds: Cond[] }
+  | null;
 type Order = { __op: "desc"; col: string } | null;
 
 interface TableMarker {
@@ -112,8 +116,22 @@ export function makeFakeDb(): FakeDbModule {
 
   const nameOf = (t: TableMarker): string => t.__table;
 
+  const matchesCond = (row: Row, cond: Cond): boolean => {
+    if (!cond) return true;
+    switch (cond.__op) {
+      case "eq":
+        return row[cond.col] === cond.val;
+      case "isNull":
+        return row[cond.col] == null;
+      case "and":
+        return cond.conds.every((c) => matchesCond(row, c));
+      default:
+        return true;
+    }
+  };
+
   const applyWhere = (rows: Row[], cond: Cond): Row[] =>
-    cond && cond.__op === "eq" ? rows.filter((r) => r[cond.col] === cond.val) : rows;
+    cond ? rows.filter((r) => matchesCond(r, cond)) : rows;
 
   const applyOrder = (rows: Row[], order: Order): Row[] => {
     if (!order || order.__op !== "desc") return rows;
@@ -262,6 +280,8 @@ export async function stubDrizzleOrm(): Promise<Record<string, unknown>> {
   return {
     ...actual,
     eq: (col: string, val: unknown) => ({ __op: "eq", col, val }),
+    isNull: (col: string) => ({ __op: "isNull", col }),
+    and: (...conds: unknown[]) => ({ __op: "and", conds: conds.filter(Boolean) }),
     desc: (col: string) => ({ __op: "desc", col }),
   };
 }

@@ -1,6 +1,6 @@
 import type { OddsEvent } from "./odds";
 import type { MatchupKInputs, PitcherKMatchupSide, PitcherKStats } from "./mlb";
-import { americanToDecimal, americanToImpliedProb, decimalToAmerican } from "./odds-math";
+import { americanToDecimal, americanToImpliedProb, trimmedMeanClosingAmerican } from "./odds-math";
 import { projectPitcherK, lineProbabilities, kellyFraction, recommendedKellyUnits, DEFAULT_KELLY_MULTIPLIER } from "./pitcher-k-model";
 
 export const PITCHER_K_MARKET = "pitcher_strikeouts";
@@ -298,13 +298,10 @@ export function closingConsensusForLine(
 
   const closingProb = side.fairSamples.reduce((s, p) => s + p, 0) / side.fairSamples.length;
 
-  // Trimmed mean of the per-book prices (in decimal), dropping the single best
-  // and worst when there are enough samples to trim.
-  const decimals = collectSidePrices(event, pitcher, point, selection).map(americanToDecimal).sort((a, b) => a - b);
-  if (decimals.length === 0) return null;
-  const trimmed = decimals.length >= 4 ? decimals.slice(1, -1) : decimals;
-  const meanDecimal = trimmed.reduce((s, d) => s + d, 0) / trimmed.length;
-  const closingAmerican = decimalToAmerican(meanDecimal);
+  // Trimmed-mean-in-decimal-space consensus of the per-book prices, shared with
+  // the game-line closer so the two beat-the-close numbers can't drift apart.
+  const closingAmerican = trimmedMeanClosingAmerican(collectSidePrices(event, pitcher, point, selection));
+  if (closingAmerican == null) return null;
 
   return { closingAmerican, closingProb };
 }

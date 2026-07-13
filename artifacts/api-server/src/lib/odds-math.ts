@@ -32,6 +32,33 @@ export function computeClvPercent(betAmericanOdds: number, closingAmericanOdds: 
   return Math.round((betDecimal / closeDecimal - 1) * 10000) / 100;
 }
 
+/**
+ * Require at least this many books to quote a line before recording a close.
+ * A one-book feed is too thin to trust — a single stale or mispriced quote would
+ * become the "consensus" — so both closing-line jobs abstain below this.
+ */
+export const MIN_CLOSING_BOOKS = 2;
+
+/**
+ * Consensus closing price from a set of per-book American quotes for a single
+ * line/side. American odds aren't linear, so averaging the raw numbers is wrong:
+ * we convert to decimal, drop the single best and worst quote once at least four
+ * books quote the line (a trimmed mean, so one stale/mispriced sportsbook can't
+ * drag the close off), mean the rest, and convert back to American. Returns null
+ * when fewer than `MIN_CLOSING_BOOKS` quotes are supplied.
+ *
+ * This is the shared robustness rule behind both closing-line jobs (game lines
+ * and pitcher strikeouts) — keep it here so a tweak to the trim size or minimum
+ * threshold applies to both at once instead of letting them drift apart.
+ */
+export function trimmedMeanClosingAmerican(americanPrices: number[]): number | null {
+  if (americanPrices.length < MIN_CLOSING_BOOKS) return null;
+  const decimals = americanPrices.map(americanToDecimal).sort((a, b) => a - b);
+  const trimmed = decimals.length >= 4 ? decimals.slice(1, -1) : decimals;
+  const meanDecimal = trimmed.reduce((sum, d) => sum + d, 0) / trimmed.length;
+  return decimalToAmerican(meanDecimal);
+}
+
 /** Normalizes a totals selection like "Over 8.5" down to "Over" or "Under". */
 export function baseSelection(market: string, selection: string): string {
   if (market === "totals") {

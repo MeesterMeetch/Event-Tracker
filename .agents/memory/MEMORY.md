@@ -4,3 +4,4 @@
 - [shadcn select one-row clamp](shadcn-select-clamp.md) — Select showing only one option / no scroll = height-clamp class on the popper Viewport; remove it.
 - [MLB K inputs degrade silently](mlb-k-inputs-degrade-silently.md) — getMatchupKInputs returns zeroed/null stats (not an error) on feed failure; consumers must abstain, or projectPitcherK emits a league-average number off nothing.
 - [CLV closing-line jobs](clv-jobs.md) — game-line closer averages RAW American odds (wrong math, but tested as-is); paper-trade closer needs ≥2 books and only expires past the give-up window.
+- [Route test harness](route-test-harness.md) — vi.mock instances survive resetModules (add clearAllMocks); routes need a stubbed req.log; spy Date.now (not fake timers) for TTL tests.

@@ -31,6 +31,11 @@ export const pitcherKPaperTradesTable = pgTable("pitcher_k_paper_trades", {
   modelProb: doublePrecision("model_prob").notNull(),
   marketProb: doublePrecision("market_prob"),
   edgePercent: doublePrecision("edge_percent"),
+  // The model's actual flag decision at scan time (scanner's `isFlagged`), so
+  // the flagged-vs-unflagged comparison reflects what the model really picked
+  // rather than a client-side re-derivation. Nullable: rows logged before this
+  // column existed have no recorded decision and fall back to the heuristic.
+  isFlagged: boolean("is_flagged"),
   expectedStrikeouts: doublePrecision("expected_strikeouts").notNull(),
   projectedBattersFaced: doublePrecision("projected_batters_faced").notNull(),
   recommendedUnits: doublePrecision("recommended_units").notNull(),

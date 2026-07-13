@@ -91,6 +91,7 @@ router.post("/paper-trades", async (req, res): Promise<void> => {
       pitcherId: d.pitcherId ?? null,
       marketProb: d.marketProb ?? null,
       edgePercent: d.edgePercent ?? null,
+      isFlagged: d.isFlagged ?? null,
       status: "open",
     })
     .returning();

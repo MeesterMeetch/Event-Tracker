@@ -23,11 +23,15 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 import { LineChart as LineChartIcon, Target, RotateCcw, User, Swords } from "lucide-react";
 import { easternDayKey, formatPercent, cn } from "@/lib/utils";
 
-// A line was "flagged" by the model when it had a market consensus (marketProb
-// present) and cleared the same edge threshold the scanner uses to flag lines.
+// Newer trades persist the model's actual flag decision (`isFlagged`) at log
+// time, so the flagged-vs-unflagged split is exact. Rows logged before that
+// column existed have no stored decision, so we fall back to re-deriving it:
+// a line was "flagged" when it had a market consensus (marketProb present) and
+// cleared the same edge threshold the scanner uses to flag lines.
 const FLAG_EDGE_PERCENT = 1;
 
 function isFlaggedTrade(t: PaperTrade): boolean {
+  if (t.isFlagged != null) return t.isFlagged;
   return t.marketProb != null && t.edgePercent != null && t.edgePercent >= FLAG_EDGE_PERCENT;
 }
 

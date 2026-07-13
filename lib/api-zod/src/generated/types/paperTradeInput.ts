@@ -26,6 +26,11 @@ export interface PaperTradeInput {
   marketProb?: number | null;
   /** @nullable */
   edgePercent?: number | null;
+  /**
+     * The model's actual flag decision for this line at scan time.
+     * @nullable
+     */
+  isFlagged?: boolean | null;
   expectedStrikeouts: number;
   projectedBattersFaced: number;
   recommendedUnits: number;

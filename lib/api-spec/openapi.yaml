@@ -730,6 +730,11 @@ components:
           type: ["number", "null"]
         edgePercent:
           type: ["number", "null"]
+        isFlagged:
+          description: >-
+            The model's actual flag decision recorded at log time. Null for
+            legacy rows logged before the flag was persisted.
+          type: ["boolean", "null"]
         expectedStrikeouts:
           type: number
         projectedBattersFaced:
@@ -805,6 +810,9 @@ components:
           type: ["number", "null"]
         edgePercent:
           type: ["number", "null"]
+        isFlagged:
+          description: The model's actual flag decision for this line at scan time.
+          type: ["boolean", "null"]
         expectedStrikeouts:
           type: number
         projectedBattersFaced:

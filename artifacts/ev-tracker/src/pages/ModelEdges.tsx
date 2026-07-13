@@ -70,6 +70,7 @@ function ProjectionCard({ projection }: { projection: ModelPitcherProjection }) 
           modelProb: line.modelProb,
           marketProb: line.marketProb,
           edgePercent: line.edgePercent,
+          isFlagged: line.isFlagged,
           expectedStrikeouts: projection.expectedStrikeouts,
           projectedBattersFaced: projection.projectedBattersFaced,
           recommendedUnits: line.recommendedUnits,

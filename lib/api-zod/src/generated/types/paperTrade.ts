@@ -28,6 +28,11 @@ export interface PaperTrade {
   marketProb: number | null;
   /** @nullable */
   edgePercent: number | null;
+  /**
+     * The model's actual flag decision recorded at log time. Null for legacy rows logged before the flag was persisted.
+     * @nullable
+     */
+  isFlagged?: boolean | null;
   expectedStrikeouts: number;
   projectedBattersFaced: number;
   recommendedUnits: number;

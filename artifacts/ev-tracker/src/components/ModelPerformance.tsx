@@ -61,6 +61,11 @@ type BreakdownRow = {
   avgClv: number | null;
 };
 
+// A pitcher/opponent needs at least this many graded trades before its avg CLV
+// is trustworthy enough to rank. Below this, one or two lucky closes can top the
+// leaderboard on noise alone, so low-sample groups are split out of the ranking.
+const MIN_GRADED_SAMPLE = 5;
+
 /**
  * Group graded trades by an arbitrary key (pitcher / opponent) and summarize
  * each group. Ordered by avg CLV descending so the model's strongest reads
@@ -199,6 +204,34 @@ function StatBlock({ label, value, tone }: { label: string; value: string; tone?
   );
 }
 
+function BreakdownRows({ rows, dim }: { rows: BreakdownRow[]; dim?: boolean }) {
+  return (
+    <>
+      {rows.map((r) => (
+        <TableRow key={r.key} className={cn(dim && "opacity-55")}>
+          <TableCell className="font-medium whitespace-nowrap max-w-[180px] truncate" title={r.key}>
+            {r.key}
+          </TableCell>
+          <TableCell className="text-right font-mono">{r.count}</TableCell>
+          <TableCell className="text-right font-mono">{fmtRate(r.beatClose)}</TableCell>
+          <TableCell
+            className={cn(
+              "text-right font-mono font-semibold",
+              r.avgClv == null
+                ? "text-muted-foreground"
+                : r.avgClv > 0
+                  ? "text-positive"
+                  : "text-destructive",
+            )}
+          >
+            {r.avgClv == null ? "—" : formatPercent(r.avgClv)}
+          </TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
+}
+
 function BreakdownTable({
   title,
   icon,
@@ -210,6 +243,13 @@ function BreakdownTable({
   groupLabel: string;
   rows: BreakdownRow[];
 }) {
+  const [showLowSample, setShowLowSample] = useState(false);
+
+  // Only rank groups with enough graded trades to trust; small samples are held
+  // out so a 1–2 trade fluke can't masquerade as the model's strongest read.
+  const reliable = rows.filter((r) => r.count >= MIN_GRADED_SAMPLE);
+  const lowSample = rows.filter((r) => r.count < MIN_GRADED_SAMPLE);
+
   return (
     <Card>
       <CardContent className="p-4">
@@ -219,6 +259,10 @@ function BreakdownTable({
         </div>
         {rows.length === 0 ? (
           <p className="py-8 text-center text-xs text-muted-foreground">No graded trades in this view.</p>
+        ) : reliable.length === 0 && !showLowSample ? (
+          <p className="py-8 text-center text-xs text-muted-foreground">
+            No {groupLabel.toLowerCase()} has {MIN_GRADED_SAMPLE}+ graded trades yet — too little data to rank.
+          </p>
         ) : (
           <div className="max-h-[280px] overflow-y-auto">
             <Table>
@@ -231,34 +275,38 @@ function BreakdownTable({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
-                  <TableRow key={r.key}>
-                    <TableCell className="font-medium whitespace-nowrap max-w-[180px] truncate" title={r.key}>
-                      {r.key}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">{r.count}</TableCell>
-                    <TableCell className="text-right font-mono">{fmtRate(r.beatClose)}</TableCell>
-                    <TableCell
-                      className={cn(
-                        "text-right font-mono font-semibold",
-                        r.avgClv == null
-                          ? "text-muted-foreground"
-                          : r.avgClv > 0
-                            ? "text-positive"
-                            : "text-destructive",
-                      )}
-                    >
-                      {r.avgClv == null ? "—" : formatPercent(r.avgClv)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                <BreakdownRows rows={reliable} />
+                {showLowSample && lowSample.length > 0 && (
+                  <>
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell
+                        colSpan={4}
+                        className="pt-3 pb-1 text-[10px] font-mono uppercase tracking-wide text-muted-foreground"
+                      >
+                        Insufficient sample (&lt;{MIN_GRADED_SAMPLE} graded)
+                      </TableCell>
+                    </TableRow>
+                    <BreakdownRows rows={lowSample} dim />
+                  </>
+                )}
               </TableBody>
             </Table>
           </div>
         )}
+        {lowSample.length > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-2 h-7 text-xs text-muted-foreground"
+            onClick={() => setShowLowSample((v) => !v)}
+          >
+            {showLowSample ? "Hide" : "Show"} {lowSample.length} low-sample{" "}
+            {lowSample.length === 1 ? groupLabel.toLowerCase() : `${groupLabel.toLowerCase()}s`}
+          </Button>
+        )}
         <p className="mt-3 text-[10px] font-mono text-muted-foreground">
-          Graded trades grouped by {groupLabel.toLowerCase()}, ranked by avg CLV. Positive CLV where the model reads the
-          matchup well; negative where it's guessing.
+          Graded trades grouped by {groupLabel.toLowerCase()}, ranked by avg CLV. Only groups with {MIN_GRADED_SAMPLE}+
+          graded trades are ranked; smaller samples are held out so noise can't top the board.
         </p>
       </CardContent>
     </Card>

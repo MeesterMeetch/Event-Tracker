@@ -68,19 +68,21 @@ function fetchCallCount(): number {
 
 describe("captureClosingLines — captures the consensus closing line", () => {
   it("records the averaged closing price and CLV for a due bet", async () => {
-    // evt-mlb-1 h2h Yankees: DraftKings -110, FanDuel +120 → mean 5.
+    // evt-mlb-1 h2h Yankees: DraftKings -110, FanDuel +120. Averaging in decimal
+    // space: (1.909091 + 2.2) / 2 = 2.054545 → +105 American.
     seedDueBet({ id: 1, selection: "New York Yankees", americanOdds: 120 });
     stubFetchRoutes([{ contains: "/odds", payload: loadFixture("edges-slate-mlb.json") }]);
 
     await captureClosingLines();
 
     const bet = dbMod.__stores.bets[0];
-    expect(bet.closingOdds).toBe(5);
-    expect(bet.clvPercent).toBe(computeClvPercent(120, 5));
+    expect(bet.closingOdds).toBe(105);
+    expect(bet.clvPercent).toBe(computeClvPercent(120, 105));
   });
 
   it("captures totals by side/point, not exact selection string", async () => {
-    // evt-mlb-2 totals Over 8.5: DraftKings -110, FanDuel +115 → mean 2.5.
+    // evt-mlb-2 totals Over 8.5: DraftKings -110, FanDuel +115. Averaging in
+    // decimal space: (1.909091 + 2.15) / 2 = 2.029545 → +103 American.
     seedDueBet({
       id: 1,
       gameId: "evt-mlb-2",
@@ -96,8 +98,8 @@ describe("captureClosingLines — captures the consensus closing line", () => {
     await captureClosingLines();
 
     const bet = dbMod.__stores.bets[0];
-    expect(bet.closingOdds).toBe(2.5);
-    expect(bet.clvPercent).toBe(computeClvPercent(115, 2.5));
+    expect(bet.closingOdds).toBe(103);
+    expect(bet.clvPercent).toBe(computeClvPercent(115, 103));
   });
 });
 

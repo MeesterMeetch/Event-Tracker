@@ -5,8 +5,8 @@ description: Gotchas in the game-line (clv.ts) and paper-trade (model-clv.ts) cl
 
 # CLV closing-line capture
 
-- **Game-line closer averages RAW American odds, not decimals/probs.** `findClosingOdds` in `clv.ts` does `mean(price)` directly over American numbers (e.g. -110 and +120 → 5). This is mathematically wrong for odds (American isn't linear); it distorts `computeClvPercent`. The pitcher-K closer (`model-clv.ts` → `closingConsensusForLine`) does it correctly (trimmed mean in decimal space). Tests assert the *current* averaging behavior — if you fix the game-line math, update `clv.test.ts` expectations too.
-  **Why:** a bad CLV number silently inflates/deflates the model's beat-the-close record; the two jobs disagree on method.
+- **Both closers now average in decimal space.** `findClosingOdds` in `clv.ts` converts each book's American price to decimal, means them, and converts back (`decimalToAmerican`), matching the pitcher-K closer's approach. (Game-line closer does NOT trim high/low like `closingConsensusForLine` — it's a plain decimal mean.) `clv.test.ts` expectations track this corrected math (e.g. -110 & +120 → +105, not the old raw mean of 5).
+  **Why:** raw-American averaging (e.g. -110 & +120 → 5) is mathematically wrong since American odds aren't linear, and silently distorted `computeClvPercent` / the model's beat-the-close record.
 
 - **Abstain semantics differ between the two jobs.** `clv.ts` never expires a bet — on missing/degraded feed it just leaves `closingOdds` null (retry next cycle). `model-clv.ts` marks a trade `expired` only once past `commenceTime + 3h` (give-up window); before that it leaves it `open`. Neither ever writes a partial/bogus CLV.
 

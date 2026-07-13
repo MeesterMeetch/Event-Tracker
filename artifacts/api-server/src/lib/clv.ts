@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db, betsTable } from "@workspace/db";
 import { fetchOdds, type OddsEvent } from "./odds";
-import { computeClvPercent, baseSelection } from "./odds-math";
+import { computeClvPercent, baseSelection, americanToDecimal, decimalToAmerican } from "./odds-math";
 import { logger } from "./logger";
 
 /** Start looking for a closing line this long before kickoff. */
@@ -31,7 +31,10 @@ function findClosingOdds(event: OddsEvent, market: string, selection: string, po
     }
   }
   if (prices.length === 0) return null;
-  return Math.round((prices.reduce((sum, p) => sum + p, 0) / prices.length) * 100) / 100;
+  // American odds aren't linear, so averaging the raw numbers is wrong. Work in
+  // decimal space (matching the pitcher-strikeout closer) and convert back.
+  const meanDecimal = prices.reduce((sum, p) => sum + americanToDecimal(p), 0) / prices.length;
+  return decimalToAmerican(meanDecimal);
 }
 
 let clvRunning = false;

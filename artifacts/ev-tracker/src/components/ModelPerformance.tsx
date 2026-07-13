@@ -368,9 +368,18 @@ export default function ModelPerformance() {
         count: inBucket.length,
         rate: rate == null ? 0 : Math.round(rate * 100),
         hasData: inBucket.length > 0,
+        // Buckets with a handful of trades can post a 100%/0% beat-close rate on
+        // a single lucky/unlucky close, so flag them as low-confidence rather
+        // than letting them read as proof.
+        lowSample: inBucket.length > 0 && inBucket.length < MIN_GRADED_SAMPLE,
       };
     });
   }, [graded]);
+
+  const anyLowSampleBucket = useMemo(
+    () => bucketSeries.some((b) => b.lowSample),
+    [bucketSeries],
+  );
 
   const flaggedSplit = useMemo(() => {
     const flagged = graded.filter(isFlaggedTrade);
@@ -551,10 +560,16 @@ export default function ModelPerformance() {
                     <ChartTooltip
                       content={
                         <ChartTooltipContent
-                          formatter={(value, _name, item) => [
-                            `${value}%  (${item?.payload?.count ?? 0} trades)`,
-                            "Beat-Close Rate",
-                          ]}
+                          formatter={(value, _name, item) => {
+                            const count = item?.payload?.count ?? 0;
+                            const low = item?.payload?.lowSample === true;
+                            return [
+                              `${value}%  (${count} ${count === 1 ? "trade" : "trades"})${
+                                low ? " · low confidence" : ""
+                              }`,
+                              "Beat-Close Rate",
+                            ];
+                          }}
                         />
                       }
                     />
@@ -563,7 +578,10 @@ export default function ModelPerformance() {
                         <Cell
                           key={b.label}
                           fill={b.hasData ? "var(--color-rate)" : "hsl(var(--muted))"}
-                          fillOpacity={b.hasData ? 1 : 0.4}
+                          // Low-sample buckets keep the accent color so you can
+                          // tell they hold data, but faded so a 1–2 trade fluke
+                          // can't read as a confident bar next to a solid sample.
+                          fillOpacity={!b.hasData ? 0.4 : b.lowSample ? 0.35 : 1}
                         />
                       ))}
                     </Bar>
@@ -572,6 +590,13 @@ export default function ModelPerformance() {
                 <p className="mt-3 text-[10px] font-mono text-muted-foreground">
                   Share of graded trades that beat the close, grouped by the edge the model saw. Dashed line marks the
                   50% break-even.
+                  {anyLowSampleBucket && (
+                    <>
+                      {" "}
+                      Faded bars have fewer than {MIN_GRADED_SAMPLE} graded trades — too small a sample to trust, so a
+                      single lucky or unlucky close can swing them to 100% or 0%.
+                    </>
+                  )}
                 </p>
               </CardContent>
             </Card>

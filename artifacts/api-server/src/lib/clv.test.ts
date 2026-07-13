@@ -103,6 +103,41 @@ describe("captureClosingLines — captures the consensus closing line", () => {
   });
 });
 
+describe("captureClosingLines — one mispriced book can't skew the close", () => {
+  it("trims the best and worst quote when enough books quote the line", async () => {
+    // evt-mlb-trim h2h Yankees, 5 books: -300, -110, +100, +105, +400. Dropping
+    // the single best (+400 → 5.0) and worst (-300 → 1.3333) leaves DraftKings,
+    // FanDuel, and Caesars: (1.909091 + 2.0 + 2.05) / 3 = 1.986364 → -101 American.
+    // A plain mean would be dragged to +146 by the +400 outlier.
+    seedDueBet({ id: 1, gameId: "evt-mlb-trim", selection: "New York Yankees", americanOdds: 120 });
+    stubFetchRoutes([{ contains: "/odds", payload: loadFixture("clv-trimming-mlb.json") }]);
+
+    await captureClosingLines();
+
+    const bet = dbMod.__stores.bets[0];
+    expect(bet.closingOdds).toBe(-101);
+    expect(bet.clvPercent).toBe(computeClvPercent(120, -101));
+  });
+
+  it("leaves closingOdds null when only one book quotes the line", async () => {
+    // evt-mlb-thin has a single book on the Cubs h2h — too thin to trust as a
+    // consensus, so the closer abstains rather than record a one-book close.
+    seedDueBet({
+      id: 1,
+      gameId: "evt-mlb-thin",
+      homeTeam: "Chicago Cubs",
+      awayTeam: "St. Louis Cardinals",
+      selection: "Chicago Cubs",
+      americanOdds: -120,
+    });
+    stubFetchRoutes([{ contains: "/odds", payload: loadFixture("clv-trimming-mlb.json") }]);
+
+    await captureClosingLines();
+
+    expect(dbMod.__stores.bets[0]).toMatchObject({ closingOdds: null, clvPercent: null });
+  });
+});
+
 describe("captureClosingLines — leaves the bet open instead of writing a bogus CLV", () => {
   it("leaves closingOdds null when the game is missing from the feed", async () => {
     seedDueBet({ id: 1, gameId: "evt-not-in-feed" });

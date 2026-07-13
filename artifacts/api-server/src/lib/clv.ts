@@ -18,6 +18,14 @@ const CLV_GIVE_UP_AFTER_MS = 3 * 60 * 60 * 1000;
  */
 const CLV_MARKETS = new Set(["h2h", "spreads", "totals"]);
 
+/**
+ * Require at least this many books to quote the line before recording a close.
+ * A one-book feed is too thin to trust — a single stale or mispriced quote would
+ * become the "consensus" — so we abstain (leave closingOdds null) below this.
+ * Mirrors the 2-book minimum in the pitcher-strikeout closer.
+ */
+const MIN_CLOSING_BOOKS = 2;
+
 function findClosingOdds(event: OddsEvent, market: string, selection: string, point: number | null): number | null {
   const prices: number[] = [];
   for (const bookmaker of event.bookmakers) {
@@ -30,10 +38,17 @@ function findClosingOdds(event: OddsEvent, market: string, selection: string, po
       if (sameSide && samePoint) prices.push(outcome.price);
     }
   }
-  if (prices.length === 0) return null;
+  // Abstain when too few books quote the line: one book can't set a consensus.
+  if (prices.length < MIN_CLOSING_BOOKS) return null;
+
   // American odds aren't linear, so averaging the raw numbers is wrong. Work in
   // decimal space (matching the pitcher-strikeout closer) and convert back.
-  const meanDecimal = prices.reduce((sum, p) => sum + americanToDecimal(p), 0) / prices.length;
+  // Also drop the single best and worst quote when enough books quote the line,
+  // so one stale/mispriced sportsbook can't drag the consensus close off — a
+  // trimmed mean, mirroring `closingConsensusForLine`.
+  const decimals = prices.map(americanToDecimal).sort((a, b) => a - b);
+  const trimmed = decimals.length >= 4 ? decimals.slice(1, -1) : decimals;
+  const meanDecimal = trimmed.reduce((sum, d) => sum + d, 0) / trimmed.length;
   return decimalToAmerican(meanDecimal);
 }
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListEvents,
@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, Brain, Loader2, Plus, Target, Trash2, TrendingUp } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { formatOdds, formatPercent, formatGameTime, cn } from "@/lib/utils";
+import { formatOdds, formatPercent, formatGameTime, formatTimeOnly, easternDayKey, formatDayLabel, cn } from "@/lib/utils";
 
 const MODEL_SPORT = "baseball_mlb";
 const KELLY_MULTIPLIER = 0.25;
@@ -330,16 +330,53 @@ export default function ModelEdges() {
   const [tab, setTab] = useState<"projections" | "paper">("projections");
   const [selectedEventId, setSelectedEventId] = useState<string>("");
 
+  const [selectedDay, setSelectedDay] = useState<string>("");
+
   const { data: events, isLoading: loadingEvents, isError: eventsError } = useListEvents(
     { sport: MODEL_SPORT },
     { query: { queryKey: getListEventsQueryKey({ sport: MODEL_SPORT }) } },
   );
 
+  type Ev = NonNullable<typeof events>[number];
+  const eventsByDay = useMemo(() => {
+    const map: Record<string, Ev[]> = {};
+    for (const ev of events ?? []) {
+      const key = easternDayKey(ev.commenceTime);
+      if (!key) continue;
+      (map[key] ??= []).push(ev);
+    }
+    return map;
+  }, [events]);
+  const dayKeys = useMemo(() => Object.keys(eventsByDay).sort(), [eventsByDay]);
+
+  // Default to the soonest day with games, and keep the selection valid as the
+  // event list refreshes (a day can empty out once its games start). When the
+  // day is auto-corrected, drop any selected game too so a stale paid scan
+  // can't keep running against a game that's no longer on the visible slate.
+  const dayEvents = eventsByDay[selectedDay] ?? [];
+  // Only treat a game as selected while it's actually on the current day's
+  // slate — a defensive gate so the credit-priced projection scan never fires
+  // for a game outside the visible list.
+  const selectedEventValid = dayEvents.some((ev) => ev.id === selectedEventId);
+
+  useEffect(() => {
+    if (dayKeys.length > 0 && !dayKeys.includes(selectedDay)) {
+      // Day dropped off the slate (its games started) — move to the soonest
+      // remaining day and drop the selection with it.
+      setSelectedDay(dayKeys[0]);
+      setSelectedEventId("");
+    } else if (selectedEventId && !selectedEventValid) {
+      // Same-day game vanished on refresh — clear it so no stale paid scan
+      // lingers and the UI falls back to the "pick a game" prompt.
+      setSelectedEventId("");
+    }
+  }, [dayKeys, selectedDay, selectedEventId, selectedEventValid]);
+
   const { data: projections, isLoading: loadingProjections, isFetching: fetchingProjections, isError: projectionsError } = useListModelEdges(
     { sport: MODEL_SPORT, eventId: selectedEventId, minEdgePercent: MIN_EDGE_PERCENT, kellyMultiplier: KELLY_MULTIPLIER },
     {
       query: {
-        enabled: !!selectedEventId && tab === "projections",
+        enabled: !!selectedEventId && selectedEventValid && tab === "projections",
         queryKey: getListModelEdgesQueryKey({ sport: MODEL_SPORT, eventId: selectedEventId, minEdgePercent: MIN_EDGE_PERCENT, kellyMultiplier: KELLY_MULTIPLIER }),
       },
     },
@@ -362,23 +399,55 @@ export default function ModelEdges() {
         </TabsList>
 
         <TabsContent value="projections" className="mt-4 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
-            <div className="w-full sm:w-96">
-              <Label className="mb-2 block">Select Game</Label>
-              <Select value={selectedEventId} onValueChange={setSelectedEventId} disabled={loadingEvents}>
-                <SelectTrigger>
-                  <SelectValue placeholder={loadingEvents ? "Loading games..." : "Choose an MLB game"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {(events ?? []).map((ev) => (
-                    <SelectItem key={ev.id} value={ev.id}>
-                      {ev.awayTeam} @ {ev.homeTeam} — {formatGameTime(ev.commenceTime)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="space-y-3">
+            {loadingEvents ? (
+              <div className="flex gap-2">
+                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-9 w-24" />)}
+              </div>
+            ) : dayKeys.length > 0 ? (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {dayKeys.map((k) => (
+                  <Button
+                    key={k}
+                    size="sm"
+                    variant={k === selectedDay ? "default" : "outline"}
+                    className="shrink-0"
+                    onClick={() => {
+                      setSelectedDay(k);
+                      setSelectedEventId("");
+                    }}
+                  >
+                    {formatDayLabel(k)}
+                    <Badge variant="secondary" className="ml-2 px-1.5 font-mono text-[10px]">
+                      {eventsByDay[k].length}
+                    </Badge>
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+              <div className="w-full sm:w-96">
+                <Label className="mb-2 block">Select Game</Label>
+                <Select
+                  value={selectedEventId}
+                  onValueChange={setSelectedEventId}
+                  disabled={loadingEvents || dayEvents.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={loadingEvents ? "Loading games..." : "Choose an MLB game"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {dayEvents.map((ev) => (
+                      <SelectItem key={ev.id} value={ev.id}>
+                        {ev.awayTeam} @ {ev.homeTeam} — {formatTimeOnly(ev.commenceTime)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="font-mono text-[10px] text-muted-foreground">Each game scan uses a few odds-API credits.</p>
             </div>
-            <p className="font-mono text-[10px] text-muted-foreground">Each game scan uses a few odds-API credits.</p>
           </div>
 
           {eventsError && (

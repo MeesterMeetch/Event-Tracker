@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, Brain, Loader2, Plus, Target, Trash2, TrendingUp } from "lucide-react";
+import ModelPerformance from "@/components/ModelPerformance";
 import { useToast } from "@/components/ui/use-toast";
 import { formatOdds, formatPercent, formatGameTime, formatTimeOnly, easternDayKey, formatDayLabel, cn } from "@/lib/utils";
 
@@ -327,7 +328,7 @@ function PaperTradesTable() {
 }
 
 export default function ModelEdges() {
-  const [tab, setTab] = useState<"projections" | "paper">("projections");
+  const [tab, setTab] = useState<"projections" | "paper" | "performance">("projections");
   const [selectedEventId, setSelectedEventId] = useState<string>("");
 
   const [selectedDay, setSelectedDay] = useState<string>("");
@@ -392,10 +393,11 @@ export default function ModelEdges() {
         <p className="text-muted-foreground">Fundamental pitcher-strikeout projections vs the market, with Kelly staking and beat-the-close validation. MLB only.</p>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "projections" | "paper")}>
-        <TabsList className="grid w-full grid-cols-2 sm:w-80">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "projections" | "paper" | "performance")}>
+        <TabsList className="grid w-full grid-cols-3 sm:w-[30rem]">
           <TabsTrigger value="projections">Projections</TabsTrigger>
           <TabsTrigger value="paper">Paper Trades</TabsTrigger>
+          <TabsTrigger value="performance">Performance</TabsTrigger>
         </TabsList>
 
         <TabsContent value="projections" className="mt-4 space-y-4">
@@ -514,6 +516,10 @@ export default function ModelEdges() {
         <TabsContent value="paper" className="mt-4 space-y-4">
           <ValidationSummary />
           <PaperTradesTable />
+        </TabsContent>
+
+        <TabsContent value="performance" className="mt-4 space-y-4">
+          <ModelPerformance />
         </TabsContent>
       </Tabs>
     </div>

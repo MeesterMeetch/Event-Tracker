@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
-import { LineChart as LineChartIcon, Target, RotateCcw } from "lucide-react";
+import { LineChart as LineChartIcon, Target, RotateCcw, User, Swords } from "lucide-react";
 import { easternDayKey, formatPercent, cn } from "@/lib/utils";
 
 // A line was "flagged" by the model when it had a market consensus (marketProb
@@ -48,6 +48,41 @@ function beatCloseRate(trades: PaperTrade[]): number | null {
 
 function fmtRate(rate: number | null): string {
   return rate == null ? "—" : `${(rate * 100).toFixed(0)}%`;
+}
+
+type BreakdownRow = {
+  key: string;
+  count: number;
+  beatClose: number | null;
+  avgClv: number | null;
+};
+
+/**
+ * Group graded trades by an arbitrary key (pitcher / opponent) and summarize
+ * each group. Ordered by avg CLV descending so the model's strongest reads
+ * surface first; groups with no measurable CLV sink to the bottom.
+ */
+function buildBreakdown(trades: PaperTrade[], keyOf: (t: PaperTrade) => string): BreakdownRow[] {
+  const groups = new Map<string, PaperTrade[]>();
+  for (const t of trades) {
+    const k = keyOf(t);
+    const arr = groups.get(k);
+    if (arr) arr.push(t);
+    else groups.set(k, [t]);
+  }
+  return Array.from(groups.entries())
+    .map(([key, rows]) => ({
+      key,
+      count: rows.length,
+      beatClose: beatCloseRate(rows),
+      avgClv: mean(rows.map((t) => t.clvPercent ?? 0)),
+    }))
+    .sort((a, b) => {
+      const av = a.avgClv ?? Number.NEGATIVE_INFINITY;
+      const bv = b.avgClv ?? Number.NEGATIVE_INFINITY;
+      if (bv !== av) return bv - av;
+      return b.count - a.count;
+    });
 }
 
 const EDGE_BUCKETS: { key: string; label: string; test: (edge: number | null) => boolean }[] = [
@@ -160,6 +195,72 @@ function StatBlock({ label, value, tone }: { label: string; value: string; tone?
   );
 }
 
+function BreakdownTable({
+  title,
+  icon,
+  groupLabel,
+  rows,
+}: {
+  title: string;
+  icon: ReactNode;
+  groupLabel: string;
+  rows: BreakdownRow[];
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 mb-4">
+          {icon}
+          <h2 className="text-sm font-semibold uppercase tracking-wide">{title}</h2>
+        </div>
+        {rows.length === 0 ? (
+          <p className="py-8 text-center text-xs text-muted-foreground">No graded trades in this view.</p>
+        ) : (
+          <div className="max-h-[280px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{groupLabel}</TableHead>
+                  <TableHead className="text-right">Graded</TableHead>
+                  <TableHead className="text-right">Beat Close</TableHead>
+                  <TableHead className="text-right">Avg CLV</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((r) => (
+                  <TableRow key={r.key}>
+                    <TableCell className="font-medium whitespace-nowrap max-w-[180px] truncate" title={r.key}>
+                      {r.key}
+                    </TableCell>
+                    <TableCell className="text-right font-mono">{r.count}</TableCell>
+                    <TableCell className="text-right font-mono">{fmtRate(r.beatClose)}</TableCell>
+                    <TableCell
+                      className={cn(
+                        "text-right font-mono font-semibold",
+                        r.avgClv == null
+                          ? "text-muted-foreground"
+                          : r.avgClv > 0
+                            ? "text-positive"
+                            : "text-destructive",
+                      )}
+                    >
+                      {r.avgClv == null ? "—" : formatPercent(r.avgClv)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        <p className="mt-3 text-[10px] font-mono text-muted-foreground">
+          Graded trades grouped by {groupLabel.toLowerCase()}, ranked by avg CLV. Positive CLV where the model reads the
+          matchup well; negative where it's guessing.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function ModelPerformance() {
   const { data: trades, isLoading } = useListPaperTrades();
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
@@ -230,6 +331,9 @@ export default function ModelPerformance() {
     });
     return { flagged: build(flagged), unflagged: build(unflagged) };
   }, [graded]);
+
+  const byPitcher = useMemo(() => buildBreakdown(graded, (t) => t.pitcher), [graded]);
+  const byOpponent = useMemo(() => buildBreakdown(graded, (t) => t.opponent), [graded]);
 
   const headline = useMemo(() => {
     return {
@@ -475,6 +579,21 @@ export default function ModelPerformance() {
                 </p>
               </CardContent>
             </Card>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <BreakdownTable
+              title="By Pitcher"
+              icon={<User className="h-4 w-4 text-primary" />}
+              groupLabel="Pitcher"
+              rows={byPitcher}
+            />
+            <BreakdownTable
+              title="By Opponent"
+              icon={<Swords className="h-4 w-4 text-primary" />}
+              groupLabel="Opponent"
+              rows={byOpponent}
+            />
           </div>
         </>
       )}

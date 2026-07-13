@@ -46,6 +46,15 @@ function returns(content: string): void {
   });
 }
 
+/** Queue up per-call completion texts (first call, second call, ...). */
+function returnsInSequence(...contents: string[]): void {
+  for (const content of contents) {
+    (mockCreate as Mock).mockResolvedValueOnce({
+      choices: [{ message: { content } }],
+    });
+  }
+}
+
 beforeEach(async () => {
   vi.resetModules();
   vi.clearAllMocks();
@@ -137,5 +146,41 @@ describe("generateAnalysis — JSON missing required keys fails loudly", () => {
     await expect(generateAnalysis(INPUT)).rejects.toMatchObject({
       message: expect.stringMatching(/pitchingAnalysis.*bettingAngle.*keyFactors/),
     });
+  });
+});
+
+describe("generateAnalysis — retries once on malformed output", () => {
+  it("recovers when the first call is malformed and the second is valid", async () => {
+    returnsInSequence("not json at all", JSON.stringify(VALID));
+
+    const content = await generateAnalysis(INPUT);
+
+    expect(content).toEqual(VALID);
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("recovers when the first call is incomplete JSON and the second is valid", async () => {
+    const { keyFactors: _omit, ...partial } = VALID;
+    returnsInSequence(JSON.stringify(partial), JSON.stringify(VALID));
+
+    const content = await generateAnalysis(INPUT);
+
+    expect(content).toEqual(VALID);
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws after retrying when both calls are malformed", async () => {
+    returnsInSequence("still not json", "also not json");
+
+    await expect(generateAnalysis(INPUT)).rejects.toBeInstanceOf(AnalysisFormatError);
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not make a second call when the first attempt succeeds", async () => {
+    returns(JSON.stringify(VALID));
+
+    await generateAnalysis(INPUT);
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 });

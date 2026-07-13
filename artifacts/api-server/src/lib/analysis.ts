@@ -165,18 +165,22 @@ function coerceContent(raw: unknown): AnalysisContent {
 }
 
 /**
- * Calls the LLM to produce a structured scouting/betting analysis for one game.
- * Throws AnalysisFormatError if the model returns non-JSON or an incomplete
- * object, so the caller can fail loudly (502) instead of surfacing/caching a
- * partially-empty report.
+ * Extra nudge appended to the system prompt on a retry, after a first attempt
+ * came back malformed. Reiterates the strict JSON contract.
  */
-export async function generateAnalysis(input: AnalysisInput): Promise<AnalysisContent> {
+const RETRY_NUDGE =
+  "Your previous response could not be parsed. Respond with ONLY a single valid JSON object " +
+  "containing exactly the required keys — no markdown, no prose, no code fences.";
+
+/** One model call + parse/validate. Throws AnalysisFormatError on bad output. */
+async function attemptAnalysis(input: AnalysisInput, retry: boolean): Promise<AnalysisContent> {
+  const systemContent = retry ? `${SYSTEM_PROMPT}\n\n${RETRY_NUDGE}` : SYSTEM_PROMPT;
   const completion = await openai.chat.completions.create({
     model: ANALYSIS_MODEL,
     max_completion_tokens: 8192,
     response_format: { type: "json_object" },
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: systemContent },
       { role: "user", content: buildPrompt(input) },
     ],
   });
@@ -191,4 +195,21 @@ export async function generateAnalysis(input: AnalysisInput): Promise<AnalysisCo
   }
 
   return coerceContent(parsed);
+}
+
+/**
+ * Calls the LLM to produce a structured scouting/betting analysis for one game.
+ * If the first attempt returns non-JSON or an incomplete object, retries once
+ * (with a stricter JSON nudge) before giving up. Throws AnalysisFormatError if
+ * the retry also fails, so the caller can fail loudly (502) instead of
+ * surfacing/caching a partially-empty report.
+ */
+export async function generateAnalysis(input: AnalysisInput): Promise<AnalysisContent> {
+  try {
+    return await attemptAnalysis(input, false);
+  } catch (err) {
+    if (!(err instanceof AnalysisFormatError)) throw err;
+    logger.warn({ err }, "analysis: first attempt malformed, retrying once");
+    return await attemptAnalysis(input, true);
+  }
 }

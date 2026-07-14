@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CreateBetBody, UpdateBetBody } from "@workspace/api-zod";
+import { CreateBetBody, UpdateBetBody, UpdatePaperTradeBody } from "@workspace/api-zod";
 import {
   isValidAmericanOdds,
   isValidUnitsStake,
@@ -73,6 +73,46 @@ describe("bet-update validation matches the shared form rules", () => {
   it.each(ODDS_BOUNDARIES)("agrees with isValidAmericanOdds for odds of %s", (americanOdds) => {
     expect(updateAccepts({ americanOdds })).toBe(isValidAmericanOdds(americanOdds));
   });
+});
+
+/**
+ * Boundary prices for the bet-edit vs paper-trade-edit lockstep check.
+ * Includes every probe the ±100 gap rule pivots on.
+ */
+const EDIT_PARITY_ODDS = [-100.5, -100, -99.5, 0, 50, 99.5, 100, 100.5];
+
+describe("bet edits and paper-trade edits ban the same impossible prices", () => {
+  it.each(EDIT_PARITY_ODDS)(
+    "UpdateBetBody and UpdatePaperTradeBody agree on americanOdds %s",
+    (americanOdds) => {
+      const bet = UpdateBetBody.safeParse({ americanOdds }).success;
+      const paper = UpdatePaperTradeBody.safeParse({ americanOdds }).success;
+      expect(
+        paper,
+        `BetUpdate and PaperTradeUpdate drifted apart on americanOdds ${americanOdds}: ` +
+          `UpdateBetBody ${bet ? "accepts" : "rejects"} it but UpdatePaperTradeBody ` +
+          `${paper ? "accepts" : "rejects"} it. Both schemas in lib/api-spec/openapi.yaml ` +
+          `must keep the identical oneOf ban on the open interval (-100, 100).`,
+      ).toBe(bet);
+    },
+  );
+
+  it.each(EDIT_PARITY_ODDS)(
+    "both edit schemas agree with the shared form rule for americanOdds %s",
+    (americanOdds) => {
+      const expected = isValidAmericanOdds(americanOdds);
+      expect(
+        UpdateBetBody.safeParse({ americanOdds }).success,
+        `UpdateBetBody drifted from isValidAmericanOdds on ${americanOdds}; check the ` +
+          `BetUpdate schema in lib/api-spec/openapi.yaml.`,
+      ).toBe(expected);
+      expect(
+        UpdatePaperTradeBody.safeParse({ americanOdds }).success,
+        `UpdatePaperTradeBody drifted from isValidAmericanOdds on ${americanOdds}; check the ` +
+          `PaperTradeUpdate schema in lib/api-spec/openapi.yaml.`,
+      ).toBe(expected);
+    },
+  );
 });
 
 describe("boundary sanity (pins the exact rules, not just parity)", () => {

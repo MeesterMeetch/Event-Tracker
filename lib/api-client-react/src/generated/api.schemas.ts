@@ -292,7 +292,10 @@ export interface BetInput {
   point: number | null;
   /** American odds price. Valid prices are at most -100 or at least +100; the open interval (-100, 100) does not exist on the American odds scale. */
   americanOdds: number;
-  /** @minimum 0 */
+  /**
+     * Stake in units. Must be at least 0.01u — the same minimum the web and mobile bet forms enforce via the shared client rules.
+     * @minimum 0.01
+     */
   units: number;
   /** @nullable */
   fairOdds?: number | null;
@@ -308,7 +311,10 @@ export interface BetUpdate {
   status?: BetStatus;
   /** American odds price. Valid prices are at most -100 or at least +100; the open interval (-100, 100) does not exist on the American odds scale. */
   americanOdds?: number;
-  /** @minimum 0 */
+  /**
+     * Stake in units. Must be at least 0.01u — the same minimum the web and mobile bet forms enforce via the shared client rules.
+     * @minimum 0.01
+     */
   units?: number;
   /** @nullable */
   pnl?: number | null;

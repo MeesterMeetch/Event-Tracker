@@ -1210,8 +1210,11 @@ components:
             - type: number
               minimum: 100
         units:
+          description: >-
+            Stake in units. Must be at least 0.01u — the same minimum the web
+            and mobile bet forms enforce via the shared client rules.
           type: number
-          minimum: 0
+          minimum: 0.01
         fairOdds:
           type: ["number", "null"]
         evPercent:
@@ -1236,8 +1239,11 @@ components:
             - type: number
               minimum: 100
         units:
+          description: >-
+            Stake in units. Must be at least 0.01u — the same minimum the web
+            and mobile bet forms enforce via the shared client rules.
           type: number
-          minimum: 0
+          minimum: 0.01
         pnl:
           type: ["number", "null"]
         notes:

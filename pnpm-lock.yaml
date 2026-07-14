@@ -206,6 +206,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.9.4
+      '@workspace/format':
+        specifier: workspace:*
+        version: link:../../lib/format
       esbuild:
         specifier: 0.27.3
         version: 0.27.3

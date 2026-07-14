@@ -200,7 +200,7 @@ export const createBetBodyAmericanOddsOneMax = -100;
 
 export const createBetBodyAmericanOddsTwoMin = 100;
 
-export const createBetBodyUnitsMin = 0;
+export const createBetBodyUnitsMin = 0.01;
 
 
 
@@ -214,7 +214,7 @@ export const CreateBetBody = zod.object({
   "selection": zod.string(),
   "point": zod.number().nullable(),
   "americanOdds": zod.union([zod.number().max(createBetBodyAmericanOddsOneMax),zod.number().min(createBetBodyAmericanOddsTwoMin)]).describe('American odds price. Valid prices are at most -100 or at least +100; the open interval (-100, 100) does not exist on the American odds scale.'),
-  "units": zod.number().min(createBetBodyUnitsMin),
+  "units": zod.number().min(createBetBodyUnitsMin).describe('Stake in units. Must be at least 0.01u — the same minimum the web and mobile bet forms enforce via the shared client rules.'),
   "fairOdds": zod.number().nullish(),
   "evPercent": zod.number().nullish(),
   "book": zod.string().nullish(),
@@ -287,14 +287,14 @@ export const updateBetBodyAmericanOddsOneMax = -100;
 
 export const updateBetBodyAmericanOddsTwoMin = 100;
 
-export const updateBetBodyUnitsMin = 0;
+export const updateBetBodyUnitsMin = 0.01;
 
 
 
 export const UpdateBetBody = zod.object({
   "status": zod.enum(['pending', 'won', 'lost', 'push']).optional(),
   "americanOdds": zod.union([zod.number().max(updateBetBodyAmericanOddsOneMax),zod.number().min(updateBetBodyAmericanOddsTwoMin)]).optional().describe('American odds price. Valid prices are at most -100 or at least +100; the open interval (-100, 100) does not exist on the American odds scale.'),
-  "units": zod.number().min(updateBetBodyUnitsMin).optional(),
+  "units": zod.number().min(updateBetBodyUnitsMin).optional().describe('Stake in units. Must be at least 0.01u — the same minimum the web and mobile bet forms enforce via the shared client rules.'),
   "pnl": zod.number().nullish(),
   "notes": zod.string().nullish()
 })

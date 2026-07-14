@@ -19,6 +19,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'scope', selected: 'scope' }} />
         <Label>Edges</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="bets">
+        <Icon sf={{ default: 'list.bullet.rectangle', selected: 'list.bullet.rectangle.fill' }} />
+        <Label>Bets</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="scorecard">
         <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
         <Label>Scorecard</Label>
@@ -74,6 +78,18 @@ function ClassicTabLayout() {
               <SymbolView name="scope" tintColor={color} size={24} />
             ) : (
               <Feather name="target" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="bets"
+        options={{
+          title: 'Bets',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="list.bullet.rectangle.fill" tintColor={color} size={24} />
+            ) : (
+              <Feather name="book-open" size={22} color={color} />
             ),
         }}
       />

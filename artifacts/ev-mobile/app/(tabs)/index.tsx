@@ -204,7 +204,7 @@ function PropRow({
  * mirroring the web LogBetDialog. Props go to the bet log only — never the
  * paper-trade scorecard, which stays reserved for the K model.
  */
-function LogPropSheet({
+export function LogPropSheet({
   edge,
   onClose,
   onLogged,
@@ -740,7 +740,7 @@ function LinesHeader() {
 const lineKey = (line: ModelKLine) =>
   `${line.selection}-${line.point}-${line.book}`;
 
-function ProjectionCard({ projection }: { projection: ModelPitcherProjection }) {
+export function ProjectionCard({ projection }: { projection: ModelPitcherProjection }) {
   const colors = useColors();
   const queryClient = useQueryClient();
   const createPaperTrade = useCreatePaperTrade();

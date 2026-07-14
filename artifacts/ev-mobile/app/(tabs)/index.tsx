@@ -22,6 +22,7 @@ import {
   useListEvents,
   useListModelEdges,
   useListPropEdges,
+  useListSports,
   type EdgeOpportunity,
   type ModelKLine,
   type ModelPitcherProjection,
@@ -629,6 +630,44 @@ export default function EdgesScreen() {
   const [mode, setMode] = useState<ScanMode>('model');
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedEventId, setSelectedEventId] = useState<string>('');
+  // Props mode can scan any props-capable league; the K model itself stays
+  // MLB-only. Defaults to MLB and auto-corrects below if MLB is out of season.
+  const [propSport, setPropSport] = useState<string>(MODEL_SPORT);
+
+  // The in-season sport list is free on the Odds API, so it loads eagerly and
+  // the picker only ever offers leagues that are actually posting odds.
+  const {
+    data: sports,
+    isLoading: loadingSports,
+    isError: sportsError,
+    refetch: refetchSports,
+  } = useListSports();
+  const propsSports = useMemo(
+    () => (sports ?? []).filter((s) => s.supportsProps),
+    [sports],
+  );
+  const propSportValid = propsSports.some((s) => s.key === propSport);
+
+  // Keep the props sport valid as the live list shifts (e.g. MLB drops off
+  // over the All-Star break): fall back to the first props-capable sport. Any
+  // time Props mode is left without a valid sport — including a failed or
+  // empty sports list — drop the selected game too, so no stale event id can
+  // feed a later credit-priced scan.
+  useEffect(() => {
+    if (propSportValid) return;
+    if (mode === 'props' && selectedEventId) setSelectedEventId('');
+    if (propsSports.length > 0) setPropSport(propsSports[0].key);
+  }, [propsSports, propSportValid, mode, selectedEventId]);
+
+  const activeSport = mode === 'model' ? MODEL_SPORT : propSport;
+  const activeSportTitle =
+    mode === 'model'
+      ? 'MLB'
+      : (propsSports.find((s) => s.key === propSport)?.title ?? '');
+  // Everything below the pickers (days, games, results) hangs off the active
+  // sport; in Props mode that sport must be confirmed props-capable, or stale
+  // cached data for an invalid sport could render a contradictory slate.
+  const slateReady = mode === 'model' || propSportValid;
 
   const {
     data: events,
@@ -637,8 +676,15 @@ export default function EdgesScreen() {
     refetch: refetchEvents,
     isRefetching: refetchingEvents,
   } = useListEvents(
-    { sport: MODEL_SPORT },
-    { query: { queryKey: getListEventsQueryKey({ sport: MODEL_SPORT }) } },
+    { sport: activeSport },
+    {
+      query: {
+        // In Props mode, wait until the sport is confirmed props-capable so a
+        // stale default (e.g. out-of-season MLB) never fires a doomed fetch.
+        enabled: mode === 'model' || propSportValid,
+        queryKey: getListEventsQueryKey({ sport: activeSport }),
+      },
+    },
   );
 
   type Ev = NonNullable<typeof events>[number];
@@ -701,12 +747,13 @@ export default function EdgesScreen() {
     isError: propEdgesError,
     refetch: refetchPropEdges,
   } = useListPropEdges(
-    { sport: MODEL_SPORT, eventId: selectedEventId },
+    { sport: propSport, eventId: selectedEventId },
     {
       query: {
-        enabled: mode === 'props' && !!selectedEventId && selectedEventValid,
+        enabled:
+          mode === 'props' && propSportValid && !!selectedEventId && selectedEventValid,
         queryKey: getListPropEdgesQueryKey({
-          sport: MODEL_SPORT,
+          sport: propSport,
           eventId: selectedEventId,
         }),
       },
@@ -728,6 +775,15 @@ export default function EdgesScreen() {
     setSelectedEventId('');
   };
 
+  const selectPropSport = (key: string) => {
+    if (key === propSport) return;
+    haptic();
+    setPropSport(key);
+    // New sport, new slate — drop the game selection so the old sport's
+    // credit-priced scan can't linger or misfire on a mismatched event id.
+    setSelectedEventId('');
+  };
+
   const selectGame = (id: string) => {
     haptic();
     setSelectedEventId((cur) => (cur === id ? '' : id));
@@ -741,7 +797,7 @@ export default function EdgesScreen() {
         subtitle={
           mode === 'model'
             ? 'Fundamental pitcher-K projections vs the market, with Kelly staking. MLB only.'
-            : 'Devig-based +EV player props, scanned per game. Scan-only — props stay out of the Scorecard and CLV. MLB only.'
+            : 'Devig-based +EV player props in any in-season league, scanned per game. Scan-only — props stay out of the Scorecard and CLV.'
         }
       />
       <ScrollView
@@ -754,10 +810,15 @@ export default function EdgesScreen() {
           <RefreshControl
             refreshing={refetchingEvents}
             onRefresh={() => {
-              refetchEvents();
+              // Manual refetches bypass react-query's `enabled` gates, so they
+              // must re-apply the same eligibility rules: no events fetch for
+              // an invalid props sport, and a prop re-scan (credit-priced)
+              // only for a still-valid sport + explicitly selected game.
+              if (mode === 'props') refetchSports();
+              if (mode === 'model' || propSportValid) refetchEvents();
               if (selectedEventId && selectedEventValid) {
                 if (mode === 'model') refetchProjections();
-                else refetchPropEdges();
+                else if (propSportValid) refetchPropEdges();
               }
             }}
             tintColor={colors.primary}
@@ -766,8 +827,69 @@ export default function EdgesScreen() {
       >
         <ModeSwitch mode={mode} onChange={selectMode} />
 
+        {/* Sport picker — props can be scanned in any props-capable league */}
+        {mode === 'props' ? (
+          loadingSports ? (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} height={34} width={76} />
+              ))}
+            </View>
+          ) : sportsError ? (
+            <ErrorState
+              code="SPORTS_UNAVAILABLE"
+              message="Could not load the in-season sport list."
+              onRetry={() => refetchSports()}
+            />
+          ) : propsSports.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon="user"
+                title="No props-capable sports are in season right now."
+              />
+            </Card>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8 }}
+            >
+              {propsSports.map((s) => {
+                const active = s.key === propSport;
+                return (
+                  <Pressable
+                    key={s.key}
+                    onPress={() => selectPropSport(s.key)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    style={({ pressed }) => ({
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: colors.radius,
+                      borderWidth: 1,
+                      borderColor: active ? colors.primary : colors.border,
+                      backgroundColor: active ? colors.primary : 'transparent',
+                      opacity: pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: fonts.medium,
+                        fontSize: 13,
+                        color: active ? colors.primaryForeground : colors.foreground,
+                      }}
+                    >
+                      {s.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )
+        ) : null}
+
         {/* Day selector */}
-        {loadingEvents ? (
+        {!slateReady ? null : loadingEvents ? (
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} height={34} width={92} />
@@ -834,7 +956,7 @@ export default function EdgesScreen() {
         ) : null}
 
         {/* Errors / empty games */}
-        {eventsError ? (
+        {slateReady && eventsError ? (
           <ErrorState
             code="GAMES_UNAVAILABLE"
             message="Could not load upcoming games."
@@ -842,14 +964,21 @@ export default function EdgesScreen() {
           />
         ) : null}
 
-        {!eventsError && !loadingEvents && (events?.length ?? 0) === 0 ? (
+        {slateReady && !eventsError && !loadingEvents && events && events.length === 0 ? (
           <Card>
-            <EmptyState icon="calendar" title="No upcoming MLB games listed right now." />
+            <EmptyState
+              icon="calendar"
+              title={
+                activeSportTitle
+                  ? `No upcoming ${activeSportTitle} games listed right now.`
+                  : 'No upcoming games listed right now.'
+              }
+            />
           </Card>
         ) : null}
 
         {/* Game picker */}
-        {!eventsError && dayEvents.length > 0 ? (
+        {slateReady && !eventsError && dayEvents.length > 0 ? (
           <View style={{ gap: 8 }}>
             <Text
               style={{
@@ -901,7 +1030,7 @@ export default function EdgesScreen() {
         ) : null}
 
         {/* Results */}
-        {!selectedEventId && !eventsError && (events?.length ?? 0) > 0 ? (
+        {slateReady && !selectedEventId && !eventsError && (events?.length ?? 0) > 0 ? (
           <Card>
             <EmptyState
               icon={mode === 'model' ? 'cpu' : 'user'}

@@ -298,18 +298,12 @@ export function EditTradeSheet({
   const queryClient = useQueryClient();
   const updateTrade = useUpdatePaperTrade();
   const [oddsText, setOddsText] = useState(String(trade.americanOdds));
-  // Like the web dialog, the inline rule only appears after a save attempt.
-  const [showError, setShowError] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const parsed = parseOddsInput(oddsText);
 
   const save = () => {
-    if (updateTrade.isPending) return;
-    if (!parsed.valid) {
-      setShowError(true);
-      return;
-    }
+    if (updateTrade.isPending || !parsed.valid) return;
     haptic();
     setServerError(null);
     updateTrade.mutate(
@@ -431,7 +425,7 @@ export function EditTradeSheet({
                 value={oddsText}
                 onChangeText={(text) => {
                   setOddsText(text);
-                  setShowError(false);
+                  setServerError(null);
                 }}
                 keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
                 autoCapitalize="none"
@@ -442,7 +436,7 @@ export function EditTradeSheet({
                 style={inputStyle}
                 placeholderTextColor={colors.mutedForeground}
               />
-              {showError && !parsed.valid ? (
+              {!parsed.valid ? (
                 <Text
                   style={{
                     fontFamily: fonts.regular,
@@ -474,9 +468,10 @@ export function EditTradeSheet({
 
             <Pressable
               onPress={save}
-              disabled={updateTrade.isPending}
+              disabled={updateTrade.isPending || !parsed.valid}
               accessibilityRole="button"
               accessibilityLabel="Save price"
+              accessibilityState={{ disabled: updateTrade.isPending || !parsed.valid }}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -485,7 +480,7 @@ export function EditTradeSheet({
                 paddingVertical: 13,
                 borderRadius: colors.radius,
                 backgroundColor: colors.primary,
-                opacity: updateTrade.isPending ? 0.5 : pressed ? 0.75 : 1,
+                opacity: updateTrade.isPending || !parsed.valid ? 0.4 : pressed ? 0.75 : 1,
               })}
             >
               {updateTrade.isPending ? (

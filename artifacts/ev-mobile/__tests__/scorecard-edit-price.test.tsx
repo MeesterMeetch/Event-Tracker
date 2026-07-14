@@ -127,34 +127,59 @@ beforeEach(() => {
 // unmount explicitly or renders leak across tests.
 afterEach(cleanup);
 
-async function typeOddsAndSave(text: string) {
+/** Type text into the odds field (clears first) without clicking Save. */
+async function typeOdds(text: string) {
   const input = screen.getByLabelText('American odds');
   await user.clear(input);
   await user.type(input, text);
+}
+
+/** Type valid odds into the field then click the (enabled) Save button. */
+async function typeOddsAndSave(text: string) {
+  await typeOdds(text);
   await user.click(screen.getByLabelText('Save price'));
 }
 
 describe('EditTradeSheet price correction', () => {
-  it('rejects an impossible price with the web dialog\'s inline message and no PATCH', async () => {
+  it('shows the inline error immediately for impossible prices — no save attempt needed', async () => {
     render(<EditTradeSheet trade={makeTrade()} onClose={onClose} onSaved={onSaved} />);
 
-    // The rule appears only after a save attempt, like the web dialog.
+    // Starting value (-110) is valid: no error initially.
     expect(screen.queryByText(inlineError)).toBeNull();
 
-    await typeOddsAndSave('-50');
+    await typeOdds('-50');
 
+    // Error appears as soon as the value becomes invalid, without clicking Save.
     expect(screen.getByText(inlineError)).toBeDefined();
     expect(updateMutate).not.toHaveBeenCalled();
     expect(onSaved).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('typing again clears the inline error', async () => {
+  it('Save button is disabled for impossible prices and re-enabled when corrected', async () => {
     render(<EditTradeSheet trade={makeTrade()} onClose={onClose} onSaved={onSaved} />);
 
-    await typeOddsAndSave('-50');
+    const btn = screen.getByLabelText('Save price');
+
+    // Starting value -110 is valid: button must be enabled.
+    expect(btn.getAttribute('aria-disabled')).not.toBe('true');
+
+    // Type an impossible price: button becomes disabled.
+    await typeOdds('-50');
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+
+    // Correct to a valid price: button becomes enabled again.
+    await typeOdds('-110');
+    expect(btn.getAttribute('aria-disabled')).not.toBe('true');
+  });
+
+  it('correcting an impossible price to a valid one clears the inline error', async () => {
+    render(<EditTradeSheet trade={makeTrade()} onClose={onClose} onSaved={onSaved} />);
+
+    await typeOdds('-50');
     expect(screen.getByText(inlineError)).toBeDefined();
 
+    // Appending '0' makes the field '-500', a valid American odds price.
     await user.type(screen.getByLabelText('American odds'), '0');
     expect(screen.queryByText(inlineError)).toBeNull();
   });

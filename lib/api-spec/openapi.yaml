@@ -312,6 +312,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: >-
+            Duplicate open bet — a pending bet on the same game, market,
+            selection, point, and book is already in the log. Logging it
+            again would double-count the stake in profit and ROI. Once the
+            earlier bet settles, the same market can be logged again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /bets/{id}:
     get:
       operationId: getBet

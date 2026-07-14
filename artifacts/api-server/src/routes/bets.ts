@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db, betsTable } from "@workspace/db";
 import { calcPnl } from "../lib/grading-math";
 import {
@@ -40,6 +40,38 @@ router.post("/bets", async (req, res): Promise<void> => {
   }
   if (parsed.data.americanOdds === 0) {
     res.status(400).json({ error: "americanOdds cannot be 0" });
+    return;
+  }
+
+  // The bet log is a staking record: logging the same open wager twice would
+  // double-count its units in profit and ROI. A bet is "the same" when it
+  // targets the identical priced outcome — game, market, selection, point,
+  // and book. Only *pending* bets block a re-log: once the earlier bet
+  // settles, backing the same market again is a legitimate new wager, so no
+  // DB unique index fits here (unlike paper trades, where a pick counts once
+  // forever). A check-then-insert race is acceptable for this single-user
+  // log — the failure mode is one duplicate, not corrupted stats.
+  const d = parsed.data;
+  const point = d.point ?? null;
+  const book = d.book ?? null;
+  const [duplicate] = await db
+    .select()
+    .from(betsTable)
+    .where(
+      and(
+        eq(betsTable.gameId, d.gameId),
+        eq(betsTable.market, d.market),
+        eq(betsTable.selection, d.selection),
+        point == null ? isNull(betsTable.point) : eq(betsTable.point, point),
+        book == null ? isNull(betsTable.book) : eq(betsTable.book, book),
+        eq(betsTable.status, "pending"),
+      ),
+    );
+  if (duplicate) {
+    const label = `${d.selection}${point != null ? ` ${point}` : ""}${book ? ` @ ${book}` : ""}`;
+    res.status(409).json({
+      error: `Already in your bet log: ${label}. That bet is still open — settle or delete it before logging it again.`,
+    });
     return;
   }
 

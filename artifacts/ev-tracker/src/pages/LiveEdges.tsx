@@ -71,6 +71,18 @@ function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, children: Rea
         form.reset();
       },
       onError: (err) => {
+        if (err.status === 409) {
+          // The identical bet is still open in the log — the server blocks
+          // the repeat so units can't be double-counted. Close the dialog:
+          // retrying can't succeed until the earlier bet settles.
+          toast({
+            title: "Already in your bet log",
+            description: err.data?.error || `${selectionLabel} is already logged and still open.`,
+          });
+          setOpen(false);
+          form.reset();
+          return;
+        }
         toast({
           title: "Failed to log bet",
           description: err.data?.error || "An unknown error occurred.",

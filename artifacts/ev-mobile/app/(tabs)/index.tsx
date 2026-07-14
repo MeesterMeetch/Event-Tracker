@@ -210,10 +210,12 @@ function LogPropSheet({
   edge,
   onClose,
   onLogged,
+  onDuplicate,
 }: {
   edge: EdgeOpportunity;
   onClose: () => void;
   onLogged: (edge: EdgeOpportunity, units: number) => void;
+  onDuplicate: (edge: EdgeOpportunity, message: string) => void;
 }) {
   const colors = useColors();
   const queryClient = useQueryClient();
@@ -258,6 +260,16 @@ function LogPropSheet({
           onLogged(edge, parsedUnits);
         },
         onError: (err) => {
+          if (err?.status === 409) {
+            // The bet is already open in the log (logged earlier this
+            // session, from another device, or before a scan refresh wiped
+            // the local checkmark). Mirror the paper-trade pattern: flip the
+            // row to "logged" and surface the server's message rather than
+            // dead-ending in the sheet.
+            queryClient.invalidateQueries({ queryKey: getListBetsQueryKey() });
+            onDuplicate(edge, err?.data?.error || 'This bet is already in your bet log.');
+            return;
+          }
           setError(err?.data?.error || 'Could not log this bet. Try again.');
         },
       },
@@ -579,6 +591,13 @@ function PropResultsCard({ edges }: { edges: EdgeOpportunity[] }) {
             setConfirmation(
               `Logged ${units}u on ${propSelectionLabel(edge)} ${formatPoint(edge.point, edge.market)} @ ${formatOdds(edge.americanOdds)}`,
             );
+          }}
+          onDuplicate={(edge, message) => {
+            // Server said this bet is already open — treat the row as logged
+            // so it can't be re-tapped, and echo the server's explanation.
+            setLogged((prev) => new Set(prev).add(propKey(edge)));
+            setLogging(null);
+            setConfirmation(message);
           }}
         />
       ) : null}

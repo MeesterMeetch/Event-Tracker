@@ -144,6 +144,77 @@ describe("POST /bets", () => {
   });
 });
 
+describe("POST /bets — duplicate open-bet guard", () => {
+  // The identity key: gameId + market + selection + point + book. NEW_BET is
+  // an h2h pick, so point and book are both null — the null-safe branch.
+  it("409s when the identical bet is still pending, and never double-inserts", async () => {
+    const app = await buildApp();
+    await request(app, "POST", "/api/bets", NEW_BET);
+
+    const { status, body } = await request(app, "POST", "/api/bets", NEW_BET);
+
+    expect(status).toBe(409);
+    expect((body as { error: string }).error).toMatch(/already in your bet log/i);
+    expect(dbMod.__stores.bets).toHaveLength(1);
+  });
+
+  it("allows re-logging the same market once the earlier bet has settled", async () => {
+    seedPending({
+      id: 1,
+      gameId: NEW_BET.gameId,
+      market: NEW_BET.market,
+      selection: NEW_BET.selection,
+      point: null,
+      book: null,
+      status: "won",
+      pnl: 1.25,
+    });
+    const app = await buildApp();
+
+    const { status } = await request(app, "POST", "/api/bets", NEW_BET);
+
+    expect(status).toBe(201);
+    expect(dbMod.__stores.bets).toHaveLength(2);
+  });
+
+  it("blocks a duplicate prop bet (point + book set) at the same book", async () => {
+    const prop = {
+      ...NEW_BET,
+      market: "batter_home_runs",
+      selection: "Aaron Judge Over",
+      point: 0.5,
+      book: "DraftKings",
+    };
+    const app = await buildApp();
+    await request(app, "POST", "/api/bets", prop);
+
+    const { status, body } = await request(app, "POST", "/api/bets", prop);
+
+    expect(status).toBe(409);
+    expect((body as { error: string }).error).toContain("Aaron Judge Over 0.5 @ DraftKings");
+    expect(dbMod.__stores.bets).toHaveLength(1);
+  });
+
+  it("does not block the same selection taken at a different book or point", async () => {
+    const prop = {
+      ...NEW_BET,
+      market: "batter_home_runs",
+      selection: "Aaron Judge Over",
+      point: 0.5,
+      book: "DraftKings",
+    };
+    const app = await buildApp();
+    await request(app, "POST", "/api/bets", prop);
+
+    const otherBook = await request(app, "POST", "/api/bets", { ...prop, book: "FanDuel" });
+    const otherPoint = await request(app, "POST", "/api/bets", { ...prop, point: 1.5 });
+
+    expect(otherBook.status).toBe(201);
+    expect(otherPoint.status).toBe(201);
+    expect(dbMod.__stores.bets).toHaveLength(3);
+  });
+});
+
 describe("GET /bets", () => {
   it("returns all bets newest-first", async () => {
     seedPending({ id: 1, createdAt: new Date("2026-07-10T10:00:00Z") });

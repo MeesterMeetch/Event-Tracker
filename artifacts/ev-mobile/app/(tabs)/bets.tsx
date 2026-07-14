@@ -21,6 +21,7 @@ import {
   useDeleteBet,
   useGetDashboardSummary,
   useListBets,
+  useRestoreBet,
   useUpdateBet,
   type Bet,
   type BetStatus,
@@ -559,13 +560,20 @@ export default function BetsScreen() {
 
   const updateBet = useUpdateBet();
   const deleteBet = useDeleteBet();
+  const restoreBet = useRestoreBet();
   const [busyId, setBusyId] = useState<Bet['id'] | null>(null);
   const [editingBet, setEditingBet] = useState<Bet | null>(null);
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // `undoId` on a success banner offers a short window to restore the bet.
+  const [feedback, setFeedback] = useState<{
+    type: 'success' | 'error';
+    text: string;
+    undoId?: Bet['id'];
+  } | null>(null);
 
   useEffect(() => {
     if (feedback?.type !== 'success') return;
-    const t = setTimeout(() => setFeedback(null), 4000);
+    // Give the banner a little longer when it carries the Undo action.
+    const t = setTimeout(() => setFeedback(null), feedback.undoId != null ? 6000 : 4000);
     return () => clearTimeout(t);
   }, [feedback]);
 
@@ -619,7 +627,11 @@ export default function BetsScreen() {
           if (Platform.OS !== 'web') {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           }
-          setFeedback({ type: 'success', text: `Deleted ${bet.selection} from the bet log` });
+          setFeedback({
+            type: 'success',
+            text: `Deleted ${bet.selection} from the bet log`,
+            undoId: bet.id,
+          });
           invalidateBets();
         },
         onError: (err) => {
@@ -629,6 +641,35 @@ export default function BetsScreen() {
           });
         },
         onSettled: () => setBusyId(null),
+      },
+    );
+  };
+
+  const undoDelete = (id: Bet['id']) => {
+    if (restoreBet.isPending) return;
+    haptic();
+    // Swap the banner to a transient "restoring" note; the mutation result
+    // replaces it either way, so a stale Undo can't be tapped twice.
+    setFeedback({ type: 'success', text: 'Restoring bet…' });
+    restoreBet.mutate(
+      { id },
+      {
+        onSuccess: (restored) => {
+          if (Platform.OS !== 'web') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          setFeedback({
+            type: 'success',
+            text: `Restored ${restored.selection} to the bet log`,
+          });
+          invalidateBets();
+        },
+        onError: (err) => {
+          setFeedback({
+            type: 'error',
+            text: err?.data?.error || 'Could not undo — this bet can no longer be restored.',
+          });
+        },
       },
     );
   };
@@ -803,6 +844,30 @@ export default function BetsScreen() {
               >
                 {feedback.text}
               </Text>
+              {feedback.undoId != null ? (
+                <Pressable
+                  hitSlop={8}
+                  disabled={restoreBet.isPending}
+                  accessibilityRole="button"
+                  accessibilityLabel="Undo delete"
+                  onPress={() => undoDelete(feedback.undoId!)}
+                  style={({ pressed }) => ({
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: colors.radius,
+                    borderWidth: 1,
+                    borderColor: 'rgba(26,140,255,0.4)',
+                    backgroundColor: 'rgba(26,140,255,0.08)',
+                    opacity: pressed || restoreBet.isPending ? 0.6 : 1,
+                  })}
+                >
+                  <Text
+                    style={{ fontFamily: fonts.monoSemibold, fontSize: 10.5, color: colors.primary }}
+                  >
+                    UNDO
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
           {isLoading ? (

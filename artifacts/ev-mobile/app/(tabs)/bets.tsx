@@ -573,6 +573,10 @@ export default function BetsScreen() {
   const queryClient = useQueryClient();
 
   const [filter, setFilter] = useState<StatusFilter>('all');
+  // Sport filter — set by tapping a row in the "By Sport" breakdown, combinable
+  // with the status chips. Applied client-side: the ledger is small and the
+  // list-bets endpoint only takes a status param.
+  const [sportFilter, setSportFilter] = useState<string | null>(null);
   const {
     data: bets,
     isLoading,
@@ -580,6 +584,10 @@ export default function BetsScreen() {
     refetch,
     isRefetching,
   } = useListBets(filter === 'all' ? undefined : { status: filter });
+  const visibleBets = useMemo(
+    () => (sportFilter ? (bets ?? []).filter((b) => b.sport === sportFilter) : bets),
+    [bets, sportFilter],
+  );
 
   // All-time ledger rollup — deliberately independent of the status filter,
   // and kept fresh by the same getGetDashboardSummaryQueryKey() invalidation
@@ -883,32 +891,58 @@ export default function BetsScreen() {
                         : row.roiPercent > 0
                           ? colors.positive
                           : colors.destructive;
+                      const sportActive = sportFilter === row.sport;
+                      const sportLabel = sportTitles.get(row.sport) ?? formatSportKey(row.sport);
                       return (
-                        <View
+                        <Pressable
                           key={row.sport}
-                          style={{
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: sportActive }}
+                          accessibilityLabel={
+                            sportActive
+                              ? `Stop filtering bets by ${sportLabel}`
+                              : `Show only ${sportLabel} bets`
+                          }
+                          onPress={() => {
+                            haptic();
+                            setSportFilter((cur) => (cur === row.sport ? null : row.sport));
+                          }}
+                          style={({ pressed }) => ({
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 10,
                             paddingVertical: 9,
                             borderTopWidth: 1,
                             borderTopColor: colors.cardBorder,
-                          }}
+                            opacity: pressed ? 0.6 : 1,
+                          })}
                         >
-                          <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text
-                              style={{ fontFamily: fonts.medium, fontSize: 12.5, color: colors.foreground }}
-                              numberOfLines={1}
-                            >
-                              {sportTitles.get(row.sport) ?? formatSportKey(row.sport)}
-                            </Text>
-                            <Text
-                              style={{ fontFamily: fonts.mono, fontSize: 10.5, color: colors.mutedForeground, marginTop: 2 }}
-                              numberOfLines={1}
-                            >
-                              {row.won}-{row.lost}-{row.push}
-                              {row.pending > 0 ? ` · ${row.pending} pending` : ''}
-                            </Text>
+                          <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text
+                                style={{
+                                  fontFamily: fonts.medium,
+                                  fontSize: 12.5,
+                                  color: sportActive ? colors.primary : colors.foreground,
+                                }}
+                                numberOfLines={1}
+                              >
+                                {sportLabel}
+                              </Text>
+                              <Text
+                                style={{ fontFamily: fonts.mono, fontSize: 10.5, color: colors.mutedForeground, marginTop: 2 }}
+                                numberOfLines={1}
+                              >
+                                {row.won}-{row.lost}-{row.push}
+                                {row.pending > 0 ? ` · ${row.pending} pending` : ''}
+                              </Text>
+                            </View>
+                            <Feather
+                              name={sportActive ? 'check' : 'filter'}
+                              size={12}
+                              color={sportActive ? colors.primary : colors.mutedForeground}
+                              style={{ opacity: sportActive ? 1 : 0.45 }}
+                            />
                           </View>
                           <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 12, color: roiTone }}>
                             {formatPercent(row.roiPercent)}
@@ -924,7 +958,7 @@ export default function BetsScreen() {
                           >
                             {formatPnlUnits(row.pnl)}
                           </Text>
-                        </View>
+                        </Pressable>
                       );
                     })}
                   </View>
@@ -934,8 +968,35 @@ export default function BetsScreen() {
           </Card>
         ) : null}
 
-        {/* Status filter chips */}
+        {/* Status filter chips + active sport filter */}
         <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+          {sportFilter ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Clear sport filter ${sportTitles.get(sportFilter) ?? formatSportKey(sportFilter)}`}
+              onPress={() => {
+                haptic();
+                setSportFilter(null);
+              }}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: colors.radius,
+                borderWidth: 1,
+                borderColor: colors.primary,
+                backgroundColor: 'rgba(26,140,255,0.14)',
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: fonts.medium, fontSize: 12, color: colors.primary }}>
+                {sportTitles.get(sportFilter) ?? formatSportKey(sportFilter)}
+              </Text>
+              <Feather name="x" size={12} color={colors.primary} />
+            </Pressable>
+          ) : null}
           {FILTERS.map((f) => {
             const active = filter === f.value;
             return (
@@ -1043,19 +1104,27 @@ export default function BetsScreen() {
               message="Could not load the bet log."
               onRetry={() => refetch()}
             />
-          ) : !bets || bets.length === 0 ? (
+          ) : !visibleBets || visibleBets.length === 0 ? (
             <EmptyState
               icon="book-open"
-              title={filter === 'all' ? 'No bets logged yet' : `No ${filter} bets`}
+              title={
+                sportFilter
+                  ? `No ${filter === 'all' ? '' : `${filter} `}${sportTitles.get(sportFilter) ?? formatSportKey(sportFilter)} bets`
+                  : filter === 'all'
+                    ? 'No bets logged yet'
+                    : `No ${filter} bets`
+              }
               subtitle={
-                filter === 'all'
-                  ? 'Scan a game on the Edges tab and log a promising prop to start the ledger.'
-                  : 'Try a different status filter.'
+                sportFilter
+                  ? 'Clear the sport filter above to see the rest of the ledger.'
+                  : filter === 'all'
+                    ? 'Scan a game on the Edges tab and log a promising prop to start the ledger.'
+                    : 'Try a different status filter.'
               }
             />
           ) : (
             <View>
-              {bets.map((bet) => (
+              {visibleBets.map((bet) => (
                 <BetRow
                   key={bet.id}
                   bet={bet}

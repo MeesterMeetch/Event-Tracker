@@ -75,6 +75,14 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
+  # Dedupe @types/react to a single version across the workspace. The web
+  # artifacts request ^19.2.0 while the Expo artifact requests ~19.1.10; without
+  # this, transitive peers (react-day-picker, radix) can bind to the 19.1 copy
+  # inside a 19.2 compile, triggering "two different types with this name exist"
+  # errors. Runtime react is pinned to 19.1.0 for Expo; 19.2 types are a
+  # backward-compatible superset, matching how the web already runs.
+  "@types/react": "^19.2.0"
+  "@types/react-dom": "^19.2.0"
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"
   "esbuild>@esbuild/darwin-x64": "-"

@@ -7,3 +7,5 @@
 - [Route test harness](route-test-harness.md) — vi.mock instances survive resetModules (add clearAllMocks); routes need a stubbed req.log; spy Date.now (not fake timers) for TTL tests.
 - [API-spec/DB field add → rebuild dist](api-spec-codegen-dist-rebuild.md) — after schema+openapi.yaml+orval, run `tsc -b` on each changed lib; consumers typecheck against stale dist .d.ts, not src.
 - [Vitest for web artifacts](vitest-web-artifact-config.md) — web artifact needs its own vitest.config.ts; app vite.config.ts throws without PORT/BASE_PATH and Vitest auto-loads it.
+- [Expo useColors dark-key cast](expo-usecolors-dark-key.md) — adding a real `dark` palette to constants/colors.ts breaks the scaffold useColors Record cast; drop the cast, access colors.dark directly.
+- [@types/react dedupe (web+Expo)](types-react-dedupe-monorepo.md) — pnpm add can bind web-side react-day-picker/radix to Expo's 19.1 @types/react → "two different types" typecheck fail; pin `@types/react`/`-dom` to ^19.2.0 in workspace overrides.

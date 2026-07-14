@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -65,11 +76,13 @@ function BetRow({
   busy,
   onSettle,
   onDelete,
+  onEdit,
 }: {
   bet: Bet;
   busy: boolean;
   onSettle: (status: BetStatus) => void;
   onDelete: () => void;
+  onEdit: () => void;
 }) {
   const colors = useColors();
   const s = statusStyle(bet.status, colors);
@@ -189,6 +202,20 @@ function BetRow({
               hitSlop={10}
               disabled={busy}
               accessibilityRole="button"
+              accessibilityLabel={`Edit ${bet.selection}`}
+              onPress={() => {
+                haptic();
+                setSettling(false);
+                onEdit();
+              }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+            >
+              <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+            </Pressable>
+            <Pressable
+              hitSlop={10}
+              disabled={busy}
+              accessibilityRole="button"
               accessibilityLabel={`Delete ${bet.selection}`}
               onPress={() => {
                 haptic();
@@ -259,6 +286,246 @@ function BetRow({
   );
 }
 
+/**
+ * Bottom-sheet form for correcting a logged bet's details (units, odds,
+ * notes), mirroring the web EditBetDialog and the LogPropSheet layout on the
+ * Edges tab. Status changes stay on the row's settle chips; when odds or
+ * units change on a settled bet, the server recomputes pnl in lockstep.
+ */
+function EditBetSheet({
+  bet,
+  onClose,
+  onSaved,
+}: {
+  bet: Bet;
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const colors = useColors();
+  const queryClient = useQueryClient();
+  const updateBet = useUpdateBet();
+  const [units, setUnits] = useState(String(bet.units));
+  const [odds, setOdds] = useState(String(bet.americanOdds));
+  const [notes, setNotes] = useState(bet.notes ?? '');
+  const [error, setError] = useState<string | null>(null);
+
+  const parsedUnits = Number(units.replace(',', '.'));
+  const unitsValid = Number.isFinite(parsedUnits) && parsedUnits >= 0.01;
+  const parsedOdds = Number(odds.replace(',', '.'));
+  const oddsValid = Number.isFinite(parsedOdds) && parsedOdds !== 0;
+
+  const submit = () => {
+    if (!unitsValid || !oddsValid || updateBet.isPending) return;
+    haptic();
+    setError(null);
+    // pnl is intentionally omitted: the server keeps it in lockstep with the
+    // new odds/units on a settled bet, and leaves it null while pending.
+    updateBet.mutate(
+      {
+        id: bet.id,
+        data: {
+          americanOdds: parsedOdds,
+          units: parsedUnits,
+          notes: notes.trim() ? notes.trim() : null,
+        },
+      },
+      {
+        onSuccess: (updated) => {
+          if (Platform.OS !== 'web') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          queryClient.invalidateQueries({ queryKey: getListBetsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          onSaved(
+            `Updated ${bet.selection}${updated.pnl != null ? ` — P&L now ${formatPnlUnits(updated.pnl)}` : ''}`,
+          );
+        },
+        onError: (err) => {
+          setError(err?.data?.error || 'Could not update this bet. Try again.');
+        },
+      },
+    );
+  };
+
+  const label = {
+    fontFamily: fonts.regular,
+    fontSize: 10.5,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+    color: colors.mutedForeground,
+    marginBottom: 6,
+  };
+  const inputStyle = {
+    borderWidth: 1,
+    borderColor: colors.input,
+    borderRadius: colors.radius,
+    backgroundColor: colors.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: fonts.mono,
+    fontSize: 14,
+    color: colors.foreground,
+  };
+
+  const canSave = unitsValid && oddsValid && !updateBet.isPending;
+
+  return (
+    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <Pressable
+          onPress={onClose}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+        >
+          <Pressable
+            onPress={() => {}}
+            style={{
+              backgroundColor: colors.card,
+              borderTopLeftRadius: 18,
+              borderTopRightRadius: 18,
+              borderWidth: 1,
+              borderColor: colors.cardBorder,
+              padding: 20,
+              paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+              gap: 14,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontFamily: fonts.semibold, fontSize: 16, color: colors.foreground }}>
+                Edit Bet
+              </Text>
+              <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
+                <Feather name="x" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+
+            {/* Bet summary */}
+            <View
+              style={{
+                borderRadius: colors.radius,
+                backgroundColor: colors.secondary,
+                padding: 12,
+                gap: 8,
+              }}
+            >
+              <Text
+                style={{ fontFamily: fonts.medium, fontSize: 13, color: colors.foreground }}
+                numberOfLines={1}
+              >
+                {bet.selection} {formatPoint(bet.point, bet.market)}
+              </Text>
+              <Text
+                style={{ fontFamily: fonts.regular, fontSize: 11, color: colors.mutedForeground }}
+                numberOfLines={1}
+              >
+                {formatMarketLabel(bet.market)}
+                {bet.book ? ` · ${bet.book}` : ''} · {bet.awayTeam} @ {bet.homeTeam}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={label}>Units</Text>
+                <TextInput
+                  value={units}
+                  onChangeText={setUnits}
+                  keyboardType="decimal-pad"
+                  inputMode="decimal"
+                  selectTextOnFocus
+                  accessibilityLabel="Units"
+                  style={inputStyle}
+                  placeholderTextColor={colors.mutedForeground}
+                />
+                {!unitsValid ? (
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 11, color: colors.destructive, marginTop: 4 }}>
+                    Must be at least 0.01 units.
+                  </Text>
+                ) : null}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={label}>Odds (American)</Text>
+                <TextInput
+                  value={odds}
+                  onChangeText={setOdds}
+                  keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  selectTextOnFocus
+                  accessibilityLabel="American odds"
+                  placeholder="e.g. -110"
+                  style={inputStyle}
+                  placeholderTextColor={colors.mutedForeground}
+                />
+                {!oddsValid ? (
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 11, color: colors.destructive, marginTop: 4 }}>
+                    Enter non-zero odds, e.g. -110.
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+
+            <View>
+              <Text style={label}>Notes (optional)</Text>
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+                accessibilityLabel="Notes"
+                placeholder="e.g. Corrected the price actually taken at the book"
+                placeholderTextColor={colors.mutedForeground}
+                style={[inputStyle, { fontFamily: fonts.regular, minHeight: 64, textAlignVertical: 'top' }]}
+              />
+            </View>
+
+            {error ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Feather name="alert-circle" size={14} color={colors.destructive} />
+                <Text style={{ flex: 1, fontFamily: fonts.regular, fontSize: 12, color: colors.destructive }}>
+                  {error}
+                </Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              onPress={submit}
+              disabled={!canSave}
+              accessibilityRole="button"
+              accessibilityLabel="Save changes"
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 13,
+                borderRadius: colors.radius,
+                backgroundColor: colors.primary,
+                opacity: !canSave ? 0.5 : pressed ? 0.75 : 1,
+              })}
+            >
+              {updateBet.isPending ? (
+                <ActivityIndicator size="small" color={colors.primaryForeground} />
+              ) : (
+                <Feather name="save" size={15} color={colors.primaryForeground} />
+              )}
+              <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.primaryForeground }}>
+                Save Changes
+              </Text>
+            </Pressable>
+
+            {bet.status !== 'pending' ? (
+              <Text style={{ fontFamily: fonts.regular, fontSize: 10.5, color: colors.mutedForeground, lineHeight: 15 }}>
+                This bet is settled — changing odds or units recomputes its P&L automatically.
+              </Text>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 export default function BetsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -293,6 +560,7 @@ export default function BetsScreen() {
   const updateBet = useUpdateBet();
   const deleteBet = useDeleteBet();
   const [busyId, setBusyId] = useState<Bet['id'] | null>(null);
+  const [editingBet, setEditingBet] = useState<Bet | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -568,12 +836,26 @@ export default function BetsScreen() {
                   busy={busyId === bet.id}
                   onSettle={(status) => settleBet(bet, status)}
                   onDelete={() => removeBet(bet)}
+                  onEdit={() => {
+                    setFeedback(null);
+                    setEditingBet(bet);
+                  }}
                 />
               ))}
             </View>
           )}
         </Card>
       </ScrollView>
+      {editingBet ? (
+        <EditBetSheet
+          bet={editingBet}
+          onClose={() => setEditingBet(null)}
+          onSaved={(message) => {
+            setEditingBet(null);
+            setFeedback({ type: 'success', text: message });
+          }}
+        />
+      ) : null}
     </View>
   );
 }

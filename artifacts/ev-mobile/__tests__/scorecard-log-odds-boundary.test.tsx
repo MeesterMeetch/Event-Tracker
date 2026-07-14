@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ModelPitcherProjection } from '@workspace/api-client-react';
 
@@ -12,6 +12,13 @@ import type { ModelPitcherProjection } from '@workspace/api-client-react';
  * the exact edges -100 and +100 are valid American odds and must pass; values
  * like 50, -50, and 0 are impossible on the American scale and must be caught
  * here on the device, not discovered at the HTTP layer.
+ *
+ * Rendering behaviour for impossible odds (task #131):
+ *   - The log button is visually *disabled* (opacity reduced, slash icon).
+ *   - Its accessible label changes from "Log paper trade" to the out-of-range
+ *     explanation so screen-reader users know why the button is inert.
+ *   - The button carries accessibilityState.disabled = true (→ aria-disabled).
+ *   - Clicking (or tapping) a disabled button never fires the mutation.
  *
  * Companion to:
  *   - artifacts/api-server/src/routes/paper-trades-validation-parity.test.ts
@@ -81,8 +88,8 @@ vi.mock('@workspace/api-client-react', () => ({
 
 import { ProjectionCard } from '../app/(tabs)/index';
 
-// Error text shown by logTrade when it catches an impossible price.
-const IMPOSSIBLE_ODDS_ERROR = 'Odds must be -100 or below, or +100 and up (e.g. -110).';
+// Partial text that the disabled button's accessible label begins with.
+const DISABLED_LABEL_PREFIX = 'Cannot log';
 
 function makeProjection(americanOdds: number): ModelPitcherProjection {
   return {
@@ -128,62 +135,124 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe('ProjectionCard log button — americanOdds boundary guard', () => {
-  it('rejects odds of 0 (impossible price): no mutation is fired and an error message appears', async () => {
+// ─── Disabled-button state for impossible prices ────────────────────────────
+
+describe('ProjectionCard log button — disabled state for impossible prices', () => {
+  it('shows a disabled button (not "Log paper trade") for odds of 0', () => {
     render(<ProjectionCard projection={makeProjection(0)} />);
 
-    await user.click(screen.getByLabelText('Log paper trade'));
+    // The normal idle label must be absent — the row should not look tappable.
+    expect(screen.queryByLabelText('Log paper trade')).toBeNull();
 
-    expect(createPaperTradeMutate).not.toHaveBeenCalled();
-    expect(screen.getByText(IMPOSSIBLE_ODDS_ERROR)).toBeDefined();
+    // A button whose label begins with "Cannot log" must exist instead.
+    const btn = screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX));
+    expect(btn).toBeDefined();
   });
 
-  it('rejects odds of 50 (impossible price inside (0, 100)): no mutation and error shown', async () => {
+  it('marks the button aria-disabled for odds of 0', () => {
+    render(<ProjectionCard projection={makeProjection(0)} />);
+
+    const btn = screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX));
+    // react-native-web maps accessibilityState.disabled → aria-disabled="true"
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('never fires the mutation when the disabled button is activated for odds of 0', () => {
+    render(<ProjectionCard projection={makeProjection(0)} />);
+
+    // fireEvent bypasses pointer-events:none (same as a raw OS tap landing on
+    // a visually-inert element) — the disabled Pressable's onPress must still
+    // be blocked, so the mutation must not fire.
+    const btn = screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX));
+    fireEvent.click(btn);
+
+    expect(createPaperTradeMutate).not.toHaveBeenCalled();
+  });
+
+  it('shows a disabled button for odds of 50 (inside the forbidden open interval (0, 100))', () => {
     render(<ProjectionCard projection={makeProjection(50)} />);
 
-    await user.click(screen.getByLabelText('Log paper trade'));
-
-    expect(createPaperTradeMutate).not.toHaveBeenCalled();
-    expect(screen.getByText(IMPOSSIBLE_ODDS_ERROR)).toBeDefined();
+    expect(screen.queryByLabelText('Log paper trade')).toBeNull();
+    expect(screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX))).toBeDefined();
   });
 
-  it('rejects odds of -50 (impossible price inside (-100, 0)): no mutation and error shown', async () => {
+  it('marks the button aria-disabled for odds of 50', () => {
+    render(<ProjectionCard projection={makeProjection(50)} />);
+
+    const btn = screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX));
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('never fires the mutation for odds of 50 even if the button is activated', () => {
+    render(<ProjectionCard projection={makeProjection(50)} />);
+
+    const btn = screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX));
+    fireEvent.click(btn);
+
+    expect(createPaperTradeMutate).not.toHaveBeenCalled();
+  });
+
+  it('shows a disabled button for odds of -50 (inside the forbidden open interval (-100, 0))', () => {
     render(<ProjectionCard projection={makeProjection(-50)} />);
 
-    await user.click(screen.getByLabelText('Log paper trade'));
-
-    expect(createPaperTradeMutate).not.toHaveBeenCalled();
-    expect(screen.getByText(IMPOSSIBLE_ODDS_ERROR)).toBeDefined();
+    expect(screen.queryByLabelText('Log paper trade')).toBeNull();
+    expect(screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX))).toBeDefined();
   });
 
-  it('accepts odds of -100 (exact lower boundary): mutation fires and no error shown', async () => {
+  it('marks the button aria-disabled for odds of -50', () => {
+    render(<ProjectionCard projection={makeProjection(-50)} />);
+
+    const btn = screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX));
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('never fires the mutation for odds of -50 even if the button is activated', () => {
+    render(<ProjectionCard projection={makeProjection(-50)} />);
+
+    const btn = screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX));
+    fireEvent.click(btn);
+
+    expect(createPaperTradeMutate).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Valid boundary prices — button must remain enabled ─────────────────────
+
+describe('ProjectionCard log button — valid prices at and beyond the boundary', () => {
+  it('accepts odds of -100 (exact lower boundary): button is tappable and mutation fires', async () => {
     // -100 is the outermost valid negative American odds; the forbidden zone is
     // the open interval (-100, 100), so the edge itself must be allowed through.
     render(<ProjectionCard projection={makeProjection(-100)} />);
 
-    await user.click(screen.getByLabelText('Log paper trade'));
+    const btn = screen.getByLabelText('Log paper trade');
+    expect(btn.getAttribute('aria-disabled')).not.toBe('true');
+
+    await user.click(btn);
 
     expect(createPaperTradeMutate).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(IMPOSSIBLE_ODDS_ERROR)).toBeNull();
   });
 
-  it('accepts odds of 100 (exact upper boundary): mutation fires and no error shown', async () => {
+  it('accepts odds of 100 (exact upper boundary): button is tappable and mutation fires', async () => {
     // +100 is the outermost valid positive American odds; the forbidden zone is
     // the open interval (-100, 100), so the edge itself must be allowed through.
     render(<ProjectionCard projection={makeProjection(100)} />);
 
-    await user.click(screen.getByLabelText('Log paper trade'));
+    const btn = screen.getByLabelText('Log paper trade');
+    expect(btn.getAttribute('aria-disabled')).not.toBe('true');
+
+    await user.click(btn);
 
     expect(createPaperTradeMutate).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(IMPOSSIBLE_ODDS_ERROR)).toBeNull();
   });
 
-  it('accepts a canonical valid price -110: mutation fires and no error shown', async () => {
+  it('accepts a canonical valid price -110: button is tappable and mutation fires', async () => {
     render(<ProjectionCard projection={makeProjection(-110)} />);
 
-    await user.click(screen.getByLabelText('Log paper trade'));
+    const btn = screen.getByLabelText('Log paper trade');
+    expect(btn.getAttribute('aria-disabled')).not.toBe('true');
+
+    await user.click(btn);
 
     expect(createPaperTradeMutate).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(IMPOSSIBLE_ODDS_ERROR)).toBeNull();
   });
 });

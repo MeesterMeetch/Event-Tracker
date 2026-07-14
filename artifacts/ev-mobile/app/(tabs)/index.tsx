@@ -602,7 +602,7 @@ function PropResultsCard({ edges }: { edges: EdgeOpportunity[] }) {
   );
 }
 
-type LogState = 'idle' | 'pending' | 'logged';
+type LogState = 'idle' | 'pending' | 'logged' | 'invalid';
 
 function LogButton({
   state,
@@ -617,31 +617,46 @@ function LogButton({
 }) {
   const colors = useColors();
   const disabled = state !== 'idle';
+
+  const label =
+    state === 'logged'
+      ? loggedLabel
+      : state === 'invalid'
+        ? 'Cannot log — odds are out of range (must be −100 or below, or +100 and up)'
+        : idleLabel;
+
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       hitSlop={8}
       accessibilityRole="button"
-      accessibilityLabel={state === 'logged' ? loggedLabel : idleLabel}
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
       style={({ pressed }) => ({
         width: 30,
         height: 30,
         borderRadius: colors.radius,
         borderWidth: 1,
         borderColor:
-          state === 'logged' ? 'rgba(0,204,102,0.4)' : colors.border,
+          state === 'logged'
+            ? 'rgba(0,204,102,0.4)'
+            : state === 'invalid'
+              ? colors.border
+              : colors.border,
         backgroundColor:
           state === 'logged' ? 'rgba(0,204,102,0.1)' : 'transparent',
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: pressed ? 0.6 : 1,
+        opacity: state === 'invalid' ? 0.35 : pressed ? 0.6 : 1,
       })}
     >
       {state === 'pending' ? (
         <ActivityIndicator size="small" color={colors.primary} />
       ) : state === 'logged' ? (
         <Feather name="check" size={15} color={colors.positive} />
+      ) : state === 'invalid' ? (
+        <Feather name="slash" size={15} color={colors.mutedForeground} />
       ) : (
         <Feather name="plus" size={15} color={colors.primary} />
       )}
@@ -833,6 +848,7 @@ export function ProjectionCard({ projection }: { projection: ModelPitcherProject
     const key = lineKey(line);
     if (logged.has(key)) return 'logged';
     if (pendingKey === key) return 'pending';
+    if (!isValidAmericanOdds(line.americanOdds)) return 'invalid';
     return 'idle';
   };
 

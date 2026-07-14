@@ -297,11 +297,12 @@ describe("ProjectionCard duplicate-log toast", () => {
     );
   }
 
-  // The log button is the icon-only Plus button in the line row.
+  // Each line's log button carries an accessible name naming the exact pick,
+  // so the test queries by it instead of guessing by position.
   async function clickLogButton() {
-    const buttons = screen.getAllByRole("button");
-    // Only one line is rendered, so the last button in the card is its log button.
-    await user.click(buttons[buttons.length - 1]);
+    await user.click(
+      screen.getByRole("button", { name: /log paper trade gerrit cole over 6\.5/i }),
+    );
   }
 
   it("shows a neutral 'Already logged' toast on a 409 duplicate", async () => {

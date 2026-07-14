@@ -207,6 +207,7 @@ export function ProjectionCard({ projection }: { projection: ModelPitcherProject
                     size="sm"
                     variant={line.isFlagged ? "secondary" : "ghost"}
                     className="h-7 px-2"
+                    aria-label={`Log paper trade ${projection.pitcher} ${line.selection} ${line.point}`}
                     disabled={createPaperTrade.isPending}
                     onClick={() => logTrade(line)}
                   >

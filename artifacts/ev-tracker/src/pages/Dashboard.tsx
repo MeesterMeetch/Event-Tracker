@@ -44,6 +44,14 @@ export default function Dashboard() {
     );
   }
 
+  // Same realized-stake rule as the mobile ledger card: P&L and ROI only
+  // earn a tone (and lose the muted styling) once there is settled stake
+  // with a real pnl — totalUnits > 0 — never off the W-L-P count alone.
+  // Covers the API edge case where bets are settled but pnl is still null
+  // (totalUnits 0): an unmuted "$0.00 / 0.00%" must not sit next to a
+  // non-zero record as if results were in.
+  const hasRealizedStake = summary.totalUnits > 0;
+
   return (
     <div className="space-y-6">
       <div>
@@ -58,10 +66,11 @@ export default function Dashboard() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold font-mono ${summary.totalPnl > 0 ? 'text-positive' : summary.totalPnl < 0 ? 'text-negative' : ''}`}>
-              {summary.totalPnl > 0 ? '+' : ''}{formatCurrency(summary.totalPnl)}
+            <div className={`text-2xl font-bold font-mono ${!hasRealizedStake ? 'text-muted-foreground' : summary.totalPnl > 0 ? 'text-positive' : summary.totalPnl < 0 ? 'text-negative' : ''}`}>
+              {hasRealizedStake && summary.totalPnl > 0 ? '+' : ''}{formatCurrency(summary.totalPnl)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
+              {!hasRealizedStake && <span>Awaiting results · </span>}
               Record: {summary.won}-{summary.lost}-{summary.push} ({summary.pending} pending)
             </p>
           </CardContent>
@@ -91,10 +100,12 @@ export default function Dashboard() {
             <Percent className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold font-mono ${summary.roiPercent > 0 ? 'text-positive' : summary.roiPercent < 0 ? 'text-negative' : ''}`}>
+            <div className={`text-2xl font-bold font-mono ${!hasRealizedStake ? 'text-muted-foreground' : summary.roiPercent > 0 ? 'text-positive' : summary.roiPercent < 0 ? 'text-negative' : ''}`}>
               {formatPercent(summary.roiPercent)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Return on invested capital</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {hasRealizedStake ? 'Return on invested capital' : 'Awaiting results — no settled stake yet'}
+            </p>
           </CardContent>
         </Card>
 

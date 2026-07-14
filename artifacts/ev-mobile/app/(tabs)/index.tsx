@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   RefreshControl,
@@ -10,9 +11,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useQueryClient } from '@tanstack/react-query';
 import {
+  getGetPaperTradeSummaryQueryKey,
   getListEventsQueryKey,
   getListModelEdgesQueryKey,
+  getListPaperTradesQueryKey,
+  useCreatePaperTrade,
   useListEvents,
   useListModelEdges,
   type ModelKLine,
@@ -45,7 +50,52 @@ function haptic() {
   if (Platform.OS !== 'web') Haptics.selectionAsync();
 }
 
-function LineRow({ line }: { line: ModelKLine }) {
+type LogState = 'idle' | 'pending' | 'logged';
+
+function LogButton({ state, onPress }: { state: LogState; onPress: () => void }) {
+  const colors = useColors();
+  const disabled = state !== 'idle';
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={state === 'logged' ? 'Logged to scorecard' : 'Log paper trade'}
+      style={({ pressed }) => ({
+        width: 30,
+        height: 30,
+        borderRadius: colors.radius,
+        borderWidth: 1,
+        borderColor:
+          state === 'logged' ? 'rgba(0,204,102,0.4)' : colors.border,
+        backgroundColor:
+          state === 'logged' ? 'rgba(0,204,102,0.1)' : 'transparent',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: pressed ? 0.6 : 1,
+      })}
+    >
+      {state === 'pending' ? (
+        <ActivityIndicator size="small" color={colors.primary} />
+      ) : state === 'logged' ? (
+        <Feather name="check" size={15} color={colors.positive} />
+      ) : (
+        <Feather name="plus" size={15} color={colors.primary} />
+      )}
+    </Pressable>
+  );
+}
+
+function LineRow({
+  line,
+  logState,
+  onLog,
+}: {
+  line: ModelKLine;
+  logState: LogState;
+  onLog: () => void;
+}) {
   const colors = useColors();
   const edgeColor =
     (line.edgePercent ?? 0) > 0 ? colors.positive : colors.mutedForeground;
@@ -89,6 +139,9 @@ function LineRow({ line }: { line: ModelKLine }) {
           {formatOdds(line.americanOdds)}
         </Text>
       </View>
+      <View style={{ width: 38, alignItems: 'flex-end' }}>
+        <LogButton state={logState} onPress={onLog} />
+      </View>
     </View>
   );
 }
@@ -117,12 +170,96 @@ function LinesHeader() {
       <Text style={[cell, { flex: 1, textAlign: 'right' }]}>Model</Text>
       <Text style={[cell, { flex: 1, textAlign: 'right' }]}>Edge</Text>
       <Text style={[cell, { flex: 1, textAlign: 'right' }]}>Odds</Text>
+      <Text style={[cell, { width: 38, textAlign: 'right' }]}>Log</Text>
     </View>
   );
 }
 
+const lineKey = (line: ModelKLine) =>
+  `${line.selection}-${line.point}-${line.book}`;
+
 function ProjectionCard({ projection }: { projection: ModelPitcherProjection }) {
   const colors = useColors();
+  const queryClient = useQueryClient();
+  const createPaperTrade = useCreatePaperTrade();
+
+  // Track logging locally: which lines are logged (so the button can't fire a
+  // duplicate insert — the backend happily accepts repeats), which one is
+  // in-flight, and a transient toast-style banner for confirmation/errors.
+  const [logged, setLogged] = useState<Set<string>>(new Set());
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (feedback?.type !== 'success') return;
+    const t = setTimeout(() => setFeedback(null), 4000);
+    return () => clearTimeout(t);
+  }, [feedback]);
+
+  const logTrade = (line: ModelKLine) => {
+    const key = lineKey(line);
+    if (pendingKey || logged.has(key)) return;
+    haptic();
+    setPendingKey(key);
+    setFeedback(null);
+    createPaperTrade.mutate(
+      {
+        data: {
+          sport: projection.sport,
+          gameId: projection.gameId,
+          commenceTime: projection.commenceTime,
+          homeTeam: projection.homeTeam,
+          awayTeam: projection.awayTeam,
+          pitcher: projection.pitcher,
+          team: projection.team,
+          opponent: projection.opponent,
+          selection: line.selection,
+          point: line.point,
+          book: line.book,
+          americanOdds: line.americanOdds,
+          modelProb: line.modelProb,
+          marketProb: line.marketProb,
+          edgePercent: line.edgePercent,
+          isFlagged: line.isFlagged,
+          expectedStrikeouts: projection.expectedStrikeouts,
+          projectedBattersFaced: projection.projectedBattersFaced,
+          recommendedUnits: line.recommendedUnits,
+          kellyMultiplier: KELLY_MULTIPLIER,
+        },
+      },
+      {
+        onSuccess: () => {
+          setLogged((prev) => new Set(prev).add(key));
+          setFeedback({
+            type: 'success',
+            text: `Logged ${line.selection} ${line.point}K @ ${formatOdds(line.americanOdds)} — see Scorecard`,
+          });
+          if (Platform.OS !== 'web') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          queryClient.invalidateQueries({ queryKey: getListPaperTradesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetPaperTradeSummaryQueryKey() });
+        },
+        onError: (err) => {
+          setFeedback({
+            type: 'error',
+            text: err?.data?.error || 'Could not log this pick. Try again.',
+          });
+        },
+        onSettled: () => setPendingKey(null),
+      },
+    );
+  };
+
+  const logStateFor = (line: ModelKLine): LogState => {
+    const key = lineKey(line);
+    if (logged.has(key)) return 'logged';
+    if (pendingKey === key) return 'pending';
+    return 'idle';
+  };
 
   if (projection.insufficientData) {
     return (
@@ -212,7 +349,12 @@ function ProjectionCard({ projection }: { projection: ModelPitcherProjection }) 
         <View>
           <LinesHeader />
           {projection.lines.map((line, idx) => (
-            <LineRow key={`${line.point}-${line.selection}-${idx}`} line={line} />
+            <LineRow
+              key={`${line.point}-${line.selection}-${idx}`}
+              line={line}
+              logState={logStateFor(line)}
+              onLog={() => logTrade(line)}
+            />
           ))}
         </View>
       ) : (
@@ -220,6 +362,44 @@ function ProjectionCard({ projection }: { projection: ModelPitcherProjection }) 
           No qualifying lines at the current edge threshold.
         </Text>
       )}
+
+      {feedback ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            paddingHorizontal: 10,
+            paddingVertical: 9,
+            borderRadius: colors.radius,
+            borderWidth: 1,
+            borderColor:
+              feedback.type === 'success'
+                ? 'rgba(0,204,102,0.35)'
+                : 'rgba(239,68,68,0.35)',
+            backgroundColor:
+              feedback.type === 'success'
+                ? 'rgba(0,204,102,0.08)'
+                : 'rgba(239,68,68,0.08)',
+          }}
+        >
+          <Feather
+            name={feedback.type === 'success' ? 'check-circle' : 'alert-circle'}
+            size={14}
+            color={feedback.type === 'success' ? colors.positive : colors.destructive}
+          />
+          <Text
+            style={{
+              flex: 1,
+              fontFamily: fonts.regular,
+              fontSize: 12,
+              color: feedback.type === 'success' ? colors.positive : colors.destructive,
+            }}
+          >
+            {feedback.text}
+          </Text>
+        </View>
+      ) : null}
     </Card>
   );
 }

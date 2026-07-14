@@ -19,6 +19,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -251,6 +261,10 @@ function PaperTradesTable() {
   const { data: trades, isLoading } = useListPaperTrades();
   const deleteTrade = useDeletePaperTrade();
   const restoreTrade = useRestorePaperTrade();
+  // Deleting a graded (closed) pick rewrites the model's validation stats, so
+  // it gets a blocking confirm dialog; open/expired picks delete immediately
+  // with the lightweight undo toast.
+  const [confirmTrade, setConfirmTrade] = useState<PaperTrade | null>(null);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListPaperTradesQueryKey() });
@@ -364,7 +378,13 @@ function PaperTradesTable() {
                   <Badge variant="outline" className={cn("text-[10px] uppercase font-mono", statusBadge(t.status))}>{t.status}</Badge>
                 </TableCell>
                 <TableCell>
-                  <Button size="sm" variant="ghost" className="h-7 px-2 text-muted-foreground hover:text-destructive" onClick={() => remove(t)} disabled={deleteTrade.isPending}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                    onClick={() => (t.status === "closed" ? setConfirmTrade(t) : remove(t))}
+                    disabled={deleteTrade.isPending}
+                  >
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </TableCell>
@@ -373,6 +393,32 @@ function PaperTradesTable() {
           )}
         </TableBody>
       </Table>
+      <AlertDialog open={confirmTrade != null} onOpenChange={(open) => { if (!open) setConfirmTrade(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete a graded pick?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmTrade
+                ? `${confirmTrade.pitcher} ${confirmTrade.selection} ${confirmTrade.point} K is already graded against the closing line. `
+                : ""}
+              Deleting it changes the scorecard's beat-close rate and average CLV — the model's
+              validation stats. Only remove it if the pick was logged in error.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep pick</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (confirmTrade) remove(confirmTrade);
+                setConfirmTrade(null);
+              }}
+            >
+              Delete graded pick
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }

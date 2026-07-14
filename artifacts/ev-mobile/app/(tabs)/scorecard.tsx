@@ -57,6 +57,9 @@ function TradeRow({
   const s = statusStyle(trade.status, colors);
   // Two-step confirm: first tap arms the row, second tap deletes.
   const [confirming, setConfirming] = useState(false);
+  // Closed picks are graded — deleting one rewrites the scorecard's
+  // beat-close rate and avg CLV, so they get a stronger, explicit warning.
+  const isGraded = trade.status === 'closed';
   const clvColor =
     trade.clvPercent == null
       ? colors.mutedForeground
@@ -101,7 +104,7 @@ function TradeRow({
         >
           {trade.team} vs {trade.opponent} · {formatGameTime(trade.commenceTime)}
         </Text>
-        {confirming ? (
+        {confirming && !isGraded ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Text style={{ fontFamily: fonts.mono, fontSize: 10.5, color: colors.destructive }}>
               REMOVE?
@@ -148,7 +151,7 @@ function TradeRow({
               </Text>
             </Pressable>
           </View>
-        ) : (
+        ) : confirming && isGraded ? null : (
           <Pressable
             hitSlop={10}
             disabled={deleting}
@@ -166,6 +169,77 @@ function TradeRow({
           </Pressable>
         )}
       </View>
+      {confirming && isGraded ? (
+        <View
+          style={{
+            marginTop: 4,
+            padding: 10,
+            gap: 8,
+            borderRadius: colors.radius,
+            borderWidth: 1,
+            borderColor: 'rgba(239,68,68,0.4)',
+            backgroundColor: 'rgba(239,68,68,0.08)',
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 7 }}>
+            <Feather name="alert-triangle" size={13} color={colors.destructive} style={{ marginTop: 1 }} />
+            <Text
+              style={{
+                fontFamily: fonts.medium,
+                fontSize: 11.5,
+                color: colors.destructive,
+                flex: 1,
+              }}
+            >
+              This pick is already graded. Deleting it changes the scorecard's beat-close rate and
+              average CLV — the model's validation stats.
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                haptic();
+                setConfirming(false);
+              }}
+              style={({ pressed }) => ({
+                paddingHorizontal: 12,
+                paddingVertical: 5,
+                borderRadius: colors.radius,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 10.5, color: colors.mutedForeground }}>
+                KEEP
+              </Text>
+            </Pressable>
+            <Pressable
+              hitSlop={8}
+              disabled={deleting}
+              onPress={() => {
+                haptic();
+                setConfirming(false);
+                onDelete();
+              }}
+              style={({ pressed }) => ({
+                paddingHorizontal: 12,
+                paddingVertical: 5,
+                borderRadius: colors.radius,
+                borderWidth: 1,
+                borderColor: 'rgba(239,68,68,0.5)',
+                backgroundColor: 'rgba(239,68,68,0.14)',
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 10.5, color: colors.destructive }}>
+                DELETE GRADED PICK
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }

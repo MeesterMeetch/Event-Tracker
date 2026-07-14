@@ -1,4 +1,4 @@
-import { pgTable, serial, text, doublePrecision, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, doublePrecision, integer, boolean, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -46,7 +46,14 @@ export const pitcherKPaperTradesTable = pgTable("pitcher_k_paper_trades", {
   beatClose: boolean("beat_close"),
   status: text("status").notNull().default("open"), // "open" | "closed" | "expired"
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  // One scorecard row per pick: the same game/pitcher/selection/point/book can
+  // only be logged once, no matter which client (web, mobile, second device)
+  // sends it. Duplicates would each become another graded row and quietly
+  // inflate beat-close rate and average CLV. Enforced at the DB level so
+  // concurrent requests can't race past an application-side check.
+  uniqueIndex("pitcher_k_paper_trades_pick_uniq").on(t.gameId, t.pitcher, t.selection, t.point, t.book),
+]);
 
 export const insertPitcherKPaperTradeSchema = createInsertSchema(pitcherKPaperTradesTable).omit({
   id: true,

@@ -456,6 +456,12 @@ function ProjectionCard({ projection }: { projection: ModelPitcherProjection }) 
           queryClient.invalidateQueries({ queryKey: getGetPaperTradeSummaryQueryKey() });
         },
         onError: (err) => {
+          if (err?.status === 409) {
+            // The pick is already in the scorecard (logged from another
+            // session or device) — reflect that on the button so it can't be
+            // re-tapped, and let the server's message explain why.
+            setLogged((prev) => new Set(prev).add(key));
+          }
           setFeedback({
             type: 'error',
             text: err?.data?.error || 'Could not log this pick. Try again.',

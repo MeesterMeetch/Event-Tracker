@@ -86,10 +86,13 @@ function ProjectionCard({ projection }: { projection: ModelPitcherProjection }) 
           invalidate();
         },
         onError: (err) => {
+          // A 409 means the pick is already in the scorecard (each pick counts
+          // once) — frame it as information, not a failure.
+          const isDuplicate = err.status === 409;
           toast({
-            title: "Failed to log paper trade",
+            title: isDuplicate ? "Already logged" : "Failed to log paper trade",
             description: err.data?.error || "An unknown error occurred.",
-            variant: "destructive",
+            variant: isDuplicate ? "default" : "destructive",
           });
         },
       },

@@ -194,15 +194,36 @@ export function makeFakeDb(): FakeDbModule {
       return {
         values(vals: Row | Row[]) {
           const arr = Array.isArray(vals) ? vals : [vals];
-          const inserted = arr.map((v) => insertRow(name, v));
-          return {
+          // Inserts run lazily (at await time) so an onConflictDoNothing call
+          // chained after values() can register its target columns first —
+          // mirroring Postgres, where the conflict check happens at execution.
+          let conflictTarget: string[] | null = null;
+          let done: Row[] | null = null;
+          const run = () => {
+            done ??= arr.flatMap((v) => {
+              if (conflictTarget) {
+                const clash = stores[name as keyof typeof stores].some((r) =>
+                  conflictTarget!.every((c) => r[c] === (c in v ? v[c] : null)),
+                );
+                if (clash) return [];
+              }
+              return [insertRow(name, v)];
+            });
+            return done;
+          };
+          const step = {
+            onConflictDoNothing(cfg?: { target?: unknown[] }) {
+              conflictTarget = (cfg?.target ?? []).map((c) => String(c));
+              return step;
+            },
             returning() {
-              return thenable(() => inserted);
+              return thenable(run);
             },
             then(res: (v: Row[]) => void, rej: (e: unknown) => void) {
-              thenable(() => inserted).then(res, rej);
+              thenable(run).then(res, rej);
             },
           };
+          return step;
         },
       };
     },

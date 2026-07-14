@@ -157,6 +157,43 @@ describe("POST /paper-trades — guards against stat-corrupting bad data", () =>
     expect((body as { error: string }).error).toMatch(/between 0 and 1/i);
     expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(0);
   });
+
+  it("409s a duplicate pick instead of inflating the scorecard with a second row", async () => {
+    const app = await buildApp();
+
+    const first = await request(app, "POST", "/api/paper-trades", PT_BODY);
+    const second = await request(app, "POST", "/api/paper-trades", PT_BODY);
+
+    expect(first.status).toBe(201);
+    expect(second.status).toBe(409);
+    expect((second.body as { error: string }).error).toMatch(/already logged/i);
+    expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(1);
+  });
+
+  it("409s a re-log even after the original pick was graded and closed", async () => {
+    // Same pick as PT_BODY but already closed with a captured closing line —
+    // re-logging it would add a second graded row to the scorecard.
+    seedTrade({ gameId: PT_BODY.gameId, status: "closed", clvPercent: 4, beatClose: true });
+    const app = await buildApp();
+
+    const { status } = await request(app, "POST", "/api/paper-trades", PT_BODY);
+
+    expect(status).toBe(409);
+    expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(1);
+  });
+
+  it("still accepts the same line at a different book or point", async () => {
+    const app = await buildApp();
+
+    const base = await request(app, "POST", "/api/paper-trades", PT_BODY);
+    const otherBook = await request(app, "POST", "/api/paper-trades", { ...PT_BODY, book: "DraftKings" });
+    const otherPoint = await request(app, "POST", "/api/paper-trades", { ...PT_BODY, point: 7.5 });
+
+    expect(base.status).toBe(201);
+    expect(otherBook.status).toBe(201);
+    expect(otherPoint.status).toBe(201);
+    expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(3);
+  });
 });
 
 describe("GET /paper-trades/summary — scores only what's actually graded", () => {

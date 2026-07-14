@@ -83,6 +83,10 @@ router.post("/paper-trades", async (req, res): Promise<void> => {
     return;
   }
 
+  // One scorecard row per pick. The insert defers to the DB's unique index on
+  // (gameId, pitcher, selection, point, book) rather than a check-then-insert,
+  // so two concurrent requests can't both slip through — the loser gets no row
+  // back and is told the pick already exists.
   const [row] = await db
     .insert(pitcherKPaperTradesTable)
     .values({
@@ -94,7 +98,23 @@ router.post("/paper-trades", async (req, res): Promise<void> => {
       isFlagged: d.isFlagged ?? null,
       status: "open",
     })
+    .onConflictDoNothing({
+      target: [
+        pitcherKPaperTradesTable.gameId,
+        pitcherKPaperTradesTable.pitcher,
+        pitcherKPaperTradesTable.selection,
+        pitcherKPaperTradesTable.point,
+        pitcherKPaperTradesTable.book,
+      ],
+    })
     .returning();
+
+  if (!row) {
+    res.status(409).json({
+      error: `Already logged: ${d.pitcher} ${d.selection} ${d.point} K @ ${d.book}. Each pick counts once in the scorecard.`,
+    });
+    return;
+  }
 
   res.status(201).json(CreatePaperTradeResponse.parse(row));
 });

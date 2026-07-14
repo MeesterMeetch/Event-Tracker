@@ -298,6 +298,57 @@ describe("PATCH /paper-trades/:id — correcting a mistyped price without delete
   });
 });
 
+describe("PATCH /paper-trades/:id — impossible-odds boundary sweep", () => {
+  // The open interval (-100, 100) including 0 is forbidden; the exact edges
+  // -100 and +100 are valid American odds and must pass. This suite exercises
+  // the boundary explicitly so a future schema tweak can't silently slide the
+  // cutoff and corrupt the scorecard without a test catching it.
+
+  it("rejects prices inside the impossible interval: 50 and 0 → 400", async () => {
+    const trade = seedTrade();
+    const app = await buildApp();
+
+    for (const bad of [50, 0]) {
+      const { status } = await request(app, "PATCH", `/api/paper-trades/${trade.id}`, { americanOdds: bad });
+      expect(status, `americanOdds=${bad} should be rejected`).toBe(400);
+    }
+    // No mutation should have occurred.
+    expect(dbMod.__stores.pitcher_k_paper_trades[0].americanOdds).toBe(-110);
+  });
+
+  it("accepts the exact boundary values -100 and 100 → 200", async () => {
+    // -100 and +100 are the outermost valid American odds; the forbidden zone
+    // is the open interval (-100, 100), so both edges must be allowed.
+    const app = await buildApp();
+
+    const tradeMinus = seedTrade({ americanOdds: -200 });
+    const { status: s1, body: b1 } = await request(app, "PATCH", `/api/paper-trades/${tradeMinus.id}`, {
+      americanOdds: -100,
+    });
+    expect(s1, "americanOdds=-100 should be accepted").toBe(200);
+    expect((b1 as { americanOdds: number }).americanOdds).toBe(-100);
+
+    const tradePlus = seedTrade({ gameId: "evt-boundary-100", americanOdds: -200 });
+    const { status: s2, body: b2 } = await request(app, "PATCH", `/api/paper-trades/${tradePlus.id}`, {
+      americanOdds: 100,
+    });
+    expect(s2, "americanOdds=100 should be accepted").toBe(200);
+    expect((b2 as { americanOdds: number }).americanOdds).toBe(100);
+  });
+
+  it("accepts a canonical valid price -110 → 200", async () => {
+    // Counterpart to the rejections: a standard negative line must pass the
+    // schema, update the row, and come back as 200 with the corrected odds.
+    const trade = seedTrade({ americanOdds: -1100 });
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "PATCH", `/api/paper-trades/${trade.id}`, { americanOdds: -110 });
+
+    expect(status).toBe(200);
+    expect((body as { americanOdds: number }).americanOdds).toBe(-110);
+  });
+});
+
 describe("GET /paper-trades/summary — scores only what's actually graded", () => {
   it("computes beat-close and CLV from graded trades and ignores ungraded ones", async () => {
     // Two graded closed trades (closing line captured): one beat the close, one didn't.

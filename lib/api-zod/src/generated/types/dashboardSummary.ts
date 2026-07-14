@@ -14,6 +14,7 @@ export interface DashboardSummary {
   push: number;
   pending: number;
   totalUnits: number;
+  pendingUnits: number;
   totalPnl: number;
   roiPercent: number;
   /** @nullable */

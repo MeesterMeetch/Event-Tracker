@@ -823,10 +823,21 @@ export default function BetsScreen() {
                   value: String(summary.pending),
                   tone: summary.pending > 0 ? ('primary' as const) : undefined,
                   muted: summary.pending === 0,
+                  // Open exposure: units riding on unsettled bets.
+                  hint:
+                    summary.pendingUnits > 0
+                      ? `${Math.round(summary.pendingUnits * 100) / 100}u riding`
+                      : undefined,
                 },
               ].map((s) => (
                 <View key={s.label} style={{ width: '33.33%' }}>
-                  <StatTile label={s.label} value={s.value} tone={s.tone} muted={s.muted} />
+                  <StatTile
+                    label={s.label}
+                    value={s.value}
+                    tone={s.tone}
+                    muted={s.muted}
+                    hint={'hint' in s ? s.hint : undefined}
+                  />
                 </View>
               ))}
             </View>

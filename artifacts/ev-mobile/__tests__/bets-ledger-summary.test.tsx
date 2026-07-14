@@ -95,6 +95,7 @@ function makeSummary(overrides: Partial<DashboardSummary>): DashboardSummary {
     push: 0,
     pending: 3,
     totalUnits: 0,
+    pendingUnits: 0,
     totalPnl: 0,
     roiPercent: 0,
     avgClvPercent: null,

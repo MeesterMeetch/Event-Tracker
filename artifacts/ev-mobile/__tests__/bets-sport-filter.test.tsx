@@ -117,6 +117,7 @@ const summaryBase: DashboardSummary = {
   push: 0,
   pending: 1,
   totalUnits: 2,
+  pendingUnits: 0,
   totalPnl: -1,
   roiPercent: -50,
   avgClvPercent: null,

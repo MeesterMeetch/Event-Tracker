@@ -67,6 +67,7 @@ interface SummaryBody {
   push: number;
   pending: number;
   totalUnits: number;
+  pendingUnits: number;
   totalPnl: number;
   roiPercent: number;
   avgClvPercent: number | null;
@@ -118,8 +119,21 @@ describe("GET /dashboard/summary — realized P&L and units", () => {
     expect(body.totalPnl).toBe(1.5);
     // 2 + 1.5 from the settled bets only; the pending 5u is excluded.
     expect(body.totalUnits).toBe(3.5);
+    // ...but the pending 5u shows up as open exposure.
+    expect(body.pendingUnits).toBe(5);
     expect(body.pending).toBe(1);
     expect(body.totalBets).toBe(3);
+  });
+
+  it("excludes soft-deleted pending bets from open exposure", async () => {
+    seedBet({ status: "pending", pnl: null, units: 3 });
+    seedBet({ status: "pending", pnl: null, units: 2, deletedAt: new Date("2026-07-11T00:00:00Z") });
+    const app = await buildApp();
+
+    const { body } = await getSummary(app);
+
+    expect(body.pendingUnits).toBe(3);
+    expect(body.pending).toBe(1);
   });
 
   it("excludes a bet whose pnl is still null even if its status is settled", async () => {

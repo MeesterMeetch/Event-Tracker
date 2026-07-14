@@ -76,7 +76,12 @@ export default function Dashboard() {
             {/* Server semantics: totalUnits sums SETTLED stake only — it is
                 the ROI denominator, not the pending exposure. */}
             <div className="text-2xl font-bold font-mono">{summary.totalUnits.toFixed(2)}u</div>
-            <p className="text-xs text-muted-foreground mt-1">Units risked on settled bets — the ROI denominator</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Units risked on settled bets — the ROI denominator
+              {summary.pendingUnits > 0 && (
+                <span className="text-foreground font-mono"> · +{summary.pendingUnits.toFixed(2)}u pending</span>
+              )}
+            </p>
           </CardContent>
         </Card>
 

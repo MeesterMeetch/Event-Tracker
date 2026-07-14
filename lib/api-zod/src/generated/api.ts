@@ -376,6 +376,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "push": zod.number(),
   "pending": zod.number(),
   "totalUnits": zod.number(),
+  "pendingUnits": zod.number(),
   "totalPnl": zod.number(),
   "roiPercent": zod.number(),
   "avgClvPercent": zod.number().nullable(),

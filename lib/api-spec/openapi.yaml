@@ -1271,6 +1271,7 @@ components:
         - push
         - pending
         - totalUnits
+        - pendingUnits
         - totalPnl
         - roiPercent
         - avgClvPercent
@@ -1288,6 +1289,8 @@ components:
         pending:
           type: integer
         totalUnits:
+          type: number
+        pendingUnits:
           type: number
         totalPnl:
           type: number

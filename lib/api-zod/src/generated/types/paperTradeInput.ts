@@ -20,6 +20,7 @@ export interface PaperTradeInput {
   selection: string;
   point: number;
   book: string;
+  /** Logged American odds price. Valid prices are at most -100 or at least +100; the open interval (-100, 100) does not exist on the American odds scale. */
   americanOdds: number;
   modelProb: number;
   /** @nullable */
@@ -33,6 +34,10 @@ export interface PaperTradeInput {
   isFlagged?: boolean | null;
   expectedStrikeouts: number;
   projectedBattersFaced: number;
+  /**
+     * Kelly-derived stake suggestion in units. The model clamps to [0, max], so a negative value can only be corrupt input.
+     * @minimum 0
+     */
   recommendedUnits: number;
   kellyMultiplier: number;
 }

@@ -933,7 +933,15 @@ components:
         book:
           type: string
         americanOdds:
-          type: number
+          description: >-
+            Logged American odds price. Valid prices are at most -100 or at
+            least +100; the open interval (-100, 100) does not exist on the
+            American odds scale.
+          oneOf:
+            - type: number
+              maximum: -100
+            - type: number
+              minimum: 100
         modelProb:
           type: number
         marketProb:
@@ -948,7 +956,11 @@ components:
         projectedBattersFaced:
           type: number
         recommendedUnits:
+          description: >-
+            Kelly-derived stake suggestion in units. The model clamps to
+            [0, max], so a negative value can only be corrupt input.
           type: number
+          minimum: 0
         kellyMultiplier:
           type: number
     PaperTradeUpdate:

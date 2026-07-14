@@ -83,10 +83,9 @@ router.post("/paper-trades", async (req, res): Promise<void> => {
     return;
   }
   const d = parsed.data;
-  if (d.americanOdds === 0) {
-    res.status(400).json({ error: "americanOdds cannot be 0" });
-    return;
-  }
+  // Impossible American odds (the open interval (-100, 100), incl. 0) are
+  // rejected by CreatePaperTradeBody itself — the shared zod schema generated
+  // from the OpenAPI spec — the same ban the bets create flow enforces.
   // Probabilities feed the beat-the-close/CLV math directly, so reject anything
   // outside (0,1) rather than let it silently corrupt the validation stats.
   const inUnitInterval = (p: number) => p > 0 && p < 1;

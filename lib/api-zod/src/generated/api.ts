@@ -564,6 +564,14 @@ export const ListPaperTradesResponse = zod.array(ListPaperTradesResponseItem)
 /**
  * @summary Log a model flag as a paper trade
  */
+export const createPaperTradeBodyAmericanOddsOneMax = -100;
+
+export const createPaperTradeBodyAmericanOddsTwoMin = 100;
+
+export const createPaperTradeBodyRecommendedUnitsMin = 0;
+
+
+
 export const CreatePaperTradeBody = zod.object({
   "sport": zod.string(),
   "gameId": zod.string(),
@@ -577,14 +585,14 @@ export const CreatePaperTradeBody = zod.object({
   "selection": zod.string(),
   "point": zod.number(),
   "book": zod.string(),
-  "americanOdds": zod.number(),
+  "americanOdds": zod.union([zod.number().max(createPaperTradeBodyAmericanOddsOneMax),zod.number().min(createPaperTradeBodyAmericanOddsTwoMin)]).describe('Logged American odds price. Valid prices are at most -100 or at least +100; the open interval (-100, 100) does not exist on the American odds scale.'),
   "modelProb": zod.number(),
   "marketProb": zod.number().nullish(),
   "edgePercent": zod.number().nullish(),
   "isFlagged": zod.boolean().nullish().describe('The model\'s actual flag decision for this line at scan time.'),
   "expectedStrikeouts": zod.number(),
   "projectedBattersFaced": zod.number(),
-  "recommendedUnits": zod.number(),
+  "recommendedUnits": zod.number().min(createPaperTradeBodyRecommendedUnitsMin).describe('Kelly-derived stake suggestion in units. The model clamps to [0, max], so a negative value can only be corrupt input.'),
   "kellyMultiplier": zod.number()
 })
 

@@ -8,8 +8,23 @@ import {
   formatOdds,
   formatPercent,
   formatPoint,
+  formatSportKey,
   formatTimeOnly,
 } from './index';
+
+describe('formatSportKey', () => {
+  it('drops the sport-group prefix and uppercases the league', () => {
+    expect(formatSportKey('baseball_mlb')).toBe('MLB');
+    expect(formatSportKey('basketball_wnba')).toBe('WNBA');
+    expect(formatSportKey('americanfootball_nfl')).toBe('NFL');
+  });
+  it('joins multi-segment league names with spaces', () => {
+    expect(formatSportKey('baseball_minor_league')).toBe('MINOR LEAGUE');
+  });
+  it('uppercases a bare key with no prefix', () => {
+    expect(formatSportKey('cricket')).toBe('CRICKET');
+  });
+});
 
 /**
  * Boundary tests for the shared date/format helpers. Both the web and mobile

@@ -58,6 +58,18 @@ export function formatMarketLabel(market: string): string {
 }
 
 /**
+ * Fallback display title for an Odds API sport key when the live sports list
+ * doesn't cover it (out-of-season leagues drop off the free list), e.g.
+ * "baseball_mlb" → "MLB", "basketball_wnba" → "WNBA". Prefer the API-provided
+ * title when the key is present in the sports list.
+ */
+export function formatSportKey(key: string): string {
+  const parts = key.split('_').filter(Boolean);
+  if (parts.length > 1) return parts.slice(1).join(' ').toUpperCase();
+  return key.toUpperCase();
+}
+
+/**
  * YYYY-MM-DD calendar day of an instant in US Eastern time. Games are bucketed
  * by their Eastern day so late-night games land on the correct baseball date.
  */

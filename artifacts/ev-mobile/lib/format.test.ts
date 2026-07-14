@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatPnlUnits, formatProb, formatRate, formatSportKey } from './format';
+import { formatPnlUnits, formatProb, formatRate } from './format';
 
 /**
  * Tests for mobile-only helpers. The shared date/format helpers
@@ -23,20 +23,6 @@ describe('formatPnlUnits', () => {
     expect(formatPnlUnits(-0.001)).toBe('0.00u');
     expect(formatPnlUnits(0.004)).toBe('0.00u');
     expect(formatPnlUnits(1.006)).toBe('+1.01u');
-  });
-});
-
-describe('formatSportKey', () => {
-  it('drops the sport-group prefix and uppercases the league', () => {
-    expect(formatSportKey('baseball_mlb')).toBe('MLB');
-    expect(formatSportKey('basketball_wnba')).toBe('WNBA');
-    expect(formatSportKey('americanfootball_nfl')).toBe('NFL');
-  });
-  it('joins multi-segment league names with spaces', () => {
-    expect(formatSportKey('baseball_minor_league')).toBe('MINOR LEAGUE');
-  });
-  it('uppercases a bare key with no prefix', () => {
-    expect(formatSportKey('cricket')).toBe('CRICKET');
   });
 });
 

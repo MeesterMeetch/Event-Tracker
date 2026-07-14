@@ -13,6 +13,7 @@ export {
   formatOdds,
   formatPercent,
   formatPoint,
+  formatSportKey,
   formatTimeOnly,
 } from '@workspace/format';
 
@@ -20,18 +21,6 @@ export {
 export function formatPnlUnits(pnl: number): string {
   const rounded = Math.round(pnl * 100) / 100;
   return `${rounded > 0 ? '+' : ''}${rounded.toFixed(2)}u`;
-}
-
-/**
- * Fallback display title for an Odds API sport key when the live sports list
- * doesn't cover it (out-of-season leagues drop off the free list), e.g.
- * "baseball_mlb" → "MLB", "basketball_wnba" → "WNBA". Prefer the API-provided
- * title when the key is present in the sports list.
- */
-export function formatSportKey(key: string): string {
-  const parts = key.split('_').filter(Boolean);
-  if (parts.length > 1) return parts.slice(1).join(' ').toUpperCase();
-  return key.toUpperCase();
 }
 
 /** A probability in [0,1] as a one-decimal percentage, e.g. "62.5%". */

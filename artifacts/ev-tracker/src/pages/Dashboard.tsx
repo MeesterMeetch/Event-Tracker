@@ -1,4 +1,6 @@
-import { useGetDashboardSummary } from "@workspace/api-client-react";
+import { useMemo } from "react";
+import { useGetDashboardSummary, useListSports } from "@workspace/api-client-react";
+import { formatSportKey } from "@workspace/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatPercent } from "@/lib/utils";
@@ -7,6 +9,17 @@ import { TrendingUp, Target, Coins, Percent } from "lucide-react";
 
 export default function Dashboard() {
   const { data: summary, isLoading, isError } = useGetDashboardSummary();
+
+  // The free in-season sports list resolves keys like "baseball_mlb" to
+  // display titles; formatSportKey covers keys that have dropped off the
+  // list (out-of-season leagues still present in the ledger history).
+  // Mirrors the mobile bets screen so the two apps read the same.
+  const { data: sports } = useListSports();
+  const sportTitles = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sports ?? []) map.set(s.key, s.title);
+    return map;
+  }, [sports]);
 
   if (isLoading) {
     return (
@@ -119,7 +132,9 @@ export default function Dashboard() {
               ) : (
                 summary.bySport.map(sport => (
                   <TableRow key={sport.sport}>
-                    <TableCell className="font-semibold text-foreground uppercase">{sport.sport}</TableCell>
+                    <TableCell className="font-semibold text-foreground">
+                      {sportTitles.get(sport.sport) ?? formatSportKey(sport.sport)}
+                    </TableCell>
                     <TableCell>{sport.bets}</TableCell>
                     <TableCell>{sport.won}-{sport.lost}-{sport.push}</TableCell>
                     <TableCell className={`text-right ${sport.roiPercent > 0 ? 'text-positive' : sport.roiPercent < 0 ? 'text-negative' : ''}`}>

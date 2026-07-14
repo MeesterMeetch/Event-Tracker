@@ -14,7 +14,8 @@ import type { PaperTrade } from "@workspace/api-client-react";
  * A refactor that drops the status check should fail here.
  */
 
-const { deleteMutate, restoreMutate, toastMock, tradesRef } = vi.hoisted(() => ({
+const { createMutate, deleteMutate, restoreMutate, toastMock, tradesRef } = vi.hoisted(() => ({
+  createMutate: vi.fn(),
   deleteMutate: vi.fn(),
   restoreMutate: vi.fn(),
   toastMock: vi.fn(),
@@ -25,7 +26,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useListPaperTrades: () => ({ data: tradesRef.current, isLoading: false }),
   useDeletePaperTrade: () => ({ mutate: deleteMutate, isPending: false }),
   useRestorePaperTrade: () => ({ mutate: restoreMutate, isPending: false }),
-  useCreatePaperTrade: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreatePaperTrade: () => ({ mutate: createMutate, isPending: false }),
   useGetPaperTradeSummary: () => ({ data: undefined }),
   useListEvents: () => ({ data: [], isLoading: false, isError: false }),
   useListModelEdges: () => ({ data: undefined, isLoading: false, isFetching: false, isError: false }),
@@ -45,7 +46,8 @@ vi.mock("@/components/ui/use-toast", () => ({
 // ModelPerformance pulls in charting; irrelevant to the delete guard.
 vi.mock("@/components/ModelPerformance", () => ({ default: () => null }));
 
-import { PaperTradesTable } from "./ModelEdges";
+import { PaperTradesTable, ProjectionCard } from "./ModelEdges";
+import type { ModelPitcherProjection } from "@workspace/api-client-react";
 
 function makeTrade(overrides: Partial<PaperTrade>): PaperTrade {
   return {
@@ -93,6 +95,7 @@ function renderTable(trades: PaperTrade[]) {
 const user = userEvent.setup({ pointerEventsCheck: 0 });
 
 beforeEach(() => {
+  createMutate.mockReset();
   deleteMutate.mockClear();
   restoreMutate.mockClear();
   toastMock.mockClear();
@@ -237,5 +240,101 @@ describe("PaperTradesTable delete undo", () => {
     expect(failureToast).toBeDefined();
     expect(failureToast![0].variant).toBe("destructive");
     expect(failureToast![0].description).toBe("Restore window has passed.");
+  });
+});
+
+/**
+ * Locks in the duplicate-log framing on the projections card: logging a pick
+ * that's already in the scorecard comes back as a 409 from the server, and
+ * the toast must present that as neutral information ("Already logged",
+ * default variant) — not the destructive red failure toast reserved for real
+ * errors. A refactor of logTrade's onError that drops the 409 branch should
+ * fail here.
+ */
+describe("ProjectionCard duplicate-log toast", () => {
+  function makeProjection(): ModelPitcherProjection {
+    return {
+      gameId: "g1",
+      sport: "baseball_mlb",
+      commenceTime: "2026-07-14T23:10:00Z",
+      homeTeam: "NYY",
+      awayTeam: "BOS",
+      pitcher: "Gerrit Cole",
+      team: "NYY",
+      opponent: "BOS",
+      throws: "R",
+      projectedBattersFaced: 24,
+      expectedStrikeouts: 7.1,
+      ratePerBF: 0.29,
+      opponentFactor: 1.02,
+      sampleStarts: 12,
+      sampleBattersFaced: 290,
+      opponentDataAvailable: true,
+      insufficientData: false,
+      lines: [
+        {
+          point: 6.5,
+          selection: "Over",
+          americanOdds: -110,
+          book: "fanduel",
+          marketProb: 0.52,
+          modelProb: 0.58,
+          edgePercent: 6,
+          fullKellyFraction: 0.12,
+          recommendedUnits: 1,
+          isFlagged: true,
+        },
+      ],
+    } as unknown as ModelPitcherProjection;
+  }
+
+  function renderCard() {
+    const queryClient = new QueryClient();
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <ProjectionCard projection={makeProjection()} />
+      </QueryClientProvider>,
+    );
+  }
+
+  // The log button is the icon-only Plus button in the line row.
+  async function clickLogButton() {
+    const buttons = screen.getAllByRole("button");
+    // Only one line is rendered, so the last button in the card is its log button.
+    await user.click(buttons[buttons.length - 1]);
+  }
+
+  it("shows a neutral 'Already logged' toast on a 409 duplicate", async () => {
+    createMutate.mockImplementation((_vars, opts) =>
+      opts?.onError?.({ status: 409, data: { error: "This pick is already in the scorecard." } }),
+    );
+    renderCard();
+
+    await clickLogButton();
+
+    expect(createMutate).toHaveBeenCalledTimes(1);
+    const duplicateToast = toastMock.mock.calls.find(
+      ([args]) => args?.title === "Already logged",
+    );
+    expect(duplicateToast).toBeDefined();
+    expect(duplicateToast![0].variant).toBe("default");
+    expect(duplicateToast![0].description).toBe("This pick is already in the scorecard.");
+  });
+
+  it("still shows the destructive failure toast for a non-409 error", async () => {
+    createMutate.mockImplementation((_vars, opts) =>
+      opts?.onError?.({ status: 500, data: { error: "Database unavailable." } }),
+    );
+    renderCard();
+
+    await clickLogButton();
+
+    const failureToast = toastMock.mock.calls.find(
+      ([args]) => args?.title === "Failed to log paper trade",
+    );
+    expect(failureToast).toBeDefined();
+    expect(failureToast![0].variant).toBe("destructive");
+    expect(failureToast![0].description).toBe("Database unavailable.");
+    expect(toastMock.mock.calls.some(([args]) => args?.title === "Already logged")).toBe(false);
   });
 });

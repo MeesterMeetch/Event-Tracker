@@ -53,7 +53,10 @@ function statusBadge(status: string) {
   return "text-primary border-primary/40";
 }
 
-function ProjectionCard({ projection }: { projection: ModelPitcherProjection }) {
+// Exported so the component test can lock in the duplicate-log framing:
+// a 409 from the create endpoint means the pick is already in the scorecard,
+// which must surface as a neutral "Already logged" toast, not a red failure.
+export function ProjectionCard({ projection }: { projection: ModelPitcherProjection }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const createPaperTrade = useCreatePaperTrade();

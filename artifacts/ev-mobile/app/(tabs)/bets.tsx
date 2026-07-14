@@ -8,6 +8,7 @@ import {
   getGetDashboardSummaryQueryKey,
   getListBetsQueryKey,
   useDeleteBet,
+  useGetDashboardSummary,
   useListBets,
   useUpdateBet,
   type Bet,
@@ -15,8 +16,8 @@ import {
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
 import { fonts } from '@/constants/fonts';
-import { Badge, Card, EmptyState, ErrorState, ScreenHeader, SectionHeader, Skeleton } from '@/components/ui';
-import { formatGameTime, formatMarketLabel, formatOdds, formatPoint } from '@/lib/format';
+import { Badge, Card, EmptyState, ErrorState, ScreenHeader, SectionHeader, Skeleton, StatTile } from '@/components/ui';
+import { formatGameTime, formatMarketLabel, formatOdds, formatPercent, formatPoint } from '@/lib/format';
 
 function haptic() {
   if (Platform.OS !== 'web') Haptics.selectionAsync();
@@ -272,6 +273,23 @@ export default function BetsScreen() {
     isRefetching,
   } = useListBets(filter === 'all' ? undefined : { status: filter });
 
+  // All-time ledger rollup — deliberately independent of the status filter,
+  // and kept fresh by the same getGetDashboardSummaryQueryKey() invalidation
+  // that settle/delete/undo already trigger.
+  const {
+    data: summary,
+    isLoading: loadingSummary,
+    isError: summaryError,
+    refetch: refetchSummary,
+    isRefetching: summaryRefetching,
+  } = useGetDashboardSummary();
+  const settledCount = summary ? summary.won + summary.lost + summary.push : 0;
+  // Realized stake (server-side: settled AND pnl != null) is the ROI
+  // denominator. Muting keys off it — not the W-L-P count — so an API-edge
+  // settled bet with a null pnl can't render an unmuted zero P&L/ROI next to
+  // a non-zero record.
+  const realized = (summary?.totalUnits ?? 0) > 0;
+
   const updateBet = useUpdateBet();
   const deleteBet = useDeleteBet();
   const [busyId, setBusyId] = useState<Bet['id'] | null>(null);
@@ -362,12 +380,90 @@ export default function BetsScreen() {
         }}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={() => refetch()}
+            refreshing={isRefetching || summaryRefetching}
+            onRefresh={() => {
+              refetch();
+              refetchSummary();
+            }}
             tintColor={colors.primary}
           />
         }
       >
+        {/* Ledger summary — all-time rollup, unaffected by the filter below */}
+        {loadingSummary ? (
+          <Card>
+            <Skeleton height={84} />
+          </Card>
+        ) : summaryError ? (
+          <Card>
+            <ErrorState
+              code="ERR_FETCH_SUMMARY"
+              message="Could not load the ledger summary."
+              onRetry={() => refetchSummary()}
+            />
+          </Card>
+        ) : summary && summary.totalBets > 0 ? (
+          <Card style={{ gap: 16 }}>
+            <SectionHeader icon="trending-up" title="Ledger · All Time" />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <StatTile
+                big
+                label="Total P&L"
+                value={formatPnlUnits(summary.totalPnl)}
+                tone={
+                  !realized || summary.totalPnl === 0
+                    ? undefined
+                    : summary.totalPnl > 0
+                      ? 'pos'
+                      : 'neg'
+                }
+                muted={!realized}
+                hint={!realized ? 'awaiting results' : 'all bets, any filter'}
+              />
+              <StatTile
+                big
+                label="ROI"
+                value={formatPercent(summary.roiPercent)}
+                tone={
+                  !realized || summary.roiPercent === 0
+                    ? undefined
+                    : summary.roiPercent > 0
+                      ? 'pos'
+                      : 'neg'
+                }
+                muted={!realized}
+                hint="on settled stake"
+              />
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 18 }}>
+              {[
+                {
+                  label: 'Record',
+                  value: `${summary.won}-${summary.lost}-${summary.push}`,
+                  muted: settledCount === 0,
+                },
+                {
+                  // Server semantics: totalUnits sums SETTLED stake only — it
+                  // is the ROI denominator, not the pending exposure.
+                  label: 'Settled Stake',
+                  value: `${Math.round(summary.totalUnits * 100) / 100}u`,
+                  muted: !realized,
+                },
+                {
+                  label: 'Pending',
+                  value: String(summary.pending),
+                  tone: summary.pending > 0 ? ('primary' as const) : undefined,
+                  muted: summary.pending === 0,
+                },
+              ].map((s) => (
+                <View key={s.label} style={{ width: '33.33%' }}>
+                  <StatTile label={s.label} value={s.value} tone={s.tone} muted={s.muted} />
+                </View>
+              ))}
+            </View>
+          </Card>
+        ) : null}
+
         {/* Status filter chips */}
         <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
           {FILTERS.map((f) => {

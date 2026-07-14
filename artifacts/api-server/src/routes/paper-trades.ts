@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import { db, pitcherKPaperTradesTable } from "@workspace/db";
+import { purgeExpiredPaperTradeTombstones } from "../lib/tombstones";
 import {
   ListPaperTradesQueryParams,
   ListPaperTradesResponse,
@@ -13,13 +14,6 @@ import {
 const router: IRouter = Router();
 
 const round2 = (n: number | null): number | null => (n == null ? null : Math.round(n * 100) / 100);
-
-/**
- * How long a soft-deleted trade stays restorable. The client undo window is a
- * few seconds; an hour of server-side slack keeps the affordance forgiving
- * (slow devices, brief offline) without letting invisible rows accumulate.
- */
-const RESTORE_GRACE_MS = 60 * 60 * 1000;
 
 router.get("/paper-trades", async (req, res): Promise<void> => {
   const parsed = ListPaperTradesQueryParams.safeParse(req.query);
@@ -158,11 +152,10 @@ router.delete("/paper-trades/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  // Opportunistically purge tombstones past the grace window so soft-deleted
-  // rows can't accumulate invisibly (and their unique pick slots free up).
-  await db
-    .delete(pitcherKPaperTradesTable)
-    .where(lt(pitcherKPaperTradesTable.deletedAt, new Date(Date.now() - RESTORE_GRACE_MS)));
+  // Opportunistically purge tombstones past the grace window so a re-log of
+  // the same pick isn't blocked; the periodic scheduler (lib/tombstones) is
+  // the guarantee that stragglers get cleaned even if deletes stop.
+  await purgeExpiredPaperTradeTombstones();
 
   // Soft delete: stamp deletedAt instead of dropping the row, so an immediate
   // undo can restore the exact record — logged odds, edge snapshot, and any

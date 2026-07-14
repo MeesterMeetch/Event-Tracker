@@ -3,6 +3,6 @@
 - [Player props via per-event endpoint](odds-api-ev-tracker.md) — props cost credits per market×region per game (game list is free) → drill-down UX; pair (player,point) per book to devig; props stay out of auto-grade/CLV.
 - [shadcn select one-row clamp](shadcn-select-clamp.md) — Select showing only one option / no scroll = height-clamp class on the popper Viewport; remove it.
 - [MLB K inputs degrade silently](mlb-k-inputs-degrade-silently.md) — getMatchupKInputs returns zeroed/null stats (not an error) on feed failure; consumers must abstain, or projectPitcherK emits a league-average number off nothing.
-- [CLV closing-line jobs](clv-jobs.md) — game-line closer averages RAW American odds (wrong math, but tested as-is); paper-trade closer needs ≥2 books and only expires past the give-up window.
+- [CLV closing-line jobs](clv-jobs.md) — both closers share `trimmedMeanClosingAmerican` (decimal-space trimmed mean, ≥2 books); paper-trade closer only expires past the give-up window, game-line closer never expires.
 - [Route test harness](route-test-harness.md) — vi.mock instances survive resetModules (add clearAllMocks); routes need a stubbed req.log; spy Date.now (not fake timers) for TTL tests.
 - [API-spec/DB field add → rebuild dist](api-spec-codegen-dist-rebuild.md) — after schema+openapi.yaml+orval, run `tsc -b` on each changed lib; consumers typecheck against stale dist .d.ts, not src.

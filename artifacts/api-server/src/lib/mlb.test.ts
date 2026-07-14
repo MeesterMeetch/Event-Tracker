@@ -305,6 +305,47 @@ describe("getMatchupKInputs", () => {
     expect(away.pitcher?.name).toBe("Robbie Ray");
   });
 
+  it("resolves each doubleheader game's OWN starters without sharing cached inputs", async () => {
+    // Both games of the doubleheader share the exact same date + team names.
+    // The only thing distinguishing them is the start time, which the cache key
+    // must include — otherwise the first game resolved would poison the cache
+    // and the second game (same teams, same date) would be served game 1's
+    // starters, projecting a pitcher who isn't even throwing in that game.
+    stubFetchRoutes([
+      { contains: "/schedule", payload: loadFixture("schedule-mlb-doubleheader.json") },
+      { contains: "/people/605483", payload: loadFixture("people-kstats-snell.json") },
+      { contains: "/people/657277", payload: loadFixture("people-kstats-webb.json") },
+      { contains: "/people/477132", payload: loadFixture("people-kstats-kershaw.json") },
+      { contains: "/people/592791", payload: loadFixture("people-kstats-ray.json") },
+      { contains: "/teams/137/stats", payload: loadFixture("team-kprofile-giants.json") },
+      { contains: "/teams/119/stats", payload: loadFixture("team-kprofile-dodgers.json") },
+    ]);
+
+    // Game 1 (17:10Z) is resolved first and populates the cache.
+    const game1 = await getMatchupKInputs(
+      "Los Angeles Dodgers",
+      "San Francisco Giants",
+      "2025-07-04T17:12:00Z",
+    );
+    expect(game1.home.pitcher?.id).toBe(605483); // Blake Snell
+    expect(game1.away.pitcher?.id).toBe(657277); // Logan Webb
+
+    // Game 2 (23:40Z) — identical teams + date, later start time. It must NOT be
+    // served game 1's cached Snell/Webb; it resolves its own Kershaw/Ray.
+    const game2 = await getMatchupKInputs(
+      "Los Angeles Dodgers",
+      "San Francisco Giants",
+      "2025-07-04T23:42:00Z",
+    );
+    expect(game2.home.pitcher?.id).toBe(477132); // Clayton Kershaw
+    expect(game2.away.pitcher?.id).toBe(592791); // Robbie Ray
+
+    // The two games resolved distinct starters despite identical teams + date:
+    // proof the cache key kept them apart rather than collapsing them into one.
+    expect(game1.home.pitcher?.id).not.toBe(game2.home.pitcher?.id);
+    expect(game1.away.pitcher?.id).not.toBe(game2.away.pitcher?.id);
+  });
+
   it("returns null sides when no scheduled game matches the teams", async () => {
     stubFetchRoutes([
       { contains: "/schedule", payload: loadFixture("schedule-mlb-probable.json") },

@@ -45,6 +45,13 @@ export const pitcherKPaperTradesTable = pgTable("pitcher_k_paper_trades", {
   clvPercent: doublePrecision("clv_percent"),
   beatClose: boolean("beat_close"),
   status: text("status").notNull().default("open"), // "open" | "closed" | "expired"
+  // Soft-delete marker backing the client "Undo" affordance: deleting a pick
+  // stamps this instead of dropping the row, so an immediate undo can restore
+  // the exact record (logged odds, edge snapshot, and any captured closing
+  // line) rather than approximating it with a re-create. Rows with a non-null
+  // deletedAt are invisible to list/summary/CLV and are purged after a grace
+  // period (or immediately if the same pick is re-logged).
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   // One scorecard row per pick: the same game/pitcher/selection/point/book can
@@ -63,6 +70,7 @@ export const insertPitcherKPaperTradeSchema = createInsertSchema(pitcherKPaperTr
   clvPercent: true,
   beatClose: true,
   status: true,
+  deletedAt: true,
 });
 export type InsertPitcherKPaperTrade = z.infer<typeof insertPitcherKPaperTradeSchema>;
 export type PitcherKPaperTrade = typeof pitcherKPaperTradesTable.$inferSelect;

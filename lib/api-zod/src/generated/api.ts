@@ -593,6 +593,7 @@ export const GetPaperTradeSummaryResponse = zod.object({
 
 
 /**
+ * Soft-deletes the trade: it disappears from lists and summary stats immediately, but the row (including any captured closing-line data) is kept for a short grace period so the delete can be undone via the restore endpoint. Soft-deleted rows are purged after the grace period, or immediately if the same pick is logged again.
  * @summary Delete a paper trade
  */
 export const DeletePaperTradeParams = zod.object({
@@ -600,5 +601,45 @@ export const DeletePaperTradeParams = zod.object({
 })
 
 export const DeletePaperTradeResponse = zod.void()
+
+
+/**
+ * Restores a soft-deleted paper trade exactly as it was — logged odds, edge snapshot, status, and any captured closing-line data. Returns 404 once the trade is no longer restorable (grace period elapsed, the pick was re-logged, or the id never existed).
+ * @summary Undo a recent paper-trade delete
+ */
+export const RestorePaperTradeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RestorePaperTradeResponse = zod.object({
+  "id": zod.number(),
+  "sport": zod.string(),
+  "gameId": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "pitcher": zod.string(),
+  "pitcherId": zod.number().nullable(),
+  "team": zod.string(),
+  "opponent": zod.string(),
+  "selection": zod.string(),
+  "point": zod.number(),
+  "book": zod.string(),
+  "americanOdds": zod.number(),
+  "modelProb": zod.number(),
+  "marketProb": zod.number().nullable(),
+  "edgePercent": zod.number().nullable(),
+  "isFlagged": zod.boolean().nullish().describe('The model\'s actual flag decision recorded at log time. Null for legacy rows logged before the flag was persisted.'),
+  "expectedStrikeouts": zod.number(),
+  "projectedBattersFaced": zod.number(),
+  "recommendedUnits": zod.number(),
+  "kellyMultiplier": zod.number(),
+  "closingOdds": zod.number().nullable(),
+  "closingProb": zod.number().nullable(),
+  "clvPercent": zod.number().nullable(),
+  "beatClose": zod.boolean().nullable(),
+  "status": zod.enum(['open', 'closed', 'expired']),
+  "createdAt": zod.coerce.date()
+})
 
 

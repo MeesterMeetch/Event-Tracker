@@ -58,6 +58,7 @@ const PAPER_COLS = [
   "modelProb",
   "marketProb",
   "edgePercent",
+  "isFlagged",
   "expectedStrikeouts",
   "projectedBattersFaced",
   "recommendedUnits",
@@ -67,6 +68,7 @@ const PAPER_COLS = [
   "clvPercent",
   "beatClose",
   "status",
+  "deletedAt",
   "createdAt",
 ] as const;
 
@@ -74,6 +76,8 @@ type Row = Record<string, unknown>;
 type Cond =
   | { __op: "eq"; col: string; val: unknown }
   | { __op: "isNull"; col: string }
+  | { __op: "isNotNull"; col: string }
+  | { __op: "lt"; col: string; val: unknown }
   | { __op: "and"; conds: Cond[] }
   | null;
 type Order = { __op: "desc"; col: string } | null;
@@ -123,6 +127,16 @@ export function makeFakeDb(): FakeDbModule {
         return row[cond.col] === cond.val;
       case "isNull":
         return row[cond.col] == null;
+      case "isNotNull":
+        return row[cond.col] != null;
+      case "lt": {
+        // SQL semantics: NULL < x is not true, so a null column never matches.
+        const rv = row[cond.col];
+        if (rv == null || cond.val == null) return false;
+        const a = rv instanceof Date ? rv.getTime() : (rv as number);
+        const b = cond.val instanceof Date ? cond.val.getTime() : (cond.val as number);
+        return a < b;
+      }
       case "and":
         return cond.conds.every((c) => matchesCond(row, c));
       default:
@@ -302,6 +316,8 @@ export async function stubDrizzleOrm(): Promise<Record<string, unknown>> {
     ...actual,
     eq: (col: string, val: unknown) => ({ __op: "eq", col, val }),
     isNull: (col: string) => ({ __op: "isNull", col }),
+    isNotNull: (col: string) => ({ __op: "isNotNull", col }),
+    lt: (col: string, val: unknown) => ({ __op: "lt", col, val }),
     and: (...conds: unknown[]) => ({ __op: "and", conds: conds.filter(Boolean) }),
     desc: (col: string) => ({ __op: "desc", col }),
   };

@@ -5,6 +5,7 @@ import {
   useListModelEdges,
   useCreatePaperTrade,
   useDeletePaperTrade,
+  useRestorePaperTrade,
   useListPaperTrades,
   useGetPaperTradeSummary,
   getListEventsQueryKey,
@@ -24,6 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, Brain, Loader2, Plus, Target, Trash2, TrendingUp } from "lucide-react";
 import ModelPerformance from "@/components/ModelPerformance";
 import { useToast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { formatOdds, formatPercent, formatGameTime, formatTimeOnly, easternDayKey, formatDayLabel, cn } from "@/lib/utils";
 
 const MODEL_SPORT = "baseball_mlb";
@@ -248,15 +250,59 @@ function PaperTradesTable() {
   const { toast } = useToast();
   const { data: trades, isLoading } = useListPaperTrades();
   const deleteTrade = useDeletePaperTrade();
+  const restoreTrade = useRestorePaperTrade();
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: getListPaperTradesQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetPaperTradeSummaryQueryKey() });
+  };
+
+  // Undo a delete: the server soft-deletes for a grace period, so restore
+  // brings back the exact row — logged odds, edge, and any closing-line data.
+  const undoDelete = (trade: PaperTrade) => {
+    restoreTrade.mutate(
+      { id: trade.id },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Paper trade restored",
+            description: `${trade.pitcher} ${trade.selection} ${trade.point} K is back in the scorecard.`,
+          });
+          invalidate();
+        },
+        onError: (err) => {
+          toast({
+            title: "Could not undo",
+            description: err.data?.error || "This pick can no longer be restored.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
 
   const remove = (trade: PaperTrade) => {
     deleteTrade.mutate(
       { id: trade.id },
       {
         onSuccess: () => {
-          toast({ title: "Paper trade deleted" });
-          queryClient.invalidateQueries({ queryKey: getListPaperTradesQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetPaperTradeSummaryQueryKey() });
+          toast({
+            title: "Paper trade deleted",
+            description: `${trade.pitcher} ${trade.selection} ${trade.point} K removed from the scorecard.`,
+            action: (
+              <ToastAction altText="Undo delete" onClick={() => undoDelete(trade)}>
+                Undo
+              </ToastAction>
+            ),
+          });
+          invalidate();
+        },
+        onError: (err) => {
+          toast({
+            title: "Failed to delete paper trade",
+            description: err.data?.error || "An unknown error occurred.",
+            variant: "destructive",
+          });
         },
       },
     );

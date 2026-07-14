@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt } from "drizzle-orm";
 import { db, pitcherKPaperTradesTable } from "@workspace/db";
 import {
   ListPaperTradesQueryParams,
@@ -7,11 +7,19 @@ import {
   CreatePaperTradeBody,
   CreatePaperTradeResponse,
   GetPaperTradeSummaryResponse,
+  RestorePaperTradeResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
 const round2 = (n: number | null): number | null => (n == null ? null : Math.round(n * 100) / 100);
+
+/**
+ * How long a soft-deleted trade stays restorable. The client undo window is a
+ * few seconds; an hour of server-side slack keeps the affordance forgiving
+ * (slow devices, brief offline) without letting invisible rows accumulate.
+ */
+const RESTORE_GRACE_MS = 60 * 60 * 1000;
 
 router.get("/paper-trades", async (req, res): Promise<void> => {
   const parsed = ListPaperTradesQueryParams.safeParse(req.query);
@@ -20,20 +28,27 @@ router.get("/paper-trades", async (req, res): Promise<void> => {
     return;
   }
 
-  const rows = parsed.data.status
-    ? await db
-        .select()
-        .from(pitcherKPaperTradesTable)
-        .where(eq(pitcherKPaperTradesTable.status, parsed.data.status))
-        .orderBy(desc(pitcherKPaperTradesTable.createdAt))
-    : await db.select().from(pitcherKPaperTradesTable).orderBy(desc(pitcherKPaperTradesTable.createdAt));
+  // Soft-deleted rows are pending-undo tombstones, never listed.
+  const notDeleted = isNull(pitcherKPaperTradesTable.deletedAt);
+  const rows = await db
+    .select()
+    .from(pitcherKPaperTradesTable)
+    .where(
+      parsed.data.status ? and(eq(pitcherKPaperTradesTable.status, parsed.data.status), notDeleted) : notDeleted,
+    )
+    .orderBy(desc(pitcherKPaperTradesTable.createdAt));
 
   res.json(ListPaperTradesResponse.parse(rows));
 });
 
 // Registered before "/paper-trades/:id" so "summary" isn't swallowed as an id.
 router.get("/paper-trades/summary", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(pitcherKPaperTradesTable);
+  // Excludes soft-deleted rows so a removed pick stops counting immediately;
+  // an undo brings its numbers back with it.
+  const rows = await db
+    .select()
+    .from(pitcherKPaperTradesTable)
+    .where(isNull(pitcherKPaperTradesTable.deletedAt));
 
   const total = rows.length;
   const open = rows.filter((r) => r.status === "open").length;
@@ -83,6 +98,23 @@ router.post("/paper-trades", async (req, res): Promise<void> => {
     return;
   }
 
+  // Re-logging a pick whose earlier row was soft-deleted (sitting in the undo
+  // grace window) must succeed: the tombstone still holds the pick's unique
+  // slot, so clear it first. This forfeits the pending undo for that pick —
+  // the freshly logged row supersedes it.
+  await db
+    .delete(pitcherKPaperTradesTable)
+    .where(
+      and(
+        eq(pitcherKPaperTradesTable.gameId, d.gameId),
+        eq(pitcherKPaperTradesTable.pitcher, d.pitcher),
+        eq(pitcherKPaperTradesTable.selection, d.selection),
+        eq(pitcherKPaperTradesTable.point, d.point),
+        eq(pitcherKPaperTradesTable.book, d.book),
+        isNotNull(pitcherKPaperTradesTable.deletedAt),
+      ),
+    );
+
   // One scorecard row per pick. The insert defers to the DB's unique index on
   // (gameId, pitcher, selection, point, book) rather than a check-then-insert,
   // so two concurrent requests can't both slip through — the loser gets no row
@@ -126,13 +158,48 @@ router.delete("/paper-trades/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [deleted] = await db.delete(pitcherKPaperTradesTable).where(eq(pitcherKPaperTradesTable.id, id)).returning();
+  // Opportunistically purge tombstones past the grace window so soft-deleted
+  // rows can't accumulate invisibly (and their unique pick slots free up).
+  await db
+    .delete(pitcherKPaperTradesTable)
+    .where(lt(pitcherKPaperTradesTable.deletedAt, new Date(Date.now() - RESTORE_GRACE_MS)));
+
+  // Soft delete: stamp deletedAt instead of dropping the row, so an immediate
+  // undo can restore the exact record — logged odds, edge snapshot, and any
+  // captured closing-line data — which a re-create could not reproduce.
+  const [deleted] = await db
+    .update(pitcherKPaperTradesTable)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(pitcherKPaperTradesTable.id, id), isNull(pitcherKPaperTradesTable.deletedAt)))
+    .returning();
   if (!deleted) {
     res.status(404).json({ error: "Paper trade not found" });
     return;
   }
 
   res.sendStatus(204);
+});
+
+router.post("/paper-trades/:id/restore", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid paper trade id" });
+    return;
+  }
+
+  // Only a soft-deleted row can be restored; the guard doubles as protection
+  // against double-tapping Undo (the second tap 404s instead of doing harm).
+  const [restored] = await db
+    .update(pitcherKPaperTradesTable)
+    .set({ deletedAt: null })
+    .where(and(eq(pitcherKPaperTradesTable.id, id), isNotNull(pitcherKPaperTradesTable.deletedAt)))
+    .returning();
+  if (!restored) {
+    res.status(404).json({ error: "This pick can no longer be restored." });
+    return;
+  }
+
+  res.json(RestorePaperTradeResponse.parse(restored));
 });
 
 export default router;

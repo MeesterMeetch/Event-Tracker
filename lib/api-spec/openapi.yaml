@@ -552,6 +552,12 @@ paths:
       operationId: deletePaperTrade
       tags: [paper-trades]
       summary: Delete a paper trade
+      description: >-
+        Soft-deletes the trade: it disappears from lists and summary stats
+        immediately, but the row (including any captured closing-line data)
+        is kept for a short grace period so the delete can be undone via the
+        restore endpoint. Soft-deleted rows are purged after the grace period,
+        or immediately if the same pick is logged again.
       parameters:
         - name: id
           in: path
@@ -560,9 +566,38 @@ paths:
             type: integer
       responses:
         "204":
-          description: Deleted
+          description: Deleted (restorable for a short grace period)
         "404":
           description: Paper trade not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /paper-trades/{id}/restore:
+    post:
+      operationId: restorePaperTrade
+      tags: [paper-trades]
+      summary: Undo a recent paper-trade delete
+      description: >-
+        Restores a soft-deleted paper trade exactly as it was — logged odds,
+        edge snapshot, status, and any captured closing-line data. Returns 404
+        once the trade is no longer restorable (grace period elapsed, the pick
+        was re-logged, or the id never existed).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The restored paper trade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperTrade"
+        "404":
+          description: No restorable paper trade with this id
           content:
             application/json:
               schema:

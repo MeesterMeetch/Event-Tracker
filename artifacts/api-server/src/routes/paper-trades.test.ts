@@ -256,15 +256,23 @@ describe("GET /paper-trades", () => {
   });
 });
 
-describe("DELETE /paper-trades/:id", () => {
-  it("deletes an existing trade", async () => {
-    seedTrade({ id: 1 });
+describe("DELETE /paper-trades/:id — soft delete backing the undo affordance", () => {
+  it("soft-deletes: hidden from list and summary but the row survives for undo", async () => {
+    seedTrade({ id: 1, status: "closed", clvPercent: 4, beatClose: true });
     const app = await buildApp();
 
     const { status } = await request(app, "DELETE", "/api/paper-trades/1");
 
     expect(status).toBe(204);
-    expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(0);
+    // Row is kept (tombstoned), not dropped — that's what makes undo exact.
+    expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(1);
+    expect(dbMod.__stores.pitcher_k_paper_trades[0].deletedAt).toBeInstanceOf(Date);
+
+    const list = await request(app, "GET", "/api/paper-trades");
+    expect(list.body).toHaveLength(0);
+    const summary = await request(app, "GET", "/api/paper-trades/summary");
+    expect((summary.body as { total: number }).total).toBe(0);
+    expect((summary.body as { gradedCount: number }).gradedCount).toBe(0);
   });
 
   it("404s when the trade doesn't exist", async () => {
@@ -275,11 +283,103 @@ describe("DELETE /paper-trades/:id", () => {
     expect(status).toBe(404);
   });
 
+  it("404s a second delete of the same trade instead of re-stamping the tombstone", async () => {
+    seedTrade({ id: 1 });
+    const app = await buildApp();
+
+    const first = await request(app, "DELETE", "/api/paper-trades/1");
+    const second = await request(app, "DELETE", "/api/paper-trades/1");
+
+    expect(first.status).toBe(204);
+    expect(second.status).toBe(404);
+  });
+
   it("400s on a non-integer id", async () => {
     const app = await buildApp();
 
     const { status } = await request(app, "DELETE", "/api/paper-trades/abc");
 
     expect(status).toBe(400);
+  });
+
+  it("purges tombstones past the grace window on the next delete", async () => {
+    // Soft-deleted two hours ago — well past the 1h restore grace.
+    seedTrade({ id: 1, deletedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) });
+    seedTrade({ id: 2, gameId: "evt-mlb-2" });
+    const app = await buildApp();
+
+    const { status } = await request(app, "DELETE", "/api/paper-trades/2");
+
+    expect(status).toBe(204);
+    // The stale tombstone is gone; only the freshly soft-deleted row remains.
+    expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(1);
+    expect(dbMod.__stores.pitcher_k_paper_trades[0].id).toBe(2);
+  });
+});
+
+describe("POST /paper-trades/:id/restore — undo brings the exact trade back", () => {
+  it("restores a soft-deleted trade with its graded closing-line data intact", async () => {
+    seedTrade({ id: 1, status: "closed", closingOdds: -125, clvPercent: 4, beatClose: true });
+    const app = await buildApp();
+
+    await request(app, "DELETE", "/api/paper-trades/1");
+    const restored = await request(app, "POST", "/api/paper-trades/1/restore");
+
+    expect(restored.status).toBe(200);
+    const row = restored.body as Record<string, unknown>;
+    expect(row.id).toBe(1);
+    expect(row.status).toBe("closed");
+    expect(row.clvPercent).toBe(4);
+
+    // Back in the list and counting toward summary stats again.
+    const list = await request(app, "GET", "/api/paper-trades");
+    expect(list.body).toHaveLength(1);
+    const summary = await request(app, "GET", "/api/paper-trades/summary");
+    expect((summary.body as { total: number }).total).toBe(1);
+    expect((summary.body as { gradedCount: number }).gradedCount).toBe(1);
+  });
+
+  it("404s when the trade was never deleted (double-tapping undo is harmless)", async () => {
+    seedTrade({ id: 1 });
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "POST", "/api/paper-trades/1/restore");
+
+    expect(status).toBe(404);
+    expect((body as { error: string }).error).toMatch(/no longer be restored/i);
+  });
+
+  it("404s for an unknown id", async () => {
+    const app = await buildApp();
+
+    const { status } = await request(app, "POST", "/api/paper-trades/999/restore");
+
+    expect(status).toBe(404);
+  });
+
+  it("400s on a non-integer id", async () => {
+    const app = await buildApp();
+
+    const { status } = await request(app, "POST", "/api/paper-trades/abc/restore");
+
+    expect(status).toBe(400);
+  });
+
+  it("cannot restore a pick that was re-logged after deletion — no duplicate row", async () => {
+    seedTrade({ id: 1, gameId: PT_BODY.gameId, commenceTime: new Date(PT_BODY.commenceTime) });
+    const app = await buildApp();
+
+    // Delete the pick, then log the exact same pick again: the tombstone's
+    // unique slot is cleared so the re-log succeeds as a fresh row.
+    await request(app, "DELETE", "/api/paper-trades/1");
+    const relog = await request(app, "POST", "/api/paper-trades", PT_BODY);
+    expect(relog.status).toBe(201);
+
+    // The stale undo can't resurrect the old row into a duplicate.
+    const restored = await request(app, "POST", "/api/paper-trades/1/restore");
+    expect(restored.status).toBe(404);
+
+    const list = await request(app, "GET", "/api/paper-trades");
+    expect(list.body).toHaveLength(1);
   });
 });

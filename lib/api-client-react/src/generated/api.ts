@@ -1583,6 +1583,7 @@ export const getDeletePaperTradeUrl = (id: number,) => {
 }
 
 /**
+ * Soft-deletes the trade: it disappears from lists and summary stats immediately, but the row (including any captured closing-line data) is kept for a short grace period so the delete can be undone via the restore endpoint. Soft-deleted rows are purged after the grace period, or immediately if the same pick is logged again.
  * @summary Delete a paper trade
  */
 export const deletePaperTrade = async (id: number, options?: RequestInit): Promise<void> => {
@@ -1643,5 +1644,77 @@ export const useDeletePaperTrade = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getDeletePaperTradeMutationOptions(options));
+    }
+
+export const getRestorePaperTradeUrl = (id: number,) => {
+
+
+
+
+  return `/api/paper-trades/${id}/restore`
+}
+
+/**
+ * Restores a soft-deleted paper trade exactly as it was — logged odds, edge snapshot, status, and any captured closing-line data. Returns 404 once the trade is no longer restorable (grace period elapsed, the pick was re-logged, or the id never existed).
+ * @summary Undo a recent paper-trade delete
+ */
+export const restorePaperTrade = async (id: number, options?: RequestInit): Promise<PaperTrade> => {
+
+  return customFetch<PaperTrade>(getRestorePaperTradeUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestorePaperTradeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restorePaperTrade>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restorePaperTrade>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['restorePaperTrade'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restorePaperTrade>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  restorePaperTrade(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestorePaperTradeMutationResult = NonNullable<Awaited<ReturnType<typeof restorePaperTrade>>>
+
+    export type RestorePaperTradeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Undo a recent paper-trade delete
+ */
+export const useRestorePaperTrade = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restorePaperTrade>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof restorePaperTrade>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRestorePaperTradeMutationOptions(options));
     }
 

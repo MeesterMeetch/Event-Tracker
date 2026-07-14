@@ -25,7 +25,16 @@ export async function captureModelClosingLines(): Promise<void> {
     const open = await db
       .select()
       .from(pitcherKPaperTradesTable)
-      .where(and(eq(pitcherKPaperTradesTable.status, "open"), isNull(pitcherKPaperTradesTable.closingOdds)));
+      .where(
+        and(
+          eq(pitcherKPaperTradesTable.status, "open"),
+          isNull(pitcherKPaperTradesTable.closingOdds),
+          // Skip soft-deleted (pending-undo) trades: don't spend per-event API
+          // calls grading a pick the user just removed. If it's restored, the
+          // next run picks it up while it's still in the capture window.
+          isNull(pitcherKPaperTradesTable.deletedAt),
+        ),
+      );
 
     const now = Date.now();
     const due = open.filter((t) => {

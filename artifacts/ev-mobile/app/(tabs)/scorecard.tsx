@@ -10,6 +10,7 @@ import {
   useDeletePaperTrade,
   useGetPaperTradeSummary,
   useListPaperTrades,
+  useRestorePaperTrade,
   type PaperTrade,
 } from '@workspace/api-client-react';
 import { useColors } from '@/hooks/useColors';
@@ -175,16 +176,26 @@ export default function ScorecardScreen() {
   const queryClient = useQueryClient();
 
   const deleteTrade = useDeletePaperTrade();
+  const restoreTrade = useRestorePaperTrade();
   const [deletingId, setDeletingId] = useState<PaperTrade['id'] | null>(null);
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(
-    null,
-  );
+  // `undoId` on a success banner offers a short window to restore the pick.
+  const [feedback, setFeedback] = useState<{
+    type: 'success' | 'error';
+    text: string;
+    undoId?: PaperTrade['id'];
+  } | null>(null);
 
   useEffect(() => {
     if (feedback?.type !== 'success') return;
-    const t = setTimeout(() => setFeedback(null), 4000);
+    // Give the banner a little longer when it carries the Undo action.
+    const t = setTimeout(() => setFeedback(null), feedback.undoId != null ? 6000 : 4000);
     return () => clearTimeout(t);
   }, [feedback]);
+
+  const invalidateTrades = () => {
+    queryClient.invalidateQueries({ queryKey: getListPaperTradesQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetPaperTradeSummaryQueryKey() });
+  };
 
   const removeTrade = (trade: PaperTrade) => {
     if (deletingId) return;
@@ -200,9 +211,9 @@ export default function ScorecardScreen() {
           setFeedback({
             type: 'success',
             text: `Removed ${trade.pitcher} ${trade.selection} ${trade.point}K from the scorecard`,
+            undoId: trade.id,
           });
-          queryClient.invalidateQueries({ queryKey: getListPaperTradesQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetPaperTradeSummaryQueryKey() });
+          invalidateTrades();
         },
         onError: (err) => {
           setFeedback({
@@ -211,6 +222,35 @@ export default function ScorecardScreen() {
           });
         },
         onSettled: () => setDeletingId(null),
+      },
+    );
+  };
+
+  const undoRemove = (id: PaperTrade['id']) => {
+    if (restoreTrade.isPending) return;
+    haptic();
+    // Swap the banner to a transient "restoring" note; the mutation result
+    // replaces it either way, so a stale Undo can't be tapped twice.
+    setFeedback({ type: 'success', text: 'Restoring pick…' });
+    restoreTrade.mutate(
+      { id },
+      {
+        onSuccess: (restored) => {
+          if (Platform.OS !== 'web') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          setFeedback({
+            type: 'success',
+            text: `Restored ${restored.pitcher} ${restored.selection} ${restored.point}K to the scorecard`,
+          });
+          invalidateTrades();
+        },
+        onError: (err) => {
+          setFeedback({
+            type: 'error',
+            text: err?.data?.error || 'Could not undo — this pick can no longer be restored.',
+          });
+        },
       },
     );
   };
@@ -382,6 +422,28 @@ export default function ScorecardScreen() {
                   >
                     {feedback.text}
                   </Text>
+                  {feedback.undoId != null ? (
+                    <Pressable
+                      hitSlop={8}
+                      disabled={restoreTrade.isPending}
+                      onPress={() => undoRemove(feedback.undoId!)}
+                      style={({ pressed }) => ({
+                        paddingHorizontal: 10,
+                        paddingVertical: 4,
+                        borderRadius: colors.radius,
+                        borderWidth: 1,
+                        borderColor: 'rgba(26,140,255,0.4)',
+                        backgroundColor: 'rgba(26,140,255,0.08)',
+                        opacity: pressed || restoreTrade.isPending ? 0.6 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{ fontFamily: fonts.monoSemibold, fontSize: 10.5, color: colors.primary }}
+                      >
+                        UNDO
+                      </Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : null}
               {recentTrades.length === 0 ? (

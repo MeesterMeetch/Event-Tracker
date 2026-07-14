@@ -1200,7 +1200,15 @@ components:
         point:
           type: ["number", "null"]
         americanOdds:
-          type: number
+          description: >-
+            American odds price. Valid prices are at most -100 or at least
+            +100; the open interval (-100, 100) does not exist on the
+            American odds scale.
+          oneOf:
+            - type: number
+              maximum: -100
+            - type: number
+              minimum: 100
         units:
           type: number
           minimum: 0
@@ -1218,7 +1226,15 @@ components:
         status:
           $ref: "#/components/schemas/BetStatus"
         americanOdds:
-          type: number
+          description: >-
+            American odds price. Valid prices are at most -100 or at least
+            +100; the open interval (-100, 100) does not exist on the
+            American odds scale.
+          oneOf:
+            - type: number
+              maximum: -100
+            - type: number
+              minimum: 100
         units:
           type: number
           minimum: 0

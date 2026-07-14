@@ -473,7 +473,7 @@ function EditBetSheet({
                 />
                 {!oddsValid ? (
                   <Text style={{ fontFamily: fonts.regular, fontSize: 11, color: colors.destructive, marginTop: 4 }}>
-                    Enter non-zero odds, e.g. -110.
+                    Enter odds of -100 or below, or +100 and up, e.g. -110.
                   </Text>
                 ) : null}
               </View>

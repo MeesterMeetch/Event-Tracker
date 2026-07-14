@@ -24,7 +24,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 
 const editBetSchema = z.object({
   status: z.enum(['pending', 'won', 'lost', 'push']),
-  americanOdds: z.coerce.number(),
+  // American odds only exist at ≤ -100 or ≥ +100 — the interval (-100, 100)
+  // isn't a real price, so a typo like +50 must not reach the P&L math.
+  americanOdds: z.coerce
+    .number()
+    .refine((v) => Math.abs(v) >= 100, "Odds must be -100 or below, or +100 and up (e.g. -110)"),
   units: z.coerce.number().min(0.01),
   pnl: z.coerce.number().nullable().optional(),
   notes: z.string().optional().nullable(),

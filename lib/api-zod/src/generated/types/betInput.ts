@@ -16,6 +16,7 @@ export interface BetInput {
   selection: string;
   /** @nullable */
   point: number | null;
+  /** American odds price. Valid prices are at most -100 or at least +100; the open interval (-100, 100) does not exist on the American odds scale. */
   americanOdds: number;
   /** @minimum 0 */
   units: number;

@@ -50,6 +50,18 @@ describe('parseOddsInput', () => {
     expect(parseOddsInput('').valid).toBe(false);
   });
 
+  it('rejects impossible American prices inside (-100, 100), like a +50 typo', () => {
+    expect(parseOddsInput('50').valid).toBe(false);
+    expect(parseOddsInput('+50').valid).toBe(false);
+    expect(parseOddsInput('-12').valid).toBe(false);
+    expect(parseOddsInput('99.5').valid).toBe(false);
+  });
+
+  it('accepts the boundary prices -100 and +100', () => {
+    expect(parseOddsInput('-100')).toEqual({ value: -100, valid: true });
+    expect(parseOddsInput('+100')).toEqual({ value: 100, valid: true });
+  });
+
   it('rejects non-numeric input', () => {
     expect(parseOddsInput('even').valid).toBe(false);
     expect(parseOddsInput('--110').valid).toBe(false);

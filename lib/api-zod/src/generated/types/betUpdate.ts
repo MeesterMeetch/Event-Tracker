@@ -9,6 +9,7 @@ import type { BetStatus } from './betStatus';
 
 export interface BetUpdate {
   status?: BetStatus;
+  /** American odds price. Valid prices are at most -100 or at least +100; the open interval (-100, 100) does not exist on the American odds scale. */
   americanOdds?: number;
   /** @minimum 0 */
   units?: number;

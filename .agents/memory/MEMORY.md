@@ -8,6 +8,7 @@
 - [API-spec/DB field add → rebuild dist](api-spec-codegen-dist-rebuild.md) — after schema+openapi.yaml+orval, run `tsc -b` on each changed lib; consumers typecheck against stale dist .d.ts, not src.
 - [Vitest for web artifacts](vitest-web-artifact-config.md) — web artifact needs its own vitest.config.ts; app vite.config.ts throws without PORT/BASE_PATH and Vitest auto-loads it.
 - [Expo useColors dark-key cast](expo-usecolors-dark-key.md) — adding a real `dark` palette to constants/colors.ts breaks the scaffold useColors Record cast; drop the cast, access colors.dark directly.
+- [OpenAPI disjoint numeric ranges](openapi-numeric-range-constraints.md) — `oneOf` min/max branches → orval emits a zod union; put range bans in the spec, not route guards (they'd be dead code).
 - [Orval regen duplicates index exports](orval-regen-index-dupes.md) — every `pnpm exec orval` run appends duplicate `export *` lines to api-zod/api-client-react index.ts; dedupe before `tsc -b`.
 - [Component tests under Vitest](component-tests-vitest.md) — jsdom pragma + `esbuild jsx: automatic` (web); react-native-web alias, tests outside `app/` (Expo); explicit `afterEach(cleanup)` in both.
 - [@types/react dedupe (web+Expo)](types-react-dedupe-monorepo.md) — pnpm add can bind web-side react-day-picker/radix to Expo's 19.1 @types/react → "two different types" typecheck fail; pin `@types/react`/`-dom` to ^19.2.0 in workspace overrides.

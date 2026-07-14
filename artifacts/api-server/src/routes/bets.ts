@@ -43,10 +43,9 @@ router.post("/bets", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (parsed.data.americanOdds === 0) {
-    res.status(400).json({ error: "americanOdds cannot be 0" });
-    return;
-  }
+  // Impossible American odds (the open interval (-100, 100), incl. 0) are
+  // rejected by CreateBetBody itself — the shared zod schema generated from
+  // the OpenAPI spec — so bad prices never reach calcPnl here or in grading.
 
   // The bet log is a staking record: logging the same open wager twice would
   // double-count its units in profit and ROI. A bet is "the same" when it
@@ -146,10 +145,9 @@ router.patch("/bets/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (parsed.data.americanOdds === 0) {
-    res.status(400).json({ error: "americanOdds cannot be 0" });
-    return;
-  }
+  // Impossible American odds (the open interval (-100, 100), incl. 0) are
+  // rejected by UpdateBetBody itself — the shared zod schema generated from
+  // the OpenAPI spec — so a bad price can never re-freeze or skew P&L math.
 
   // A soft-deleted bet can't be edited or settled — it must be restored first.
   const [existing] = await db

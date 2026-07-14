@@ -130,8 +130,30 @@ describe("POST /bets", () => {
     const { status, body } = await request(app, "POST", "/api/bets", { ...NEW_BET, americanOdds: 0 });
 
     expect(status).toBe(400);
-    expect((body as { error: string }).error).toMatch(/americanOdds cannot be 0/i);
+    expect((body as { error: string }).error).toMatch(/americanOdds/i);
     expect(dbMod.__stores.bets).toHaveLength(0);
+  });
+
+  it("rejects impossible American odds inside (-100, 100), like a +50 typo, and never inserts", async () => {
+    const app = await buildApp();
+
+    for (const americanOdds of [50, -12, 99.5, -99]) {
+      const { status, body } = await request(app, "POST", "/api/bets", { ...NEW_BET, americanOdds });
+
+      expect(status).toBe(400);
+      expect((body as { error: string }).error).toMatch(/americanOdds/i);
+    }
+    expect(dbMod.__stores.bets).toHaveLength(0);
+  });
+
+  it("accepts the boundary prices -100 and +100", async () => {
+    const app = await buildApp();
+
+    const even = await request(app, "POST", "/api/bets", { ...NEW_BET, americanOdds: 100 });
+    expect(even.status).toBe(201);
+    const layEven = await request(app, "POST", "/api/bets", { ...NEW_BET, gameId: "evt-mlb-10", americanOdds: -100 });
+    expect(layEven.status).toBe(201);
+    expect(dbMod.__stores.bets).toHaveLength(2);
   });
 
   it("rejects a malformed body with a 400", async () => {
@@ -335,6 +357,29 @@ describe("PATCH /bets/:id — settlement books the correct P&L", () => {
     const { status } = await request(app, "PATCH", "/api/bets/1", { americanOdds: 0 });
 
     expect(status).toBe(400);
+  });
+
+  it("rejects impossible American odds inside (-100, 100), like a +50 typo, without touching the bet", async () => {
+    seedPending({ id: 1, americanOdds: -120 });
+    const app = await buildApp();
+
+    for (const americanOdds of [50, -12, 99.5]) {
+      const { status, body } = await request(app, "PATCH", "/api/bets/1", { americanOdds });
+
+      expect(status).toBe(400);
+      expect((body as { error: string }).error).toMatch(/americanOdds/i);
+    }
+    expect(dbMod.__stores.bets[0]?.americanOdds).toBe(-120);
+  });
+
+  it("accepts an edit to the boundary price +100 and recomputes P&L from it", async () => {
+    seedPending({ id: 1, status: "won", americanOdds: 150, units: 1, pnl: 1.5 });
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "PATCH", "/api/bets/1", { americanOdds: 100 });
+
+    expect(status).toBe(200);
+    expect((body as { pnl: number }).pnl).toBe(1);
   });
 
   it("404s when settling a bet that doesn't exist", async () => {

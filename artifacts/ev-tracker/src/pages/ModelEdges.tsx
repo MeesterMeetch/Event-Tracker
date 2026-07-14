@@ -35,7 +35,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { parseOddsInput } from "@workspace/format";
+import { parseOddsInput, isValidAmericanOdds } from "@workspace/format";
 import { AlertTriangle, Brain, Loader2, Pencil, Plus, Target, Trash2, TrendingUp } from "lucide-react";
 import ModelPerformance from "@/components/ModelPerformance";
 import { useToast } from "@/components/ui/use-toast";
@@ -71,6 +71,14 @@ export function ProjectionCard({ projection }: { projection: ModelPitcherProject
   };
 
   const logTrade = (line: ModelKLine) => {
+    if (!isValidAmericanOdds(line.americanOdds)) {
+      toast({
+        title: "Invalid odds",
+        description: `${line.americanOdds} is not a valid American odds price — must be -100 or below, or +100 and up.`,
+        variant: "destructive",
+      });
+      return;
+    }
     createPaperTrade.mutate(
       {
         data: {

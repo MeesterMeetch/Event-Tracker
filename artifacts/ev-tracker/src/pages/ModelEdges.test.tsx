@@ -372,3 +372,91 @@ describe("ProjectionCard duplicate-log toast", () => {
     expect(toastMock.mock.calls.some(([args]) => args?.title === "Already logged")).toBe(false);
   });
 });
+
+/**
+ * Locks in the client-side impossible-odds guard on the projections card:
+ * scan results with corrupted prices like +50, -50, or 0 must be blocked
+ * before the POST is sent, with a destructive toast. Valid boundary prices
+ * (-100, +100) must pass through and fire the mutation.
+ *
+ * A refactor that removes the isValidAmericanOdds check from logTrade should
+ * fail here.
+ */
+describe("ProjectionCard impossible-odds guard", () => {
+  function makeProjectionWithOdds(americanOdds: number): ModelPitcherProjection {
+    return {
+      gameId: "g1",
+      sport: "baseball_mlb",
+      commenceTime: "2026-07-14T23:10:00Z",
+      homeTeam: "NYY",
+      awayTeam: "BOS",
+      pitcher: "Gerrit Cole",
+      team: "NYY",
+      opponent: "BOS",
+      throws: "R",
+      projectedBattersFaced: 24,
+      expectedStrikeouts: 7.1,
+      ratePerBF: 0.29,
+      opponentFactor: 1.02,
+      sampleStarts: 12,
+      sampleBattersFaced: 290,
+      opponentDataAvailable: true,
+      insufficientData: false,
+      lines: [
+        {
+          point: 6.5,
+          selection: "Over",
+          americanOdds,
+          book: "fanduel",
+          marketProb: 0.52,
+          modelProb: 0.58,
+          edgePercent: 6,
+          fullKellyFraction: 0.12,
+          recommendedUnits: 1,
+          isFlagged: true,
+        },
+      ],
+    } as unknown as ModelPitcherProjection;
+  }
+
+  function renderCardWithOdds(americanOdds: number) {
+    const queryClient = new QueryClient();
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <ProjectionCard projection={makeProjectionWithOdds(americanOdds)} />
+      </QueryClientProvider>,
+    );
+  }
+
+  async function clickLogButton() {
+    await user.click(
+      screen.getByRole("button", { name: /log paper trade gerrit cole over 6\.5/i }),
+    );
+  }
+
+  it.each([50, -50, 0])(
+    "blocks impossible odds %s before the POST is sent and shows a destructive toast",
+    async (americanOdds) => {
+      renderCardWithOdds(americanOdds);
+      await clickLogButton();
+
+      expect(createMutate).not.toHaveBeenCalled();
+      const invalidToast = toastMock.mock.calls.find(
+        ([args]) => args?.title === "Invalid odds",
+      );
+      expect(invalidToast).toBeDefined();
+      expect(invalidToast![0].variant).toBe("destructive");
+    },
+  );
+
+  it.each([-100, 100])(
+    "allows valid boundary odds %s and fires the mutation",
+    async (americanOdds) => {
+      renderCardWithOdds(americanOdds);
+      await clickLogButton();
+
+      expect(createMutate).toHaveBeenCalledTimes(1);
+      expect(toastMock.mock.calls.some(([args]) => args?.title === "Invalid odds")).toBe(false);
+    },
+  );
+});

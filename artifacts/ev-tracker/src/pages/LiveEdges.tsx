@@ -30,7 +30,7 @@ const logBetSchema = z.object({
 
 type LogBetFormValues = z.infer<typeof logBetSchema>;
 
-function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, children: React.ReactNode }) {
+export function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const createBet = useCreateBet();

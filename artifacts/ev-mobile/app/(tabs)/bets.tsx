@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,6 +21,7 @@ import {
   useDeleteBet,
   useGetDashboardSummary,
   useListBets,
+  useListSports,
   useRestoreBet,
   useUpdateBet,
   type Bet,
@@ -36,6 +37,7 @@ import {
   formatPercent,
   formatPnlUnits,
   formatPoint,
+  formatSportKey,
 } from '@/lib/format';
 import { parseOddsInput, parsePnlInput, parseUnitsInput } from '@/lib/inputs';
 
@@ -590,6 +592,18 @@ export default function BetsScreen() {
     isRefetching: summaryRefetching,
   } = useGetDashboardSummary();
   const settledCount = summary ? summary.won + summary.lost + summary.push : 0;
+
+  // The free in-season sports list resolves keys like "baseball_mlb" to
+  // display titles; formatSportKey covers keys that have dropped off the
+  // list (out-of-season leagues still present in the ledger history).
+  const { data: sports } = useListSports();
+  const sportTitles = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sports ?? []) map.set(s.key, s.title);
+    return map;
+  }, [sports]);
+  const [showBySport, setShowBySport] = useState(false);
+  const bySport = summary?.bySport ?? [];
   // Realized stake (server-side: settled AND pnl != null) is the ROI
   // denominator. Muting keys off it — not the W-L-P count — so an API-edge
   // settled bet with a null pnl can't render an unmuted zero P&L/ROI next to
@@ -808,6 +822,115 @@ export default function BetsScreen() {
                 </View>
               ))}
             </View>
+
+            {/* Per-sport breakdown — collapsed by default; hidden when the
+                summary has no per-sport rows (no bets at all). */}
+            {bySport.length > 0 ? (
+              <View
+                style={{
+                  borderTopWidth: 1,
+                  borderTopColor: colors.cardBorder,
+                  paddingTop: 12,
+                  marginTop: -2,
+                }}
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: showBySport }}
+                  accessibilityLabel={showBySport ? 'Hide sport breakdown' : 'Show sport breakdown'}
+                  onPress={() => {
+                    haptic();
+                    setShowBySport((v) => !v);
+                  }}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <Text
+                    style={{
+                      fontFamily: fonts.regular,
+                      fontSize: 10.5,
+                      letterSpacing: 0.5,
+                      textTransform: 'uppercase',
+                      color: colors.mutedForeground,
+                    }}
+                  >
+                    By Sport · {bySport.length}
+                  </Text>
+                  <Feather
+                    name={showBySport ? 'chevron-up' : 'chevron-down'}
+                    size={15}
+                    color={colors.mutedForeground}
+                  />
+                </Pressable>
+                {showBySport ? (
+                  <View style={{ marginTop: 4 }}>
+                    {bySport.map((row) => {
+                      // Mirror the ledger card's muting: a sport with nothing
+                      // settled yet shows a neutral 0 P&L/ROI, never a green
+                      // or red number off zero results.
+                      const sportSettled = row.won + row.lost + row.push > 0;
+                      const pnlTone = !sportSettled || row.pnl === 0
+                        ? colors.mutedForeground
+                        : row.pnl > 0
+                          ? colors.positive
+                          : colors.destructive;
+                      const roiTone = !sportSettled || row.roiPercent === 0
+                        ? colors.mutedForeground
+                        : row.roiPercent > 0
+                          ? colors.positive
+                          : colors.destructive;
+                      return (
+                        <View
+                          key={row.sport}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 10,
+                            paddingVertical: 9,
+                            borderTopWidth: 1,
+                            borderTopColor: colors.cardBorder,
+                          }}
+                        >
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text
+                              style={{ fontFamily: fonts.medium, fontSize: 12.5, color: colors.foreground }}
+                              numberOfLines={1}
+                            >
+                              {sportTitles.get(row.sport) ?? formatSportKey(row.sport)}
+                            </Text>
+                            <Text
+                              style={{ fontFamily: fonts.mono, fontSize: 10.5, color: colors.mutedForeground, marginTop: 2 }}
+                              numberOfLines={1}
+                            >
+                              {row.won}-{row.lost}-{row.push}
+                              {row.pending > 0 ? ` · ${row.pending} pending` : ''}
+                            </Text>
+                          </View>
+                          <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 12, color: roiTone }}>
+                            {formatPercent(row.roiPercent)}
+                          </Text>
+                          <Text
+                            style={{
+                              fontFamily: fonts.monoSemibold,
+                              fontSize: 12,
+                              color: pnlTone,
+                              minWidth: 64,
+                              textAlign: 'right',
+                            }}
+                          >
+                            {formatPnlUnits(row.pnl)}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </Card>
         ) : null}
 

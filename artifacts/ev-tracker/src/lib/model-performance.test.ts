@@ -8,6 +8,7 @@ import {
   computeClvSeries,
   computeFlaggedSplit,
   computeHeadline,
+  deriveGradedSet,
   filterTrades,
   isFlaggedTrade,
   isGraded,
@@ -405,17 +406,82 @@ describe("filterTrades", () => {
   });
 });
 
-// Helper mirroring the component's chronological ordering of the graded set
-// before it feeds computeClvSeries.
-function chronological(rows: PaperTrade[]): PaperTrade[] {
-  return [...rows].sort(
-    (a, b) => new Date(a.commenceTime).getTime() - new Date(b.commenceTime).getTime(),
-  );
-}
-
 function easternDayKeyOf(t: PaperTrade): string {
   return new Date(t.commenceTime).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 }
+
+describe("deriveGradedSet", () => {
+  it("keeps only graded trades (captured closing line)", () => {
+    const rows = [
+      trade({ id: 1, clvPercent: null }), // open — dropped
+      graded({ id: 2, clvPercent: 1.5 }),
+      trade({ id: 3, clvPercent: null }), // open — dropped
+      graded({ id: 4, clvPercent: -0.5 }),
+    ];
+    expect(deriveGradedSet(rows).map((t) => t.id)).toEqual([2, 4]);
+  });
+
+  it("sorts ascending by commence time so the CLV line runs in first-pitch order", () => {
+    const rows = [
+      graded({ id: 1, commenceTime: "2026-07-16T18:00:00Z" }),
+      graded({ id: 2, commenceTime: "2026-07-14T18:00:00Z" }),
+      graded({ id: 3, commenceTime: "2026-07-15T18:00:00Z" }),
+    ];
+    expect(deriveGradedSet(rows).map((t) => t.id)).toEqual([2, 3, 1]);
+  });
+
+  it("compares by instant, not by string, so mixed timezone offsets order correctly", () => {
+    const rows = [
+      // Lexicographically first but chronologically last.
+      graded({ id: 1, commenceTime: "2026-07-14T23:05:00-04:00" }), // 03:05Z on the 15th
+      graded({ id: 2, commenceTime: "2026-07-14T23:05:00Z" }),
+    ];
+    expect(deriveGradedSet(rows).map((t) => t.id)).toEqual([2, 1]);
+  });
+
+  it("keeps ties and already-sorted input in stable (input) order", () => {
+    const sameTime = "2026-07-14T18:00:00Z";
+    const tied = [
+      graded({ id: 1, commenceTime: sameTime }),
+      graded({ id: 2, commenceTime: sameTime }),
+      graded({ id: 3, commenceTime: sameTime }),
+    ];
+    expect(deriveGradedSet(tied).map((t) => t.id)).toEqual([1, 2, 3]);
+
+    const sorted = [
+      graded({ id: 1, commenceTime: "2026-07-13T18:00:00Z" }),
+      graded({ id: 2, commenceTime: "2026-07-14T18:00:00Z" }),
+      graded({ id: 3, commenceTime: "2026-07-15T18:00:00Z" }),
+    ];
+    expect(deriveGradedSet(sorted).map((t) => t.id)).toEqual([1, 2, 3]);
+  });
+
+  it("pushes unparseable commence times to the end without disturbing good rows", () => {
+    const rows = [
+      graded({ id: 1, commenceTime: "not-a-date" }),
+      graded({ id: 2, commenceTime: "2026-07-15T18:00:00Z" }),
+      graded({ id: 3, commenceTime: "" }),
+      graded({ id: 4, commenceTime: "2026-07-14T18:00:00Z" }),
+    ];
+    // Good rows sort chronologically first; the two bad rows land at the end
+    // in their original relative order — deterministic, no throw.
+    expect(deriveGradedSet(rows).map((t) => t.id)).toEqual([4, 2, 1, 3]);
+  });
+
+  it("does not mutate the input array", () => {
+    const rows = [
+      graded({ id: 1, commenceTime: "2026-07-16T18:00:00Z" }),
+      graded({ id: 2, commenceTime: "2026-07-14T18:00:00Z" }),
+    ];
+    deriveGradedSet(rows);
+    expect(rows.map((t) => t.id)).toEqual([1, 2]);
+  });
+
+  it("returns an empty set for no trades or no graded trades", () => {
+    expect(deriveGradedSet([])).toEqual([]);
+    expect(deriveGradedSet([trade(), trade()])).toEqual([]);
+  });
+});
 
 describe("computeClvSeries", () => {
   it("returns an empty series (no NaN points) for an empty graded set", () => {
@@ -437,7 +503,7 @@ describe("computeClvSeries", () => {
   });
 
   it("tracks the cumulative average as chronologically-sorted trades accrue", () => {
-    const rows = chronological([
+    const rows = deriveGradedSet([
       graded({ commenceTime: "2026-07-16T18:00:00Z", clvPercent: 6 }),
       graded({ commenceTime: "2026-07-14T18:00:00Z", clvPercent: 2 }),
       graded({ commenceTime: "2026-07-15T18:00:00Z", clvPercent: 4 }),

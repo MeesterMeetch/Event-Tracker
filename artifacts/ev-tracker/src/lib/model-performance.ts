@@ -193,6 +193,30 @@ export function filterTrades(trades: PaperTrade[], filters: TradeFilters): Paper
   });
 }
 
+/**
+ * Derive the graded set feeding every scorecard chart: keep only trades with a
+ * captured closing line, sorted ascending by first pitch (`commenceTime`). The
+ * sort is stable, so ties and already-ordered input keep their relative order.
+ * Trades with a missing/unparseable commence time are deterministically pushed
+ * to the end (treated as latest) instead of throwing or silently reordering
+ * the parseable rows around them.
+ */
+export function deriveGradedSet(trades: PaperTrade[]): PaperTrade[] {
+  const timeOf = (t: PaperTrade): number => {
+    const ms = new Date(t.commenceTime).getTime();
+    return Number.isNaN(ms) ? Number.POSITIVE_INFINITY : ms;
+  };
+  return trades.filter(isGraded).sort((a, b) => {
+    const ta = timeOf(a);
+    const tb = timeOf(b);
+    // Guard the Infinity − Infinity = NaN case (two unparseable times): a NaN
+    // comparator result is implementation-defined, so report equality instead
+    // and let the stable sort preserve their input order.
+    if (ta === tb) return 0;
+    return ta - tb;
+  });
+}
+
 export type ClvPoint = {
   idx: number;
   label: string;

@@ -29,8 +29,8 @@ import {
   computeClvSeries,
   computeFlaggedSplit,
   computeHeadline,
+  deriveGradedSet,
   filterTrades,
-  isGraded,
   type BreakdownRow,
 } from "@/lib/model-performance";
 
@@ -281,11 +281,9 @@ export default function ModelPerformance() {
 
   const filtered = useMemo(() => filterTrades(trades ?? [], filters), [trades, filters]);
 
-  const graded = useMemo(() => {
-    return filtered
-      .filter(isGraded)
-      .sort((a, b) => new Date(a.commenceTime).getTime() - new Date(b.commenceTime).getTime());
-  }, [filtered]);
+  // Graded trades only, in chronological order of first pitch — the ordering
+  // computeClvSeries depends on to draw the running-average line correctly.
+  const graded = useMemo(() => deriveGradedSet(filtered), [filtered]);
 
   // CLV over time: cumulative average CLV as graded trades accrue, in
   // chronological order of first pitch.

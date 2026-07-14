@@ -1046,6 +1046,7 @@ export const getDeleteBetUrl = (id: number,) => {
 }
 
 /**
+ * Soft-deletes the bet: it disappears from the log and dashboard stats immediately, but the row (including any captured closing-line/CLV data and settled P&L) is kept for a short grace period so the delete can be undone via the restore endpoint. Soft-deleted rows are purged after the grace period.
  * @summary Delete a logged bet
  */
 export const deleteBet = async (id: number, options?: RequestInit): Promise<void> => {
@@ -1106,6 +1107,78 @@ export const useDeleteBet = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getDeleteBetMutationOptions(options));
+    }
+
+export const getRestoreBetUrl = (id: number,) => {
+
+
+
+
+  return `/api/bets/${id}/restore`
+}
+
+/**
+ * Restores a soft-deleted bet exactly as it was — logged odds, units, status, P&L, and any captured closing-line/CLV data. Returns 404 once the bet is no longer restorable (grace period elapsed or the id never existed).
+ * @summary Undo a recent bet delete
+ */
+export const restoreBet = async (id: number, options?: RequestInit): Promise<Bet> => {
+
+  return customFetch<Bet>(getRestoreBetUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestoreBetMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreBet>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreBet>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['restoreBet'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreBet>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  restoreBet(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreBetMutationResult = NonNullable<Awaited<ReturnType<typeof restoreBet>>>
+
+    export type RestoreBetMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Undo a recent bet delete
+ */
+export const useRestoreBet = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreBet>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof restoreBet>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRestoreBetMutationOptions(options));
     }
 
 export const getGetDashboardSummaryUrl = () => {

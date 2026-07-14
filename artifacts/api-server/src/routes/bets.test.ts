@@ -241,6 +241,17 @@ describe("GET /bets", () => {
     expect(bets[0].status).toBe("won");
   });
 
+  it("hides soft-deleted bets from the log", async () => {
+    seedPending({ id: 1 });
+    seedPending({ id: 2, gameId: "evt-mlb-2", deletedAt: new Date() });
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "GET", "/api/bets");
+
+    expect(status).toBe(200);
+    expect((body as Array<{ id: number }>).map((b) => b.id)).toEqual([1]);
+  });
+
   it("returns an empty list (not an error) when nothing is logged", async () => {
     const app = await buildApp();
 
@@ -335,15 +346,22 @@ describe("PATCH /bets/:id — settlement books the correct P&L", () => {
   });
 });
 
-describe("DELETE /bets/:id", () => {
-  it("deletes an existing bet", async () => {
-    seedPending({ id: 1 });
+describe("DELETE /bets/:id — soft delete backing the undo affordance", () => {
+  it("soft-deletes: hidden from the log and dashboard-visible stats but the row survives for undo", async () => {
+    seedPending({ id: 1, status: "won", pnl: 3, clvPercent: 2.5 });
     const app = await buildApp();
 
     const { status } = await request(app, "DELETE", "/api/bets/1");
 
     expect(status).toBe(204);
-    expect(dbMod.__stores.bets).toHaveLength(0);
+    // Row is kept (tombstoned), not dropped — that's what makes undo exact.
+    expect(dbMod.__stores.bets).toHaveLength(1);
+    expect(dbMod.__stores.bets[0].deletedAt).toBeInstanceOf(Date);
+
+    const list = await request(app, "GET", "/api/bets");
+    expect(list.body).toHaveLength(0);
+    const one = await request(app, "GET", "/api/bets/1");
+    expect(one.status).toBe(404);
   });
 
   it("404s when deleting a bet that doesn't exist", async () => {
@@ -352,5 +370,120 @@ describe("DELETE /bets/:id", () => {
     const { status } = await request(app, "DELETE", "/api/bets/999");
 
     expect(status).toBe(404);
+  });
+
+  it("404s a second delete of the same bet instead of re-stamping the tombstone", async () => {
+    seedPending({ id: 1 });
+    const app = await buildApp();
+
+    const first = await request(app, "DELETE", "/api/bets/1");
+    const second = await request(app, "DELETE", "/api/bets/1");
+
+    expect(first.status).toBe(204);
+    expect(second.status).toBe(404);
+  });
+
+  it("blocks settling a soft-deleted bet during the grace window", async () => {
+    seedPending({ id: 1 });
+    const app = await buildApp();
+
+    await request(app, "DELETE", "/api/bets/1");
+    const { status } = await request(app, "PATCH", "/api/bets/1", { status: "won" });
+
+    expect(status).toBe(404);
+  });
+
+  it("purges tombstones past the grace window on the next delete", async () => {
+    // Soft-deleted two hours ago — well past the 1h restore grace.
+    seedPending({ id: 1, deletedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) });
+    seedPending({ id: 2, gameId: "evt-mlb-2" });
+    const app = await buildApp();
+
+    const { status } = await request(app, "DELETE", "/api/bets/2");
+
+    expect(status).toBe(204);
+    // The stale tombstone is gone; only the freshly soft-deleted row remains.
+    expect(dbMod.__stores.bets).toHaveLength(1);
+    expect(dbMod.__stores.bets[0].id).toBe(2);
+  });
+});
+
+describe("POST /bets/:id/restore — undo brings the exact bet back", () => {
+  it("restores a soft-deleted bet with its settled P&L and CLV intact", async () => {
+    seedPending({ id: 1, status: "won", pnl: 3, closingOdds: 130, clvPercent: 2.5 });
+    const app = await buildApp();
+
+    await request(app, "DELETE", "/api/bets/1");
+    const restored = await request(app, "POST", "/api/bets/1/restore");
+
+    expect(restored.status).toBe(200);
+    const row = restored.body as Record<string, unknown>;
+    expect(row.id).toBe(1);
+    expect(row.status).toBe("won");
+    expect(row.pnl).toBe(3);
+    expect(row.clvPercent).toBe(2.5);
+
+    // Back in the log.
+    const list = await request(app, "GET", "/api/bets");
+    expect(list.body).toHaveLength(1);
+  });
+
+  it("404s when the bet was never deleted (double-tapping undo is harmless)", async () => {
+    seedPending({ id: 1 });
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "POST", "/api/bets/1/restore");
+
+    expect(status).toBe(404);
+    expect((body as { error: string }).error).toMatch(/no longer be restored/i);
+  });
+
+  it("cannot restore a bet once the grace window has elapsed — the tombstone is purged instead", async () => {
+    // Soft-deleted two hours ago, well past the 1h grace. No intervening
+    // delete has run, so only the restore path's own purge can enforce it.
+    seedPending({ id: 1, deletedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) });
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "POST", "/api/bets/1/restore");
+
+    expect(status).toBe(404);
+    expect((body as { error: string }).error).toMatch(/no longer be restored/i);
+    // The expired tombstone is gone for good, not lingering invisibly.
+    expect(dbMod.__stores.bets).toHaveLength(0);
+  });
+
+  it("404s for an unknown id and 400s on a non-integer id", async () => {
+    const app = await buildApp();
+
+    const missing = await request(app, "POST", "/api/bets/999/restore");
+    const malformed = await request(app, "POST", "/api/bets/abc/restore");
+
+    expect(missing.status).toBe(404);
+    expect(malformed.status).toBe(400);
+  });
+
+  it("cannot restore a pending bet that was re-logged after deletion — no double-counted duplicate", async () => {
+    seedPending({
+      id: 1,
+      gameId: NEW_BET.gameId,
+      market: NEW_BET.market,
+      selection: NEW_BET.selection,
+      point: null,
+      book: null,
+    });
+    const app = await buildApp();
+
+    // Delete the wager, then log the exact same wager again: the tombstone is
+    // purged so the re-log succeeds as a fresh row instead of 409ing.
+    await request(app, "DELETE", "/api/bets/1");
+    const relog = await request(app, "POST", "/api/bets", NEW_BET);
+    expect(relog.status).toBe(201);
+
+    // The stale undo can't resurrect the old row into a duplicate open bet.
+    const restored = await request(app, "POST", "/api/bets/1/restore");
+    expect(restored.status).toBe(404);
+
+    const list = await request(app, "GET", "/api/bets");
+    expect(list.body).toHaveLength(1);
   });
 });

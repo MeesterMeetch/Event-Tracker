@@ -316,6 +316,7 @@ export const UpdateBetResponse = zod.object({
 
 
 /**
+ * Soft-deletes the bet: it disappears from the log and dashboard stats immediately, but the row (including any captured closing-line/CLV data and settled P&L) is kept for a short grace period so the delete can be undone via the restore endpoint. Soft-deleted rows are purged after the grace period.
  * @summary Delete a logged bet
  */
 export const DeleteBetParams = zod.object({
@@ -323,6 +324,38 @@ export const DeleteBetParams = zod.object({
 })
 
 export const DeleteBetResponse = zod.void()
+
+
+/**
+ * Restores a soft-deleted bet exactly as it was — logged odds, units, status, P&L, and any captured closing-line/CLV data. Returns 404 once the bet is no longer restorable (grace period elapsed or the id never existed).
+ * @summary Undo a recent bet delete
+ */
+export const RestoreBetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RestoreBetResponse = zod.object({
+  "id": zod.number(),
+  "sport": zod.string(),
+  "gameId": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "market": zod.string(),
+  "selection": zod.string(),
+  "point": zod.number().nullable(),
+  "americanOdds": zod.number(),
+  "units": zod.number(),
+  "fairOdds": zod.number().nullable(),
+  "evPercent": zod.number().nullable(),
+  "book": zod.string().nullable(),
+  "closingOdds": zod.number().nullable(),
+  "clvPercent": zod.number().nullable(),
+  "status": zod.enum(['pending', 'won', 'lost', 'push']),
+  "pnl": zod.number().nullable(),
+  "notes": zod.string().nullable(),
+  "createdAt": zod.coerce.date()
+})
 
 
 /**

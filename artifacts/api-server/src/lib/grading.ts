@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db, betsTable } from "@workspace/db";
 import { fetchScores, type ScoresGame } from "./odds";
 import { gradeBet, calcPnl } from "./grading-math";
@@ -28,7 +28,13 @@ export async function settlePendingBets(): Promise<void> {
   if (gradingRunning) return;
   gradingRunning = true;
   try {
-    const pending = await db.select().from(betsTable).where(eq(betsTable.status, "pending"));
+    // Soft-deleted bets are pending-undo tombstones — never grade them, so a
+    // deleted wager can't be settled behind the user's back during the grace
+    // window.
+    const pending = await db
+      .select()
+      .from(betsTable)
+      .where(and(eq(betsTable.status, "pending"), isNull(betsTable.deletedAt)));
 
     const now = Date.now();
     const due = pending.filter((b) => AUTO_GRADABLE_MARKETS.has(b.market) && now - new Date(b.commenceTime).getTime() >= GRADE_AFTER_MS);

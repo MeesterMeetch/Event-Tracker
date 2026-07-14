@@ -37,6 +37,7 @@ const BETS_COLS = [
   "status",
   "pnl",
   "notes",
+  "deletedAt",
   "createdAt",
 ] as const;
 

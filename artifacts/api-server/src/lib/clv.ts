@@ -42,7 +42,13 @@ export async function captureClosingLines(): Promise<void> {
   if (clvRunning) return;
   clvRunning = true;
   try {
-    const candidates = await db.select().from(betsTable).where(isNull(betsTable.closingOdds));
+    // Soft-deleted bets (pending-undo tombstones) are skipped: no point
+    // spending API credits capturing a closing line for a row that's about to
+    // be purged.
+    const candidates = await db
+      .select()
+      .from(betsTable)
+      .where(and(isNull(betsTable.closingOdds), isNull(betsTable.deletedAt)));
 
     const now = Date.now();
     const due = candidates.filter((b) => {

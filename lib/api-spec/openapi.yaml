@@ -379,6 +379,12 @@ paths:
       operationId: deleteBet
       tags: [bets]
       summary: Delete a logged bet
+      description: >-
+        Soft-deletes the bet: it disappears from the log and dashboard stats
+        immediately, but the row (including any captured closing-line/CLV data
+        and settled P&L) is kept for a short grace period so the delete can be
+        undone via the restore endpoint. Soft-deleted rows are purged after
+        the grace period.
       parameters:
         - name: id
           in: path
@@ -387,9 +393,38 @@ paths:
             type: integer
       responses:
         "204":
-          description: Deleted
+          description: Deleted (restorable for a short grace period)
         "404":
           description: Bet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bets/{id}/restore:
+    post:
+      operationId: restoreBet
+      tags: [bets]
+      summary: Undo a recent bet delete
+      description: >-
+        Restores a soft-deleted bet exactly as it was — logged odds, units,
+        status, P&L, and any captured closing-line/CLV data. Returns 404 once
+        the bet is no longer restorable (grace period elapsed or the id never
+        existed).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The restored bet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bet"
+        "404":
+          description: No restorable bet with this id
           content:
             application/json:
               schema:

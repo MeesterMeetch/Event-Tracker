@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, lt } from "drizzle-orm";
 import { db, betsTable } from "@workspace/db";
 import { calcPnl } from "../lib/grading-math";
 import {
@@ -13,9 +13,18 @@ import {
   UpdateBetBody,
   UpdateBetResponse,
   DeleteBetParams,
+  RestoreBetResponse,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+/**
+ * How long a soft-deleted bet stays restorable. The client undo window is a
+ * few seconds; an hour of server-side slack keeps the affordance forgiving
+ * (slow devices, brief offline) without letting invisible rows accumulate.
+ * Matches the paper-trade scorecard's grace window.
+ */
+const RESTORE_GRACE_MS = 60 * 60 * 1000;
 
 router.get("/bets", async (req, res): Promise<void> => {
   const parsed = ListBetsQueryParams.safeParse(req.query);
@@ -24,9 +33,12 @@ router.get("/bets", async (req, res): Promise<void> => {
     return;
   }
 
-  const bets = parsed.data.status
-    ? await db.select().from(betsTable).where(eq(betsTable.status, parsed.data.status))
-    : await db.select().from(betsTable);
+  // Soft-deleted rows are pending-undo tombstones, never listed.
+  const notDeleted = isNull(betsTable.deletedAt);
+  const bets = await db
+    .select()
+    .from(betsTable)
+    .where(parsed.data.status ? and(eq(betsTable.status, parsed.data.status), notDeleted) : notDeleted);
 
   bets.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   res.json(ListBetsResponse.parse(bets));
@@ -54,6 +66,26 @@ router.post("/bets", async (req, res): Promise<void> => {
   const d = parsed.data;
   const point = d.point ?? null;
   const book = d.book ?? null;
+
+  // Re-logging a wager whose earlier row was soft-deleted (sitting in the
+  // undo grace window) must succeed without tripping the duplicate guard:
+  // purge any matching pending tombstone first. This forfeits the pending
+  // undo for that wager — the freshly logged bet supersedes it, so a stale
+  // Undo tap can't resurrect the old row into a double-counted duplicate.
+  await db
+    .delete(betsTable)
+    .where(
+      and(
+        eq(betsTable.gameId, d.gameId),
+        eq(betsTable.market, d.market),
+        eq(betsTable.selection, d.selection),
+        point == null ? isNull(betsTable.point) : eq(betsTable.point, point),
+        book == null ? isNull(betsTable.book) : eq(betsTable.book, book),
+        eq(betsTable.status, "pending"),
+        isNotNull(betsTable.deletedAt),
+      ),
+    );
+
   const [duplicate] = await db
     .select()
     .from(betsTable)
@@ -65,6 +97,7 @@ router.post("/bets", async (req, res): Promise<void> => {
         point == null ? isNull(betsTable.point) : eq(betsTable.point, point),
         book == null ? isNull(betsTable.book) : eq(betsTable.book, book),
         eq(betsTable.status, "pending"),
+        isNull(betsTable.deletedAt),
       ),
     );
   if (duplicate) {
@@ -95,7 +128,11 @@ router.get("/bets/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [bet] = await db.select().from(betsTable).where(eq(betsTable.id, params.data.id));
+  // A soft-deleted bet is invisible everywhere except the restore endpoint.
+  const [bet] = await db
+    .select()
+    .from(betsTable)
+    .where(and(eq(betsTable.id, params.data.id), isNull(betsTable.deletedAt)));
   if (!bet) {
     res.status(404).json({ error: "Bet not found" });
     return;
@@ -121,7 +158,11 @@ router.patch("/bets/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [existing] = await db.select().from(betsTable).where(eq(betsTable.id, params.data.id));
+  // A soft-deleted bet can't be edited or settled — it must be restored first.
+  const [existing] = await db
+    .select()
+    .from(betsTable)
+    .where(and(eq(betsTable.id, params.data.id), isNull(betsTable.deletedAt)));
   if (!existing) {
     res.status(404).json({ error: "Bet not found" });
     return;
@@ -142,7 +183,7 @@ router.patch("/bets/:id", async (req, res): Promise<void> => {
   const [bet] = await db
     .update(betsTable)
     .set({ ...parsed.data, pnl: nextPnl })
-    .where(eq(betsTable.id, params.data.id))
+    .where(and(eq(betsTable.id, params.data.id), isNull(betsTable.deletedAt)))
     .returning();
   if (!bet) {
     res.status(404).json({ error: "Bet not found" });
@@ -159,13 +200,54 @@ router.delete("/bets/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [bet] = await db.delete(betsTable).where(eq(betsTable.id, params.data.id)).returning();
-  if (!bet) {
+  // Opportunistically purge tombstones past the grace window so soft-deleted
+  // rows can't accumulate invisibly.
+  await db.delete(betsTable).where(lt(betsTable.deletedAt, new Date(Date.now() - RESTORE_GRACE_MS)));
+
+  // Soft delete: stamp deletedAt instead of dropping the row, so an immediate
+  // undo can restore the exact record — logged odds, units, settled P&L, and
+  // any captured closing-line/CLV data — which a re-create could not
+  // reproduce.
+  const [deleted] = await db
+    .update(betsTable)
+    .set({ deletedAt: new Date() })
+    .where(and(eq(betsTable.id, params.data.id), isNull(betsTable.deletedAt)))
+    .returning();
+  if (!deleted) {
     res.status(404).json({ error: "Bet not found" });
     return;
   }
 
   res.sendStatus(204);
+});
+
+router.post("/bets/:id/restore", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid bet id" });
+    return;
+  }
+
+  // Enforce the grace window at the restore boundary itself: purge any
+  // tombstones past it first, so an old deleted bet can't be resurrected
+  // long after the user believed it gone — even if no intervening delete
+  // ever triggered the opportunistic purge.
+  await db.delete(betsTable).where(lt(betsTable.deletedAt, new Date(Date.now() - RESTORE_GRACE_MS)));
+
+  // Only a soft-deleted row still inside the grace window can be restored;
+  // the guard doubles as protection against double-tapping Undo (the second
+  // tap 404s instead of doing harm).
+  const [restored] = await db
+    .update(betsTable)
+    .set({ deletedAt: null })
+    .where(and(eq(betsTable.id, id), isNotNull(betsTable.deletedAt)))
+    .returning();
+  if (!restored) {
+    res.status(404).json({ error: "This bet can no longer be restored." });
+    return;
+  }
+
+  res.json(RestoreBetResponse.parse(restored));
 });
 
 export default router;

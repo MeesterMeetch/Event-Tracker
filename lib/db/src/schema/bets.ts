@@ -29,9 +29,16 @@ export const betsTable = pgTable("bets", {
   status: text("status").notNull().default("pending"), // "pending" | "won" | "lost" | "push"
   pnl: doublePrecision("pnl"),
   notes: text("notes"),
+  // Soft-delete marker backing the client "Undo" affordance: deleting a bet
+  // stamps this instead of dropping the row, so an immediate undo can restore
+  // the exact record — logged odds, units, and any captured closing-line/CLV
+  // data — rather than approximating it with a re-create. Rows with a
+  // non-null deletedAt are invisible to list/dashboard/grading/CLV and are
+  // purged after a grace period.
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertBetSchema = createInsertSchema(betsTable).omit({ id: true, createdAt: true });
+export const insertBetSchema = createInsertSchema(betsTable).omit({ id: true, createdAt: true, deletedAt: true });
 export type InsertBet = z.infer<typeof insertBetSchema>;
 export type Bet = typeof betsTable.$inferSelect;

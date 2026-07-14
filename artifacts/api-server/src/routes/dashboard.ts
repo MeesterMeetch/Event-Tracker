@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { isNull } from "drizzle-orm";
 import { db, betsTable, type Bet } from "@workspace/db";
 import { GetDashboardSummaryResponse } from "@workspace/api-zod";
 
@@ -10,7 +11,9 @@ function roi(pnl: number, units: number): number {
 }
 
 router.get("/dashboard/summary", async (_req, res): Promise<void> => {
-  const bets = await db.select().from(betsTable);
+  // Excludes soft-deleted bets so a removed wager stops counting toward
+  // profit/ROI immediately; an undo brings its numbers back with it.
+  const bets = await db.select().from(betsTable).where(isNull(betsTable.deletedAt));
 
   const settled = bets.filter((b): b is Bet & { pnl: number } => b.status !== "pending" && b.pnl != null);
   const totalPnl = Math.round(settled.reduce((sum, b) => sum + b.pnl, 0) * 100) / 100;

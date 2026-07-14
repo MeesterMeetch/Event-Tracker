@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListBets, useUpdateBet, useDeleteBet, getListBetsQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { useListBets, useUpdateBet, useDeleteBet, useRestoreBet, getListBetsQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatOdds, formatPercent, formatPoint, formatCurrency, formatMarketLabel } from "@/lib/utils";
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { MoreHorizontal, Pencil, Trash2, Loader2, ListTodo } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
@@ -177,7 +178,7 @@ function EditBetDialog({ bet, open, onOpenChange }: { bet: Bet, open: boolean, o
   );
 }
 
-function DeleteBetDialog({ bet, open, onOpenChange }: { bet: Bet, open: boolean, onOpenChange: (open: boolean) => void }) {
+function DeleteBetDialog({ bet, open, onOpenChange, onUndo }: { bet: Bet, open: boolean, onOpenChange: (open: boolean) => void, onUndo: (bet: Bet) => void }) {
   const { toast } = useToast();
   const deleteBet = useDeleteBet();
   const queryClient = useQueryClient();
@@ -185,7 +186,19 @@ function DeleteBetDialog({ bet, open, onOpenChange }: { bet: Bet, open: boolean,
   const onDelete = () => {
     deleteBet.mutate({ id: bet.id }, {
       onSuccess: () => {
-        toast({ title: "Bet Deleted" });
+        // The server soft-deletes for a grace period, so the toast offers a
+        // quick Undo that restores the exact row — odds, P&L, and CLV data.
+        // onUndo lives in the page (which outlives this dialog), so the
+        // restore still fires after the dialog unmounts.
+        toast({
+          title: "Bet Deleted",
+          description: `${bet.selection} removed from the bet log.`,
+          action: (
+            <ToastAction altText="Undo delete" onClick={() => onUndo(bet)}>
+              Undo
+            </ToastAction>
+          ),
+        });
         queryClient.invalidateQueries({ queryKey: getListBetsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
         onOpenChange(false);
@@ -206,7 +219,7 @@ function DeleteBetDialog({ bet, open, onOpenChange }: { bet: Bet, open: boolean,
         <DialogHeader>
           <DialogTitle>Delete Bet</DialogTitle>
           <DialogDescription>
-            Are you sure you want to delete this bet? This action cannot be undone and will affect your dashboard stats.
+            Are you sure you want to delete this bet? It will stop counting toward your dashboard stats. You can undo right after deleting.
           </DialogDescription>
         </DialogHeader>
         <div className="rounded-md bg-muted p-4 my-2 text-sm space-y-1">
@@ -240,6 +253,36 @@ export default function BetLog() {
   
   const [editingBet, setEditingBet] = useState<Bet | null>(null);
   const [deletingBet, setDeletingBet] = useState<Bet | null>(null);
+
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const restoreBet = useRestoreBet();
+
+  // Undo a delete: the server soft-deletes for a grace period, so restore
+  // brings back the exact row — logged odds, units, P&L, and CLV data.
+  // Lives here (not in the dialog) so it survives the dialog unmounting.
+  const undoDelete = (bet: Bet) => {
+    restoreBet.mutate(
+      { id: bet.id },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Bet restored",
+            description: `${bet.selection} is back in the bet log.`,
+          });
+          queryClient.invalidateQueries({ queryKey: getListBetsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+        },
+        onError: (err) => {
+          toast({
+            title: "Could not undo",
+            description: err.data?.error || "This bet can no longer be restored.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -366,6 +409,7 @@ export default function BetLog() {
           bet={deletingBet} 
           open={!!deletingBet} 
           onOpenChange={(open) => !open && setDeletingBet(null)} 
+          onUndo={undoDelete}
         />
       )}
     </div>

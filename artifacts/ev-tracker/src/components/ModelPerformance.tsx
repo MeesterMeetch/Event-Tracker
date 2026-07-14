@@ -11,7 +11,6 @@ import {
   YAxis,
 } from "recharts";
 import { useListPaperTrades } from "@workspace/api-client-react";
-import type { PaperTrade } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -22,84 +21,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { LineChart as LineChartIcon, Target, RotateCcw, User, Swords } from "lucide-react";
 import { easternDayKey, formatPercent, cn } from "@/lib/utils";
-
-// Newer trades persist the model's actual flag decision (`isFlagged`) at log
-// time, so the flagged-vs-unflagged split is exact. Rows logged before that
-// column existed have no stored decision, so we fall back to re-deriving it:
-// a line was "flagged" when it had a market consensus (marketProb present) and
-// cleared the same edge threshold the scanner uses to flag lines.
-const FLAG_EDGE_PERCENT = 1;
-
-function isFlaggedTrade(t: PaperTrade): boolean {
-  if (t.isFlagged != null) return t.isFlagged;
-  return t.marketProb != null && t.edgePercent != null && t.edgePercent >= FLAG_EDGE_PERCENT;
-}
-
-/** Trades that have a captured closing line (CLV computed) — the gradable set. */
-function isGraded(t: PaperTrade): boolean {
-  return t.clvPercent != null;
-}
-
-function mean(nums: number[]): number | null {
-  if (nums.length === 0) return null;
-  return nums.reduce((s, n) => s + n, 0) / nums.length;
-}
-
-function beatCloseRate(trades: PaperTrade[]): number | null {
-  if (trades.length === 0) return null;
-  return trades.filter((t) => t.beatClose === true).length / trades.length;
-}
+import {
+  FLAG_EDGE_PERCENT,
+  MIN_GRADED_SAMPLE,
+  buildBreakdown,
+  computeBucketSeries,
+  computeFlaggedSplit,
+  computeHeadline,
+  isGraded,
+  type BreakdownRow,
+} from "@/lib/model-performance";
 
 function fmtRate(rate: number | null): string {
   return rate == null ? "—" : `${(rate * 100).toFixed(0)}%`;
 }
-
-type BreakdownRow = {
-  key: string;
-  count: number;
-  beatClose: number | null;
-  avgClv: number | null;
-};
-
-// A pitcher/opponent needs at least this many graded trades before its avg CLV
-// is trustworthy enough to rank. Below this, one or two lucky closes can top the
-// leaderboard on noise alone, so low-sample groups are split out of the ranking.
-const MIN_GRADED_SAMPLE = 5;
-
-/**
- * Group graded trades by an arbitrary key (pitcher / opponent) and summarize
- * each group. Ordered by avg CLV descending so the model's strongest reads
- * surface first; groups with no measurable CLV sink to the bottom.
- */
-function buildBreakdown(trades: PaperTrade[], keyOf: (t: PaperTrade) => string): BreakdownRow[] {
-  const groups = new Map<string, PaperTrade[]>();
-  for (const t of trades) {
-    const k = keyOf(t);
-    const arr = groups.get(k);
-    if (arr) arr.push(t);
-    else groups.set(k, [t]);
-  }
-  return Array.from(groups.entries())
-    .map(([key, rows]) => ({
-      key,
-      count: rows.length,
-      beatClose: beatCloseRate(rows),
-      avgClv: mean(rows.map((t) => t.clvPercent ?? 0)),
-    }))
-    .sort((a, b) => {
-      const av = a.avgClv ?? Number.NEGATIVE_INFINITY;
-      const bv = b.avgClv ?? Number.NEGATIVE_INFINITY;
-      if (bv !== av) return bv - av;
-      return b.count - a.count;
-    });
-}
-
-const EDGE_BUCKETS: { key: string; label: string; test: (edge: number | null) => boolean }[] = [
-  { key: "none", label: "<1%", test: (e) => e == null || e < 1 },
-  { key: "low", label: "1–3%", test: (e) => e != null && e >= 1 && e < 3 },
-  { key: "mid", label: "3–5%", test: (e) => e != null && e >= 3 && e < 5 },
-  { key: "high", label: "5%+", test: (e) => e != null && e >= 5 },
-];
 
 const clvConfig: ChartConfig = {
   cumAvg: { label: "Cumulative Avg CLV", color: "hsl(var(--primary))" },
@@ -378,52 +313,19 @@ export default function ModelPerformance() {
     });
   }, [graded]);
 
-  const bucketSeries = useMemo(() => {
-    return EDGE_BUCKETS.map((b) => {
-      const inBucket = graded.filter((t) => b.test(t.edgePercent));
-      const rate = beatCloseRate(inBucket);
-      return {
-        label: b.label,
-        count: inBucket.length,
-        rate: rate == null ? 0 : Math.round(rate * 100),
-        hasData: inBucket.length > 0,
-        // Buckets with a handful of trades can post a 100%/0% beat-close rate on
-        // a single lucky/unlucky close, so flag them as low-confidence rather
-        // than letting them read as proof.
-        lowSample: inBucket.length > 0 && inBucket.length < MIN_GRADED_SAMPLE,
-      };
-    });
-  }, [graded]);
+  const bucketSeries = useMemo(() => computeBucketSeries(graded), [graded]);
 
   const anyLowSampleBucket = useMemo(
     () => bucketSeries.some((b) => b.lowSample),
     [bucketSeries],
   );
 
-  const flaggedSplit = useMemo(() => {
-    const flagged = graded.filter(isFlaggedTrade);
-    const unflagged = graded.filter((t) => !isFlaggedTrade(t));
-    const build = (rows: PaperTrade[]) => ({
-      count: rows.length,
-      beatClose: beatCloseRate(rows),
-      avgClv: mean(rows.map((t) => t.clvPercent ?? 0)),
-      avgEdge: mean(rows.filter((t) => t.edgePercent != null).map((t) => t.edgePercent as number)),
-    });
-    return { flagged: build(flagged), unflagged: build(unflagged) };
-  }, [graded]);
+  const flaggedSplit = useMemo(() => computeFlaggedSplit(graded), [graded]);
 
   const byPitcher = useMemo(() => buildBreakdown(graded, (t) => t.pitcher), [graded]);
   const byOpponent = useMemo(() => buildBreakdown(graded, (t) => t.opponent), [graded]);
 
-  const headline = useMemo(() => {
-    return {
-      total: filtered.length,
-      graded: graded.length,
-      beatClose: beatCloseRate(graded),
-      avgClv: mean(graded.map((t) => t.clvPercent ?? 0)),
-      avgEdge: mean(filtered.filter((t) => t.edgePercent != null).map((t) => t.edgePercent as number)),
-    };
-  }, [filtered, graded]);
+  const headline = useMemo(() => computeHeadline(filtered, graded), [filtered, graded]);
 
   // The headline Beat Close / Avg CLV blocks summarize only the graded set, so a
   // single lucky close on a 1–2 trade sample can make the model look proven.

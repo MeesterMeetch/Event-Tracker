@@ -6,3 +6,4 @@
 - [CLV closing-line jobs](clv-jobs.md) — both closers share `trimmedMeanClosingAmerican` (decimal-space trimmed mean, ≥2 books); paper-trade closer only expires past the give-up window, game-line closer never expires.
 - [Route test harness](route-test-harness.md) — vi.mock instances survive resetModules (add clearAllMocks); routes need a stubbed req.log; spy Date.now (not fake timers) for TTL tests.
 - [API-spec/DB field add → rebuild dist](api-spec-codegen-dist-rebuild.md) — after schema+openapi.yaml+orval, run `tsc -b` on each changed lib; consumers typecheck against stale dist .d.ts, not src.
+- [Vitest for web artifacts](vitest-web-artifact-config.md) — web artifact needs its own vitest.config.ts; app vite.config.ts throws without PORT/BASE_PATH and Vitest auto-loads it.

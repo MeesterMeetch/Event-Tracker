@@ -33,7 +33,7 @@ isValidation = true
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pnpm --filter @workspace/api-server run test"
+args = "pnpm run test"
 
 [[workflows.workflow]]
 name = "typecheck"

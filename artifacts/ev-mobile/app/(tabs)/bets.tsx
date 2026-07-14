@@ -37,7 +37,7 @@ import {
   formatPnlUnits,
   formatPoint,
 } from '@/lib/format';
-import { parseOddsInput, parseUnitsInput } from '@/lib/inputs';
+import { parseOddsInput, parsePnlInput, parseUnitsInput } from '@/lib/inputs';
 
 function haptic() {
   if (Platform.OS !== 'web') Haptics.selectionAsync();
@@ -310,17 +310,26 @@ function EditBetSheet({
   const [units, setUnits] = useState(String(bet.units));
   const [odds, setOdds] = useState(String(bet.americanOdds));
   const [notes, setNotes] = useState(bet.notes ?? '');
+  // Manual P&L override (settled bets only). Starts empty on purpose: an
+  // untouched field means "keep the server's automatic lockstep pnl", so we
+  // must not prefill it with the current value and accidentally freeze it.
+  const [pnlText, setPnlText] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const { value: parsedUnits, valid: unitsValid } = parseUnitsInput(units);
   const { value: parsedOdds, valid: oddsValid } = parseOddsInput(odds);
+  const isSettled = bet.status !== 'pending';
+  const { value: parsedPnl, valid: pnlValid, provided: pnlProvided } = parsePnlInput(
+    isSettled ? pnlText : '',
+  );
 
   const submit = () => {
-    if (!unitsValid || !oddsValid || updateBet.isPending) return;
+    if (!unitsValid || !oddsValid || !pnlValid || updateBet.isPending) return;
     haptic();
     setError(null);
-    // pnl is intentionally omitted: the server keeps it in lockstep with the
-    // new odds/units on a settled bet, and leaves it null while pending.
+    // pnl is omitted unless the bettor typed a correction: the server keeps
+    // it in lockstep with the new odds/units on a settled bet (and null while
+    // pending), but an explicit pnl takes precedence as a manual override.
     updateBet.mutate(
       {
         id: bet.id,
@@ -328,6 +337,7 @@ function EditBetSheet({
           americanOdds: parsedOdds,
           units: parsedUnits,
           notes: notes.trim() ? notes.trim() : null,
+          ...(pnlProvided ? { pnl: parsedPnl } : {}),
         },
       },
       {
@@ -338,7 +348,9 @@ function EditBetSheet({
           queryClient.invalidateQueries({ queryKey: getListBetsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
           onSaved(
-            `Updated ${bet.selection}${updated.pnl != null ? ` — P&L now ${formatPnlUnits(updated.pnl)}` : ''}`,
+            pnlProvided
+              ? `Updated ${bet.selection} — P&L corrected to ${formatPnlUnits(updated.pnl ?? parsedPnl)}`
+              : `Updated ${bet.selection}${updated.pnl != null ? ` — P&L now ${formatPnlUnits(updated.pnl)}` : ''}`,
           );
         },
         onError: (err) => {
@@ -368,7 +380,7 @@ function EditBetSheet({
     color: colors.foreground,
   };
 
-  const canSave = unitsValid && oddsValid && !updateBet.isPending;
+  const canSave = unitsValid && oddsValid && pnlValid && !updateBet.isPending;
 
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onClose}>
@@ -467,6 +479,31 @@ function EditBetSheet({
               </View>
             </View>
 
+            {isSettled ? (
+              <View>
+                <Text style={label}>P&L (units) — optional override</Text>
+                <TextInput
+                  value={pnlText}
+                  onChangeText={setPnlText}
+                  keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  selectTextOnFocus
+                  accessibilityLabel="P&L in units"
+                  placeholder={
+                    bet.pnl != null ? `Auto: ${formatPnlUnits(bet.pnl)}` : 'e.g. -0.5'
+                  }
+                  style={inputStyle}
+                  placeholderTextColor={colors.mutedForeground}
+                />
+                {!pnlValid ? (
+                  <Text style={{ fontFamily: fonts.regular, fontSize: 11, color: colors.destructive, marginTop: 4 }}>
+                    Enter a number in units, e.g. -0.5, or leave blank for automatic.
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
             <View>
               <Text style={label}>Notes (optional)</Text>
               <TextInput
@@ -515,9 +552,10 @@ function EditBetSheet({
               </Text>
             </Pressable>
 
-            {bet.status !== 'pending' ? (
+            {isSettled ? (
               <Text style={{ fontFamily: fonts.regular, fontSize: 10.5, color: colors.mutedForeground, lineHeight: 15 }}>
                 This bet is settled — changing odds or units recomputes its P&L automatically.
+                Fill in P&L only to override the payout (boosts, partial cash-outs, voided legs).
               </Text>
             ) : null}
           </Pressable>

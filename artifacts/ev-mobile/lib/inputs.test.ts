@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseOddsInput, parseUnitsInput } from './inputs';
+import { parseOddsInput, parsePnlInput, parseUnitsInput } from './inputs';
 
 /**
  * Safety net over the stake/odds input parsing shared by the scanner's
@@ -53,5 +53,29 @@ describe('parseOddsInput', () => {
   it('rejects non-numeric input', () => {
     expect(parseOddsInput('even').valid).toBe(false);
     expect(parseOddsInput('--110').valid).toBe(false);
+  });
+});
+
+describe('parsePnlInput', () => {
+  it('treats empty/whitespace as "no override" and stays valid', () => {
+    expect(parsePnlInput('')).toEqual({ value: 0, valid: true, provided: false });
+    expect(parsePnlInput('   ')).toEqual({ value: 0, valid: true, provided: false });
+  });
+
+  it('accepts positive, negative, and zero corrections', () => {
+    expect(parsePnlInput('1.82')).toEqual({ value: 1.82, valid: true, provided: true });
+    expect(parsePnlInput('-0.5')).toEqual({ value: -0.5, valid: true, provided: true });
+    // Zero is a legitimate graded amount (e.g. a fully voided ticket).
+    expect(parsePnlInput('0')).toEqual({ value: 0, valid: true, provided: true });
+  });
+
+  it('accepts a comma decimal separator (European keyboards)', () => {
+    expect(parsePnlInput('-0,5')).toEqual({ value: -0.5, valid: true, provided: true });
+  });
+
+  it('rejects non-numeric input but still marks it provided', () => {
+    expect(parsePnlInput('abc').valid).toBe(false);
+    expect(parsePnlInput('abc').provided).toBe(true);
+    expect(parsePnlInput('1.2.3').valid).toBe(false);
   });
 });

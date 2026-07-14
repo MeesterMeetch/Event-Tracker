@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseOddsInput, parsePnlInput, parseUnitsInput } from './inputs';
+import { parseOddsInput, parsePnlInput, parseUnitsInput } from './betInputs';
 
 /**
- * Safety net over the stake/odds input parsing shared by the scanner's
- * LogPropSheet and the bet log's EditBetSheet. These rules guard the ledger:
+ * Safety net over the stake/odds input parsing shared by the web bet forms
+ * and the phone's LogPropSheet / EditBetSheet. These rules guard the ledger:
  * a bogus stake or a zero price would flow straight into P&L math on the
  * server, so the forms must refuse to submit them.
  */

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatOdds, formatPercent, formatPoint, formatGameTime, formatMarketLabel } from "@/lib/utils";
+import { isValidUnitsStake, propSelectionLabel } from "@workspace/format";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, Plus, Loader2, Sparkles } from "lucide-react";
@@ -21,7 +22,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import type { EdgeOpportunity, ProbablePitcher } from "@workspace/api-client-react";
 
 const logBetSchema = z.object({
-  units: z.coerce.number().min(0.01, "Must wager at least 0.01 units"),
+  // Shared rule from @workspace/format keeps this form and the phone's
+  // LogPropSheet agreeing on the minimum stake.
+  units: z.coerce.number().refine(isValidUnitsStake, "Must wager at least 0.01 units"),
   notes: z.string().optional(),
 });
 
@@ -42,8 +45,9 @@ function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, children: Rea
 
   const onSubmit = (data: LogBetFormValues) => {
     // Prop bets carry the player in the logged selection so the bet log
-    // reads "Aaron Judge Over 1.5", not just "Over 1.5".
-    const selectionLabel = edge.player ? `${edge.player} ${edge.selection}` : edge.selection;
+    // reads "Aaron Judge Over 1.5", not just "Over 1.5". Shared with mobile —
+    // the server's duplicate-open-bet guard keys off this exact string.
+    const selectionLabel = propSelectionLabel(edge);
     createBet.mutate({
       data: {
         sport: edge.sport,

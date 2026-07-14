@@ -39,7 +39,7 @@ import {
   formatPoint,
   formatSportKey,
 } from '@/lib/format';
-import { parseOddsInput, parsePnlInput, parseUnitsInput } from '@/lib/inputs';
+import { parseOddsInput, parsePnlInput, parseUnitsInput } from '@workspace/format';
 
 function haptic() {
   if (Platform.OS !== 'web') Haptics.selectionAsync();

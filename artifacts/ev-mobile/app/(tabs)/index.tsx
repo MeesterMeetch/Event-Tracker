@@ -52,8 +52,7 @@ import {
   formatProb,
   formatTimeOnly,
 } from '@/lib/format';
-import { parseUnitsInput } from '@/lib/inputs';
-import { propSelectionLabel } from '@/lib/selection';
+import { parseUnitsInput, propSelectionLabel } from '@workspace/format';
 
 const MODEL_SPORT = 'baseball_mlb';
 const KELLY_MULTIPLIER = 0.25;

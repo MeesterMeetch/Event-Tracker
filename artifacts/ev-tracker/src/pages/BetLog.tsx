@@ -3,6 +3,7 @@ import { useListBets, useUpdateBet, useDeleteBet, useRestoreBet, getListBetsQuer
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatOdds, formatPercent, formatPoint, formatCurrency, formatMarketLabel } from "@/lib/utils";
+import { isValidAmericanOdds, isValidUnitsStake } from "@workspace/format";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -24,12 +25,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 
 const editBetSchema = z.object({
   status: z.enum(['pending', 'won', 'lost', 'push']),
-  // American odds only exist at ≤ -100 or ≥ +100 — the interval (-100, 100)
-  // isn't a real price, so a typo like +50 must not reach the P&L math.
+  // Shared rules from @workspace/format keep this form and the phone's
+  // EditBetSheet agreeing on what counts as a valid price and stake.
   americanOdds: z.coerce
     .number()
-    .refine((v) => Math.abs(v) >= 100, "Odds must be -100 or below, or +100 and up (e.g. -110)"),
-  units: z.coerce.number().min(0.01),
+    .refine(isValidAmericanOdds, "Odds must be -100 or below, or +100 and up (e.g. -110)"),
+  units: z.coerce.number().refine(isValidUnitsStake, "Must wager at least 0.01 units"),
   pnl: z.coerce.number().nullable().optional(),
   notes: z.string().optional().nullable(),
 });

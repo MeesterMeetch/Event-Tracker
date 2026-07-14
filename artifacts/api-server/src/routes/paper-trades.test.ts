@@ -174,6 +174,34 @@ describe("POST /paper-trades — guards against stat-corrupting bad data", () =>
     expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(1);
   });
 
+  it("accepts americanOdds = -100 (exact lower boundary) and returns 201", async () => {
+    // -100 is the outermost valid negative American odds; the forbidden zone is
+    // the open interval (-100, 100), so the edge itself must be allowed through
+    // the schema, reach the INSERT, and come back as 201 open.
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "POST", "/api/paper-trades", { ...PT_BODY, americanOdds: -100 });
+
+    expect(status).toBe(201);
+    expect((body as { status: string }).status).toBe("open");
+    expect((body as { americanOdds: number }).americanOdds).toBe(-100);
+    expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(1);
+  });
+
+  it("accepts americanOdds = 100 (exact upper boundary) and returns 201", async () => {
+    // +100 is the outermost valid positive American odds; the forbidden zone is
+    // the open interval (-100, 100), so the edge itself must be allowed through
+    // the schema, reach the INSERT, and come back as 201 open.
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "POST", "/api/paper-trades", { ...PT_BODY, americanOdds: 100 });
+
+    expect(status).toBe(201);
+    expect((body as { status: string }).status).toBe("open");
+    expect((body as { americanOdds: number }).americanOdds).toBe(100);
+    expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(1);
+  });
+
   it("rejects an out-of-range probability that would corrupt CLV math", async () => {
     const app = await buildApp();
 

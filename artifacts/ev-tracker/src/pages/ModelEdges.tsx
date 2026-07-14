@@ -219,8 +219,12 @@ export function ProjectionCard({ projection }: { projection: ModelPitcherProject
                     size="sm"
                     variant={line.isFlagged ? "secondary" : "ghost"}
                     className="h-7 px-2"
-                    aria-label={`Log paper trade ${projection.pitcher} ${line.selection} ${line.point}`}
-                    disabled={createPaperTrade.isPending}
+                    aria-label={
+                      isValidAmericanOdds(line.americanOdds)
+                        ? `Log paper trade ${projection.pitcher} ${line.selection} ${line.point}`
+                        : `Cannot log — invalid odds ${line.americanOdds} for ${projection.pitcher} ${line.selection} ${line.point}`
+                    }
+                    disabled={createPaperTrade.isPending || !isValidAmericanOdds(line.americanOdds)}
                     onClick={() => logTrade(line)}
                   >
                     <Plus className="h-3 w-3" />

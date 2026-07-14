@@ -374,15 +374,23 @@ describe("ProjectionCard duplicate-log toast", () => {
 });
 
 /**
- * Locks in the client-side impossible-odds guard on the projections card:
- * scan results with corrupted prices like +50, -50, or 0 must be blocked
- * before the POST is sent, with a destructive toast. Valid boundary prices
- * (-100, +100) must pass through and fire the mutation.
+ * Locks in the client-side impossible-odds disabled state on the projections
+ * card: scan results with corrupted prices like +50, -50, or 0 must render
+ * with a visually-disabled, aria-disabled button whose accessible label
+ * changes to "Cannot log — invalid odds …" so screen-reader users know why
+ * the control is inert. The mutation must never fire, and no toast appears
+ * (the disabled state is self-explanatory — no toast nag required).
  *
- * A refactor that removes the isValidAmericanOdds check from logTrade should
- * fail here.
+ * Valid boundary prices (-100, +100) must keep the normal "Log paper trade"
+ * label, must NOT carry aria-disabled, and must fire the mutation on click.
+ *
+ * Complementary to artifacts/ev-mobile/__tests__/scorecard-log-odds-boundary.test.tsx
+ * which covers the same rule on the phone.
+ *
+ * A refactor that removes the isValidAmericanOdds check from the button's
+ * disabled prop should fail here.
  */
-describe("ProjectionCard impossible-odds guard", () => {
+describe("ProjectionCard impossible-odds disabled state", () => {
   function makeProjectionWithOdds(americanOdds: number): ModelPitcherProjection {
     return {
       gameId: "g1",
@@ -428,35 +436,115 @@ describe("ProjectionCard impossible-odds guard", () => {
     );
   }
 
-  async function clickLogButton() {
-    await user.click(
-      screen.getByRole("button", { name: /log paper trade gerrit cole over 6\.5/i }),
+  // Partial text the disabled button's accessible label begins with — must
+  // match the aria-label set on the Button when !isValidAmericanOdds.
+  const DISABLED_LABEL_PREFIX = /cannot log/i;
+
+  describe("impossible prices render a disabled, inaccessible button", () => {
+    it.each([0, 50, -50])(
+      "hides the normal 'Log paper trade' label for odds %s",
+      (americanOdds) => {
+        renderCardWithOdds(americanOdds);
+
+        expect(
+          screen.queryByRole("button", { name: /log paper trade gerrit cole/i }),
+        ).toBeNull();
+      },
     );
-  }
 
-  it.each([50, -50, 0])(
-    "blocks impossible odds %s before the POST is sent and shows a destructive toast",
-    async (americanOdds) => {
-      renderCardWithOdds(americanOdds);
-      await clickLogButton();
+    it.each([0, 50, -50])(
+      "renders a 'Cannot log' button instead for odds %s",
+      (americanOdds) => {
+        renderCardWithOdds(americanOdds);
 
-      expect(createMutate).not.toHaveBeenCalled();
-      const invalidToast = toastMock.mock.calls.find(
-        ([args]) => args?.title === "Invalid odds",
+        const btn = screen.getByRole("button", { name: DISABLED_LABEL_PREFIX });
+        expect(btn).toBeDefined();
+      },
+    );
+
+    it.each([0, 50, -50])(
+      "marks the button disabled (HTML disabled attribute) for odds %s",
+      (americanOdds) => {
+        renderCardWithOdds(americanOdds);
+
+        const btn = screen.getByRole("button", { name: DISABLED_LABEL_PREFIX });
+        // The shadcn Button sets the native disabled attribute, which also
+        // maps to aria-disabled in the accessibility tree.
+        expect((btn as HTMLButtonElement).disabled).toBe(true);
+      },
+    );
+
+    it.each([0, 50, -50])(
+      "never fires the create mutation for odds %s",
+      (americanOdds) => {
+        renderCardWithOdds(americanOdds);
+
+        // The button is natively disabled so user-event will not dispatch a
+        // click event; confirm directly that the mock was not called.
+        expect(createMutate).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each([0, 50, -50])(
+      "never shows the 'Invalid odds' toast for odds %s (button is inert, not a click-time guard)",
+      (americanOdds) => {
+        renderCardWithOdds(americanOdds);
+
+        expect(
+          toastMock.mock.calls.some(([args]) => args?.title === "Invalid odds"),
+        ).toBe(false);
+      },
+    );
+  });
+
+  describe("valid boundary prices keep the button enabled and fire the mutation", () => {
+    it.each([-100, 100])(
+      "shows the normal 'Log paper trade' label for boundary odds %s",
+      (americanOdds) => {
+        renderCardWithOdds(americanOdds);
+
+        expect(
+          screen.getByRole("button", { name: /log paper trade gerrit cole over 6\.5/i }),
+        ).toBeDefined();
+      },
+    );
+
+    it.each([-100, 100])(
+      "button is not disabled for boundary odds %s",
+      (americanOdds) => {
+        renderCardWithOdds(americanOdds);
+
+        const btn = screen.getByRole("button", {
+          name: /log paper trade gerrit cole over 6\.5/i,
+        }) as HTMLButtonElement;
+        expect(btn.disabled).toBe(false);
+      },
+    );
+
+    it.each([-100, 100])(
+      "fires the mutation when boundary odds %s button is clicked",
+      async (americanOdds) => {
+        renderCardWithOdds(americanOdds);
+
+        await user.click(
+          screen.getByRole("button", { name: /log paper trade gerrit cole over 6\.5/i }),
+        );
+
+        expect(createMutate).toHaveBeenCalledTimes(1);
+        expect(
+          toastMock.mock.calls.some(([args]) => args?.title === "Invalid odds"),
+        ).toBe(false);
+      },
+    );
+
+    it("fires the mutation for a canonical valid price -110", async () => {
+      renderCardWithOdds(-110);
+
+      await user.click(
+        screen.getByRole("button", { name: /log paper trade gerrit cole over 6\.5/i }),
       );
-      expect(invalidToast).toBeDefined();
-      expect(invalidToast![0].variant).toBe("destructive");
-    },
-  );
-
-  it.each([-100, 100])(
-    "allows valid boundary odds %s and fires the mutation",
-    async (americanOdds) => {
-      renderCardWithOdds(americanOdds);
-      await clickLogButton();
 
       expect(createMutate).toHaveBeenCalledTimes(1);
-      expect(toastMock.mock.calls.some(([args]) => args?.title === "Invalid odds")).toBe(false);
-    },
-  );
+    });
+  });
 });

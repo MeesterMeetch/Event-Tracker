@@ -164,6 +164,18 @@ router.patch("/bets/:id", async (req, res): Promise<void> => {
   // explicitly provided alongside a settled status is treated as a manual
   // correction (e.g. fixing a graded amount) and takes precedence.
   const nextStatus = parsed.data.status ?? existing.status;
+
+  // A pending bet must never carry a realized P&L — dashboard math treats
+  // settled ⟺ pnl as an invariant. An explicit non-null pnl combined with a
+  // (resulting) pending status is a contradiction, so reject it outright
+  // rather than silently nulling the caller's value.
+  if (nextStatus === "pending" && parsed.data.pnl != null) {
+    res.status(400).json({
+      error: "A pending bet cannot have a P&L. Settle the bet (won/lost/push) to record a result.",
+    });
+    return;
+  }
+
   const nextOdds = parsed.data.americanOdds ?? existing.americanOdds;
   const nextUnits = parsed.data.units ?? existing.units;
   let nextPnl = parsed.data.pnl;

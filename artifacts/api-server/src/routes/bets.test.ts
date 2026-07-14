@@ -350,6 +350,37 @@ describe("PATCH /bets/:id — settlement books the correct P&L", () => {
     expect((body as { pnl: number }).pnl).toBe(2.75);
   });
 
+  it("rejects an explicit pnl on a bet being set to pending (settled ⟺ pnl stays intact)", async () => {
+    seedPending({ id: 1 });
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "PATCH", "/api/bets/1", { status: "pending", pnl: 2.5 });
+
+    expect(status).toBe(400);
+    expect((body as { error: string }).error).toMatch(/pending bet cannot have a P&L/i);
+    expect(dbMod.__stores.bets[0]?.pnl).toBeNull();
+  });
+
+  it("rejects an explicit pnl when the bet stays pending (status omitted from the patch)", async () => {
+    seedPending({ id: 1 });
+    const app = await buildApp();
+
+    const { status } = await request(app, "PATCH", "/api/bets/1", { pnl: 2.5 });
+
+    expect(status).toBe(400);
+    expect(dbMod.__stores.bets[0]?.pnl).toBeNull();
+  });
+
+  it("still allows an explicit null pnl alongside a pending status (redundant but consistent)", async () => {
+    seedPending({ id: 1, status: "won", pnl: 3 });
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "PATCH", "/api/bets/1", { status: "pending", pnl: null });
+
+    expect(status).toBe(200);
+    expect((body as { pnl: number | null }).pnl).toBeNull();
+  });
+
   it("rejects odds of 0 (bad data) with a 400", async () => {
     seedPending({ id: 1 });
     const app = await buildApp();

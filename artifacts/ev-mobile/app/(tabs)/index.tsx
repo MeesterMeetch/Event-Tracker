@@ -52,7 +52,7 @@ import {
   formatProb,
   formatTimeOnly,
 } from '@/lib/format';
-import { parseUnitsInput, propSelectionLabel } from '@workspace/format';
+import { isValidAmericanOdds, parseUnitsInput, propSelectionLabel } from '@workspace/format';
 
 const MODEL_SPORT = 'baseball_mlb';
 const KELLY_MULTIPLIER = 0.25;
@@ -764,6 +764,13 @@ export function ProjectionCard({ projection }: { projection: ModelPitcherProject
   const logTrade = (line: ModelKLine) => {
     const key = lineKey(line);
     if (pendingKey || logged.has(key)) return;
+    if (!isValidAmericanOdds(line.americanOdds)) {
+      setFeedback({
+        type: 'error',
+        text: 'Odds must be -100 or below, or +100 and up (e.g. -110).',
+      });
+      return;
+    }
     haptic();
     setPendingKey(key);
     setFeedback(null);

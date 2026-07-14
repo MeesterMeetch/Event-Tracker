@@ -655,31 +655,51 @@ export default function ModelPerformance() {
                         ["Flagged", flaggedSplit.flagged],
                         ["Unflagged", flaggedSplit.unflagged],
                       ] as const
-                    ).map(([label, s]) => (
-                      <TableRow key={label}>
-                        <TableCell className="font-medium whitespace-nowrap">
-                          {label === "Flagged" && <Target className="inline mr-1.5 h-3 w-3 text-positive" />}
-                          {label}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">{s.count}</TableCell>
-                        <TableCell className="text-right font-mono">{fmtRate(s.beatClose)}</TableCell>
-                        <TableCell
-                          className={cn(
-                            "text-right font-mono font-semibold",
-                            s.avgClv == null
-                              ? "text-muted-foreground"
-                              : s.avgClv > 0
-                                ? "text-positive"
-                                : "text-destructive",
-                          )}
-                        >
-                          {s.avgClv == null ? "—" : formatPercent(s.avgClv)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-muted-foreground">
-                          {s.avgEdge == null ? "—" : formatPercent(s.avgEdge)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    ).map(([label, s]) => {
+                      // A side with only 1–2 graded trades can post a lucky Beat
+                      // Close / Avg CLV that makes the flags look sharp on noise.
+                      // Mute those numbers and annotate the count so a tiny
+                      // sample can't read as proof — same treatment as the
+                      // headline StatBlocks.
+                      const lowConfidence = s.count > 0 && s.count < MIN_GRADED_SAMPLE;
+                      return (
+                        <TableRow key={label} className={cn(lowConfidence && "opacity-60")}>
+                          <TableCell className="font-medium whitespace-nowrap">
+                            {label === "Flagged" && <Target className="inline mr-1.5 h-3 w-3 text-positive" />}
+                            {label}
+                            {lowConfidence && (
+                              <div className="mt-0.5 text-[10px] font-normal leading-tight text-muted-foreground/80">
+                                {s.count} graded — too few to trust
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">{s.count}</TableCell>
+                          <TableCell
+                            className={cn(
+                              "text-right font-mono",
+                              lowConfidence && "text-muted-foreground",
+                            )}
+                          >
+                            {fmtRate(s.beatClose)}
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "text-right font-mono font-semibold",
+                              lowConfidence || s.avgClv == null
+                                ? "text-muted-foreground"
+                                : s.avgClv > 0
+                                  ? "text-positive"
+                                  : "text-destructive",
+                            )}
+                          >
+                            {s.avgClv == null ? "—" : formatPercent(s.avgClv)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">
+                            {s.avgEdge == null ? "—" : formatPercent(s.avgEdge)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
                 <p className="mt-3 text-[10px] font-mono text-muted-foreground">

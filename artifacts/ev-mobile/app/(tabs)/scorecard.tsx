@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -11,8 +22,10 @@ import {
   useGetPaperTradeSummary,
   useListPaperTrades,
   useRestorePaperTrade,
+  useUpdatePaperTrade,
   type PaperTrade,
 } from '@workspace/api-client-react';
+import { parseOddsInput } from '@workspace/format';
 import { useColors } from '@/hooks/useColors';
 import { fonts } from '@/constants/fonts';
 import {
@@ -49,10 +62,12 @@ function haptic() {
 // open/expired picks get the lightweight inline REMOVE? confirm.
 export function TradeRow({
   trade,
+  onEdit,
   onDelete,
   deleting,
 }: {
   trade: PaperTrade;
+  onEdit?: () => void;
   onDelete: () => void;
   deleting: boolean;
 }) {
@@ -155,22 +170,38 @@ export function TradeRow({
             </Pressable>
           </View>
         ) : confirming && isGraded ? null : (
-          <Pressable
-            hitSlop={10}
-            disabled={deleting}
-            accessibilityLabel={`Delete pick ${trade.pitcher} ${trade.selection} ${trade.point}`}
-            onPress={() => {
-              haptic();
-              setConfirming(true);
-            }}
-            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, paddingLeft: 12 })}
-          >
-            <Feather
-              name={deleting ? 'loader' : 'trash-2'}
-              size={14}
-              color={colors.mutedForeground}
-            />
-          </Pressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {onEdit ? (
+              <Pressable
+                hitSlop={10}
+                disabled={deleting}
+                accessibilityLabel={`Edit price for pick ${trade.pitcher} ${trade.selection} ${trade.point}`}
+                onPress={() => {
+                  haptic();
+                  onEdit();
+                }}
+                style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, paddingLeft: 12 })}
+              >
+                <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+              </Pressable>
+            ) : null}
+            <Pressable
+              hitSlop={10}
+              disabled={deleting}
+              accessibilityLabel={`Delete pick ${trade.pitcher} ${trade.selection} ${trade.point}`}
+              onPress={() => {
+                haptic();
+                setConfirming(true);
+              }}
+              style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, paddingLeft: 12 })}
+            >
+              <Feather
+                name={deleting ? 'loader' : 'trash-2'}
+                size={14}
+                color={colors.mutedForeground}
+              />
+            </Pressable>
+          </View>
         )}
       </View>
       {confirming && isGraded ? (
@@ -248,6 +279,233 @@ export function TradeRow({
   );
 }
 
+// Correct a mistyped price without delete-and-relog: deleting loses the edge
+// snapshot and any captured closing line, and re-logging is impossible once
+// the game starts. Mirrors the web EditPaperTradeDialog — only the logged
+// price changes; the server recomputes CLV%/beat-close from the corrected
+// price if a close was already captured. Exported so the component test can
+// lock in the shared odds rule and the CLV-recompute success message.
+export function EditTradeSheet({
+  trade,
+  onClose,
+  onSaved,
+}: {
+  trade: PaperTrade;
+  onClose: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const colors = useColors();
+  const queryClient = useQueryClient();
+  const updateTrade = useUpdatePaperTrade();
+  const [oddsText, setOddsText] = useState(String(trade.americanOdds));
+  // Like the web dialog, the inline rule only appears after a save attempt.
+  const [showError, setShowError] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const parsed = parseOddsInput(oddsText);
+
+  const save = () => {
+    if (updateTrade.isPending) return;
+    if (!parsed.valid) {
+      setShowError(true);
+      return;
+    }
+    haptic();
+    setServerError(null);
+    updateTrade.mutate(
+      { id: trade.id, data: { americanOdds: parsed.value } },
+      {
+        onSuccess: () => {
+          if (Platform.OS !== 'web') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          queryClient.invalidateQueries({ queryKey: getListPaperTradesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetPaperTradeSummaryQueryKey() });
+          onSaved(
+            `${trade.pitcher} ${trade.selection} ${trade.point}K is now ${formatOdds(parsed.value)}${
+              trade.closingOdds != null ? ' — CLV recomputed against the captured close' : ''
+            }`,
+          );
+          onClose();
+        },
+        onError: (err) => {
+          setServerError(err?.data?.error || 'Could not correct this price. Try again.');
+        },
+      },
+    );
+  };
+
+  const inputStyle = {
+    borderWidth: 1,
+    borderColor: colors.input,
+    borderRadius: colors.radius,
+    backgroundColor: colors.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: fonts.mono,
+    fontSize: 14,
+    color: colors.foreground,
+  };
+
+  return (
+    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <Pressable
+          onPress={onClose}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+        >
+          <Pressable
+            onPress={() => {}}
+            style={{
+              backgroundColor: colors.card,
+              borderTopLeftRadius: 18,
+              borderTopRightRadius: 18,
+              borderWidth: 1,
+              borderColor: colors.cardBorder,
+              padding: 20,
+              paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+              gap: 14,
+            }}
+          >
+            <View
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <Text style={{ fontFamily: fonts.semibold, fontSize: 16, color: colors.foreground }}>
+                Correct Logged Price
+              </Text>
+              <Pressable
+                onPress={onClose}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <Feather name="x" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+
+            {/* Pick summary + what stays untouched */}
+            <View
+              style={{
+                borderRadius: colors.radius,
+                backgroundColor: colors.secondary,
+                padding: 12,
+                gap: 8,
+              }}
+            >
+              <Text
+                style={{ fontFamily: fonts.medium, fontSize: 13, color: colors.foreground }}
+                numberOfLines={1}
+              >
+                {trade.pitcher} {trade.selection} {trade.point} K
+              </Text>
+              <Text
+                style={{ fontFamily: fonts.regular, fontSize: 11, color: colors.mutedForeground }}
+                numberOfLines={2}
+              >
+                @ {trade.book} · Only the logged price changes — the edge snapshot and any captured
+                closing line stay as recorded
+                {trade.closingOdds != null
+                  ? ', and CLV is recomputed from the corrected price'
+                  : ''}
+                .
+              </Text>
+            </View>
+
+            <View>
+              <Text
+                style={{
+                  fontFamily: fonts.regular,
+                  fontSize: 10.5,
+                  letterSpacing: 0.5,
+                  textTransform: 'uppercase',
+                  color: colors.mutedForeground,
+                  marginBottom: 6,
+                }}
+              >
+                Odds (American)
+              </Text>
+              <TextInput
+                value={oddsText}
+                onChangeText={(text) => {
+                  setOddsText(text);
+                  setShowError(false);
+                }}
+                keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
+                autoCapitalize="none"
+                autoCorrect={false}
+                selectTextOnFocus
+                accessibilityLabel="American odds"
+                placeholder="-110"
+                style={inputStyle}
+                placeholderTextColor={colors.mutedForeground}
+              />
+              {showError && !parsed.valid ? (
+                <Text
+                  style={{
+                    fontFamily: fonts.regular,
+                    fontSize: 11,
+                    color: colors.destructive,
+                    marginTop: 4,
+                  }}
+                >
+                  Odds must be -100 or below, or +100 and up (e.g. -110).
+                </Text>
+              ) : null}
+            </View>
+
+            {serverError ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Feather name="alert-circle" size={14} color={colors.destructive} />
+                <Text
+                  style={{
+                    flex: 1,
+                    fontFamily: fonts.regular,
+                    fontSize: 12,
+                    color: colors.destructive,
+                  }}
+                >
+                  {serverError}
+                </Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              onPress={save}
+              disabled={updateTrade.isPending}
+              accessibilityRole="button"
+              accessibilityLabel="Save price"
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 13,
+                borderRadius: colors.radius,
+                backgroundColor: colors.primary,
+                opacity: updateTrade.isPending ? 0.5 : pressed ? 0.75 : 1,
+              })}
+            >
+              {updateTrade.isPending ? (
+                <ActivityIndicator size="small" color={colors.primaryForeground} />
+              ) : (
+                <Feather name="save" size={15} color={colors.primaryForeground} />
+              )}
+              <Text
+                style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.primaryForeground }}
+              >
+                Save Price
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
 export default function ScorecardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -256,6 +514,9 @@ export default function ScorecardScreen() {
   const deleteTrade = useDeletePaperTrade();
   const restoreTrade = useRestorePaperTrade();
   const [deletingId, setDeletingId] = useState<PaperTrade['id'] | null>(null);
+  // A mistyped price is corrected in place (sheet) rather than delete-and-relog,
+  // which would lose the edge snapshot and any captured closing line.
+  const [editTrade, setEditTrade] = useState<PaperTrade | null>(null);
   // `undoId` on a success banner offers a short window to restore the pick.
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error';
@@ -535,6 +796,7 @@ export default function ScorecardScreen() {
                       key={t.id}
                       trade={t}
                       deleting={deletingId === t.id}
+                      onEdit={() => setEditTrade(t)}
                       onDelete={() => removeTrade(t)}
                     />
                   ))}
@@ -544,6 +806,13 @@ export default function ScorecardScreen() {
           </>
         )}
       </ScrollView>
+      {editTrade ? (
+        <EditTradeSheet
+          trade={editTrade}
+          onClose={() => setEditTrade(null)}
+          onSaved={(message) => setFeedback({ type: 'success', text: message })}
+        />
+      ) : null}
     </View>
   );
 }

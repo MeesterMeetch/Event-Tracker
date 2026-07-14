@@ -82,6 +82,7 @@ vi.mock('@workspace/api-client-react', () => ({
   }),
   useDeletePaperTrade: () => ({ mutate: deleteMutate, isPending: false }),
   useRestorePaperTrade: () => ({ mutate: restoreMutate, isPending: false }),
+  useUpdatePaperTrade: () => ({ mutate: vi.fn(), isPending: false }),
   getListPaperTradesQueryKey: () => ['paper-trades'],
   getGetPaperTradeSummaryQueryKey: () => ['paper-trade-summary'],
 }));

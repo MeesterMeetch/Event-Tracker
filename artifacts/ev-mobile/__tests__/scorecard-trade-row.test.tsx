@@ -43,6 +43,7 @@ vi.mock('@/components/ui', () => ({
 vi.mock('@workspace/api-client-react', () => ({
   useDeletePaperTrade: () => ({ mutate: vi.fn(), isPending: false }),
   useRestorePaperTrade: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdatePaperTrade: () => ({ mutate: vi.fn(), isPending: false }),
   useGetPaperTradeSummary: () => ({ data: undefined }),
   useListPaperTrades: () => ({ data: [] }),
   getListPaperTradesQueryKey: () => ['paper-trades'],

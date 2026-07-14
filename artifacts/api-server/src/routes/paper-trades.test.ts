@@ -148,6 +148,32 @@ describe("POST /paper-trades — guards against stat-corrupting bad data", () =>
     expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(0);
   });
 
+  it("rejects americanOdds = 50 (impossible price inside (-100, 100)) with 400 at the HTTP layer, never inserting", async () => {
+    // This is the route-level integration complement to the schema-only parity
+    // suite: it confirms that the zod parse inside the handler actually produces
+    // a 400 and that no row reaches the db — catching any future middleware gap
+    // between schema validation and the INSERT.
+    const app = await buildApp();
+
+    const { status } = await request(app, "POST", "/api/paper-trades", { ...PT_BODY, americanOdds: 50 });
+
+    expect(status).toBe(400);
+    expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(0);
+  });
+
+  it("accepts americanOdds = -120 (valid) and returns 201", async () => {
+    // Counterpart to the impossible-odds rejection: a canonical negative-line
+    // price must pass the schema, reach the INSERT, and come back as 201 open.
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "POST", "/api/paper-trades", { ...PT_BODY, americanOdds: -120 });
+
+    expect(status).toBe(201);
+    expect((body as { status: string }).status).toBe("open");
+    expect((body as { americanOdds: number }).americanOdds).toBe(-120);
+    expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(1);
+  });
+
   it("rejects an out-of-range probability that would corrupt CLV math", async () => {
     const app = await buildApp();
 

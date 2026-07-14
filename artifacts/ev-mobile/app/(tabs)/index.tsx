@@ -17,9 +17,12 @@ import {
   getListEventsQueryKey,
   getListModelEdgesQueryKey,
   getListPaperTradesQueryKey,
+  getListPropEdgesQueryKey,
   useCreatePaperTrade,
   useListEvents,
   useListModelEdges,
+  useListPropEdges,
+  type EdgeOpportunity,
   type ModelKLine,
   type ModelPitcherProjection,
 } from '@workspace/api-client-react';
@@ -36,8 +39,10 @@ import {
 import {
   easternDayKey,
   formatDayLabel,
+  formatMarketLabel,
   formatOdds,
   formatPercent,
+  formatPoint,
   formatProb,
   formatTimeOnly,
 } from '@/lib/format';
@@ -48,6 +53,213 @@ const MIN_EDGE_PERCENT = 1;
 
 function haptic() {
   if (Platform.OS !== 'web') Haptics.selectionAsync();
+}
+
+type ScanMode = 'model' | 'props';
+
+/**
+ * Segmented switch between the strikeout model and the player-prop scanner.
+ * Props are a separate, scan-only surface: they're priced per market when a
+ * game is scanned and never feed the paper-trade scorecard or CLV tracking.
+ */
+function ModeSwitch({
+  mode,
+  onChange,
+}: {
+  mode: ScanMode;
+  onChange: (mode: ScanMode) => void;
+}) {
+  const colors = useColors();
+  const segment = (value: ScanMode, icon: 'cpu' | 'user', label: string) => {
+    const active = mode === value;
+    return (
+      <Pressable
+        onPress={() => onChange(value)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: active }}
+        style={({ pressed }) => ({
+          flex: 1,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          paddingVertical: 9,
+          borderRadius: colors.radius - 2,
+          backgroundColor: active ? colors.primary : 'transparent',
+          opacity: pressed ? 0.7 : 1,
+        })}
+      >
+        <Feather
+          name={icon}
+          size={13}
+          color={active ? colors.primaryForeground : colors.mutedForeground}
+        />
+        <Text
+          style={{
+            fontFamily: fonts.medium,
+            fontSize: 13,
+            color: active ? colors.primaryForeground : colors.mutedForeground,
+          }}
+        >
+          {label}
+        </Text>
+      </Pressable>
+    );
+  };
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        padding: 3,
+        gap: 3,
+        borderRadius: colors.radius,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.secondary,
+      }}
+    >
+      {segment('model', 'cpu', 'K Model')}
+      {segment('props', 'user', 'Player Props')}
+    </View>
+  );
+}
+
+function PropRow({ edge }: { edge: EdgeOpportunity }) {
+  const colors = useColors();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+      }}
+    >
+      <View style={{ flex: 1.9 }}>
+        <Text
+          style={{ fontFamily: fonts.medium, fontSize: 13, color: colors.foreground }}
+          numberOfLines={1}
+        >
+          {edge.player ?? edge.selection}
+        </Text>
+        <Text
+          style={{
+            fontFamily: fonts.regular,
+            fontSize: 10.5,
+            color: colors.mutedForeground,
+            marginTop: 1,
+          }}
+          numberOfLines={1}
+        >
+          {formatMarketLabel(edge.market)} · {edge.selection}{' '}
+          {formatPoint(edge.point, edge.market)} · {edge.book}
+        </Text>
+      </View>
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <Text style={{ fontFamily: fonts.mono, fontSize: 12.5, color: colors.mutedForeground }}>
+          {formatOdds(edge.fairOdds)}
+        </Text>
+      </View>
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 12.5, color: colors.primary }}>
+          {formatOdds(edge.americanOdds)}
+        </Text>
+      </View>
+      <View style={{ flex: 0.9, alignItems: 'flex-end' }}>
+        <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 12.5, color: colors.positive }}>
+          {formatPercent(edge.evPercent)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function PropsHeader() {
+  const colors = useColors();
+  const cell = {
+    fontFamily: fonts.regular,
+    fontSize: 9.5,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+    color: colors.mutedForeground,
+  };
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 8,
+        paddingBottom: 6,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.cardBorder,
+      }}
+    >
+      <Text style={[cell, { flex: 1.9 }]}>Prop</Text>
+      <Text style={[cell, { flex: 1, textAlign: 'right' }]}>Fair</Text>
+      <Text style={[cell, { flex: 1, textAlign: 'right' }]}>Odds</Text>
+      <Text style={[cell, { flex: 0.9, textAlign: 'right' }]}>EV</Text>
+    </View>
+  );
+}
+
+/** Scanned prop edges for one game — display-only, never logged to the scorecard. */
+function PropResultsCard({ edges }: { edges: EdgeOpportunity[] }) {
+  const colors = useColors();
+  if (edges.length === 0) {
+    return (
+      <Card>
+        <EmptyState
+          icon="activity"
+          title="No +EV player props found for this game."
+          subtitle="Books are aligned. Try another game or check back closer to start."
+        />
+      </Card>
+    );
+  }
+  return (
+    <Card style={{ gap: 10 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Text
+          style={{
+            fontFamily: fonts.regular,
+            fontSize: 10,
+            letterSpacing: 0.5,
+            textTransform: 'uppercase',
+            color: colors.mutedForeground,
+          }}
+        >
+          {edges.length} +EV prop{edges.length === 1 ? '' : 's'}
+        </Text>
+        <Badge label="Scan only · not in scorecard" mono />
+      </View>
+      <View>
+        <PropsHeader />
+        {edges.map((edge, idx) => (
+          <PropRow
+            key={`${edge.market}-${edge.player}-${edge.selection}-${edge.point}-${edge.book}-${idx}`}
+            edge={edge}
+          />
+        ))}
+      </View>
+      <Text
+        style={{
+          fontFamily: fonts.regular,
+          fontSize: 10.5,
+          color: colors.mutedForeground,
+          lineHeight: 15,
+        }}
+      >
+        Fair odds come from devigging each prop across books. Props aren't tracked in the
+        Scorecard and are excluded from CLV.
+      </Text>
+    </Card>
+  );
 }
 
 type LogState = 'idle' | 'pending' | 'logged';
@@ -408,6 +620,7 @@ export default function EdgesScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
+  const [mode, setMode] = useState<ScanMode>('model');
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedEventId, setSelectedEventId] = useState<string>('');
 
@@ -461,7 +674,8 @@ export default function EdgesScreen() {
     },
     {
       query: {
-        enabled: !!selectedEventId && selectedEventValid,
+        // Gated on the active mode so browsing props can't trigger a model scan.
+        enabled: mode === 'model' && !!selectedEventId && selectedEventValid,
         queryKey: getListModelEdgesQueryKey({
           sport: MODEL_SPORT,
           eventId: selectedEventId,
@@ -471,6 +685,36 @@ export default function EdgesScreen() {
       },
     },
   );
+
+  // Player props are priced per market×region when a game is scanned, so the
+  // query only runs after an explicit game tap while the Props mode is active.
+  const {
+    data: propEdges,
+    isLoading: loadingPropEdges,
+    isFetching: fetchingPropEdges,
+    isError: propEdgesError,
+    refetch: refetchPropEdges,
+  } = useListPropEdges(
+    { sport: MODEL_SPORT, eventId: selectedEventId },
+    {
+      query: {
+        enabled: mode === 'props' && !!selectedEventId && selectedEventValid,
+        queryKey: getListPropEdgesQueryKey({
+          sport: MODEL_SPORT,
+          eventId: selectedEventId,
+        }),
+      },
+    },
+  );
+
+  const selectMode = (next: ScanMode) => {
+    if (next === mode) return;
+    haptic();
+    setMode(next);
+    // Drop the game selection so switching surfaces never auto-fires the other
+    // mode's credit-priced scan — every scan stays an explicit tap.
+    setSelectedEventId('');
+  };
 
   const selectDay = (key: string) => {
     haptic();
@@ -486,9 +730,13 @@ export default function EdgesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScreenHeader
-        icon="cpu"
-        title="Strikeout Model"
-        subtitle="Fundamental pitcher-K projections vs the market, with Kelly staking. MLB only."
+        icon={mode === 'model' ? 'cpu' : 'user'}
+        title={mode === 'model' ? 'Strikeout Model' : 'Player Props'}
+        subtitle={
+          mode === 'model'
+            ? 'Fundamental pitcher-K projections vs the market, with Kelly staking. MLB only.'
+            : 'Devig-based +EV player props, scanned per game. Scan-only — props stay out of the Scorecard and CLV. MLB only.'
+        }
       />
       <ScrollView
         contentContainerStyle={{
@@ -501,12 +749,17 @@ export default function EdgesScreen() {
             refreshing={refetchingEvents}
             onRefresh={() => {
               refetchEvents();
-              if (selectedEventId && selectedEventValid) refetchProjections();
+              if (selectedEventId && selectedEventValid) {
+                if (mode === 'model') refetchProjections();
+                else refetchPropEdges();
+              }
             }}
             tintColor={colors.primary}
           />
         }
       >
+        <ModeSwitch mode={mode} onChange={selectMode} />
+
         {/* Day selector */}
         {loadingEvents ? (
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -641,38 +894,82 @@ export default function EdgesScreen() {
           </View>
         ) : null}
 
-        {/* Projections */}
+        {/* Results */}
         {!selectedEventId && !eventsError && (events?.length ?? 0) > 0 ? (
           <Card>
             <EmptyState
-              icon="cpu"
-              title="Pick a game to project its starters"
-              subtitle="The model projects both probable starters' strikeouts and compares them to the market."
+              icon={mode === 'model' ? 'cpu' : 'user'}
+              title={
+                mode === 'model'
+                  ? 'Pick a game to project its starters'
+                  : "Pick a game to scan its player props"
+              }
+              subtitle={
+                mode === 'model'
+                  ? "The model projects both probable starters' strikeouts and compares them to the market."
+                  : 'Props are devigged across books to find +EV lines. Scans are read-only — nothing here is logged to the Scorecard.'
+              }
             />
           </Card>
         ) : null}
 
-        {selectedEventId && loadingProjections ? (
-          <View style={{ gap: 16 }}>
-            {[1, 2].map((i) => (
-              <Card key={i}>
-                <Skeleton height={120} />
+        {mode === 'model' ? (
+          <>
+            {selectedEventId && loadingProjections ? (
+              <View style={{ gap: 16 }}>
+                {[1, 2].map((i) => (
+                  <Card key={i}>
+                    <Skeleton height={120} />
+                  </Card>
+                ))}
+              </View>
+            ) : null}
+
+            {selectedEventId && projectionsError ? (
+              <ErrorState
+                code="PROJECTION_FAILED"
+                message="Could not project this game. Try again shortly."
+                onRetry={() => refetchProjections()}
+              />
+            ) : null}
+
+            {selectedEventId && !loadingProjections && !projectionsError && projections
+              ? projections.map((p) => <ProjectionCard key={p.pitcher + p.team} projection={p} />)
+              : null}
+          </>
+        ) : (
+          <>
+            {selectedEventId && loadingPropEdges ? (
+              <Card style={{ gap: 12 }}>
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} height={38} />
+                ))}
               </Card>
-            ))}
-          </View>
-        ) : null}
+            ) : null}
 
-        {selectedEventId && projectionsError ? (
-          <ErrorState
-            code="PROJECTION_FAILED"
-            message="Could not project this game. Try again shortly."
-            onRetry={() => refetchProjections()}
-          />
-        ) : null}
+            {selectedEventId && propEdgesError ? (
+              <ErrorState
+                code="SCAN_FAILED"
+                message="Could not retrieve player prop odds."
+                onRetry={() => refetchPropEdges()}
+              />
+            ) : null}
 
-        {selectedEventId && !loadingProjections && !projectionsError && projections
-          ? projections.map((p) => <ProjectionCard key={p.pitcher + p.team} projection={p} />)
-          : null}
+            {selectedEventId && !loadingPropEdges && !propEdgesError && propEdges ? (
+              <>
+                {fetchingPropEdges ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={{ fontFamily: fonts.regular, fontSize: 12, color: colors.primary }}>
+                      Updating props...
+                    </Text>
+                  </View>
+                ) : null}
+                <PropResultsCard edges={propEdges} />
+              </>
+            ) : null}
+          </>
+        )}
       </ScrollView>
     </View>
   );

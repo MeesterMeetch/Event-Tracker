@@ -23,6 +23,36 @@ export function formatProb(p: number | null | undefined): string {
   return `${(p * 100).toFixed(1)}%`;
 }
 
+/** Spread-style point with sign for spreads; plain number otherwise. */
+export function formatPoint(point: number | null | undefined, market: string): string {
+  if (point == null) return '';
+  if (market === 'spreads') {
+    return point > 0 ? `+${point}` : `${point}`;
+  }
+  return point.toString();
+}
+
+const MARKET_LABELS: Record<string, string> = {
+  h2h: 'H2H',
+  spreads: 'Spreads',
+  totals: 'Totals',
+};
+
+/**
+ * Human label for a market key: "totals" → "Totals",
+ * "batter_total_bases" → "Batter Total Bases", "player_pass_yds" → "Pass Yds"
+ * (the "player_" prefix is dropped — it's redundant next to a player name).
+ */
+export function formatMarketLabel(market: string): string {
+  const known = MARKET_LABELS[market];
+  if (known) return known;
+  const cleaned = market.startsWith('player_') ? market.slice('player_'.length) : market;
+  return cleaned
+    .split('_')
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w))
+    .join(' ');
+}
+
 /** A rate in [0,1] as a whole percentage, e.g. "58%". */
 export function formatRate(rate: number | null | undefined): string {
   if (rate == null) return '—';

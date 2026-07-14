@@ -120,7 +120,7 @@ async function main() {
       );
     }
     console.log(
-      "  → Paper trades have no odds-edit flow; delete the offending pick from the scorecard and re-log it at the real price if it's still open.",
+      "  → Correct the price via the scorecard's edit (pencil) button — this keeps the edge snapshot and any captured closing line, and recomputes CLV from the corrected price. Only delete if the pick itself was logged in error.",
     );
   }
 

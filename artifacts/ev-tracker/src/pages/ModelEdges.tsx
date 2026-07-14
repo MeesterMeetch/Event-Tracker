@@ -4,6 +4,7 @@ import {
   useListEvents,
   useListModelEdges,
   useCreatePaperTrade,
+  useUpdatePaperTrade,
   useDeletePaperTrade,
   useRestorePaperTrade,
   useListPaperTrades,
@@ -29,10 +30,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, Brain, Loader2, Plus, Target, Trash2, TrendingUp } from "lucide-react";
+import { parseOddsInput } from "@workspace/format";
+import { AlertTriangle, Brain, Loader2, Pencil, Plus, Target, Trash2, TrendingUp } from "lucide-react";
 import ModelPerformance from "@/components/ModelPerformance";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -259,6 +263,105 @@ function ValidationSummary() {
   );
 }
 
+// Correct a mistyped price without delete-and-relog: deleting loses the edge
+// snapshot and any captured closing line, and re-logging is impossible once
+// the game starts. Editing keeps the row's history; the server recomputes
+// CLV%/beat-close from the corrected price if a close was already captured.
+export function EditPaperTradeDialog({ trade, open, onOpenChange, onSaved }: {
+  trade: PaperTrade;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const updateTrade = useUpdatePaperTrade();
+  const [oddsText, setOddsText] = useState(String(trade.americanOdds));
+  const [showError, setShowError] = useState(false);
+
+  // Re-seed the input each time the dialog opens for a (possibly different) trade.
+  useEffect(() => {
+    if (open) {
+      setOddsText(String(trade.americanOdds));
+      setShowError(false);
+    }
+  }, [open, trade.id, trade.americanOdds]);
+
+  const parsed = parseOddsInput(oddsText);
+
+  const save = () => {
+    if (!parsed.valid) {
+      setShowError(true);
+      return;
+    }
+    updateTrade.mutate(
+      { id: trade.id, data: { americanOdds: parsed.value } },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Price corrected",
+            description: `${trade.pitcher} ${trade.selection} ${trade.point} K is now ${formatOdds(parsed.value)}.${trade.closingOdds != null ? " CLV was recomputed against the captured close." : ""}`,
+          });
+          onSaved();
+          onOpenChange(false);
+        },
+        onError: (err) => {
+          toast({
+            title: "Failed to correct price",
+            description: err.data?.error || "An unknown error occurred.",
+            variant: "destructive",
+          });
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Correct logged price</DialogTitle>
+          <DialogDescription>
+            {trade.pitcher} {trade.selection} {trade.point} K @ {trade.book}. Only the logged price changes —
+            the edge snapshot and any captured closing line stay as recorded
+            {trade.closingOdds != null ? ", and CLV is recomputed from the corrected price" : ""}.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="paper-trade-odds">American odds</Label>
+          <Input
+            id="paper-trade-odds"
+            inputMode="text"
+            value={oddsText}
+            onChange={(e) => {
+              setOddsText(e.target.value);
+              setShowError(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save();
+            }}
+            aria-invalid={showError && !parsed.valid}
+            placeholder="-110"
+          />
+          {showError && !parsed.valid && (
+            <p className="text-xs text-destructive" role="alert">
+              Odds must be -100 or below, or +100 and up (e.g. -110).
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={updateTrade.isPending}>
+            Cancel
+          </Button>
+          <Button onClick={save} disabled={updateTrade.isPending}>
+            {updateTrade.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+            Save price
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Exported so the component test can lock in the graded-delete guard:
 // closed (graded) picks must confirm before deleting; open/expired delete
 // immediately with an undo toast.
@@ -272,6 +375,9 @@ export function PaperTradesTable() {
   // it gets a blocking confirm dialog; open/expired picks delete immediately
   // with the lightweight undo toast.
   const [confirmTrade, setConfirmTrade] = useState<PaperTrade | null>(null);
+  // A mistyped price is corrected in place (dialog) rather than delete-and-relog,
+  // which would lose the edge snapshot and any captured closing line.
+  const [editTrade, setEditTrade] = useState<PaperTrade | null>(null);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListPaperTradesQueryKey() });
@@ -352,7 +458,7 @@ export function PaperTradesTable() {
             <TableHead className="text-right">Close</TableHead>
             <TableHead className="text-right">CLV</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="w-[50px]"></TableHead>
+            <TableHead className="w-[80px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -385,22 +491,41 @@ export function PaperTradesTable() {
                   <Badge variant="outline" className={cn("text-[10px] uppercase font-mono", statusBadge(t.status))}>{t.status}</Badge>
                 </TableCell>
                 <TableCell>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="h-7 px-2 text-muted-foreground hover:text-destructive"
-                    aria-label={`Delete paper trade ${t.pitcher} ${t.selection} ${t.point}`}
-                    onClick={() => (t.status === "closed" ? setConfirmTrade(t) : remove(t))}
-                    disabled={deleteTrade.isPending}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  <div className="flex items-center justify-end">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                      aria-label={`Edit price for paper trade ${t.pitcher} ${t.selection} ${t.point}`}
+                      onClick={() => setEditTrade(t)}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                      aria-label={`Delete paper trade ${t.pitcher} ${t.selection} ${t.point}`}
+                      onClick={() => (t.status === "closed" ? setConfirmTrade(t) : remove(t))}
+                      disabled={deleteTrade.isPending}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))
           )}
         </TableBody>
       </Table>
+      {editTrade && (
+        <EditPaperTradeDialog
+          trade={editTrade}
+          open={editTrade != null}
+          onOpenChange={(open) => { if (!open) setEditTrade(null); }}
+          onSaved={invalidate}
+        />
+      )}
       <AlertDialog open={confirmTrade != null} onOpenChange={(open) => { if (!open) setConfirmTrade(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>

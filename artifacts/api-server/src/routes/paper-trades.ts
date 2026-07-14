@@ -9,7 +9,10 @@ import {
   CreatePaperTradeResponse,
   GetPaperTradeSummaryResponse,
   RestorePaperTradeResponse,
+  UpdatePaperTradeBody,
+  UpdatePaperTradeResponse,
 } from "@workspace/api-zod";
+import { computeClvPercent } from "../lib/odds-math";
 
 const router: IRouter = Router();
 
@@ -143,6 +146,58 @@ router.post("/paper-trades", async (req, res): Promise<void> => {
   }
 
   res.status(201).json(CreatePaperTradeResponse.parse(row));
+});
+
+router.patch("/paper-trades/:id", async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) {
+    res.status(400).json({ error: "Invalid paper trade id" });
+    return;
+  }
+
+  // Impossible American odds (the open interval (-100, 100), incl. 0) are
+  // rejected by UpdatePaperTradeBody itself — the shared zod schema generated
+  // from the OpenAPI spec — the same ban the bets edit flow enforces.
+  const parsed = UpdatePaperTradeBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  // A soft-deleted trade can't be edited — it must be restored first.
+  const [existing] = await db
+    .select()
+    .from(pitcherKPaperTradesTable)
+    .where(and(eq(pitcherKPaperTradesTable.id, id), isNull(pitcherKPaperTradesTable.deletedAt)));
+  if (!existing) {
+    res.status(404).json({ error: "Paper trade not found" });
+    return;
+  }
+
+  // Correcting the open price never touches the captured close — closingOdds
+  // and closingProb record what the market actually did. But CLV% and
+  // beat-close are derived from the open price, so if a close was already
+  // captured they must be recomputed from the corrected price, or the
+  // scorecard would keep grading the pick against the typo.
+  const nextOdds = parsed.data.americanOdds;
+  const patch: Partial<typeof existing> = { americanOdds: nextOdds };
+  if (existing.closingOdds != null) {
+    const clvPercent = computeClvPercent(nextOdds, existing.closingOdds);
+    patch.clvPercent = clvPercent;
+    patch.beatClose = clvPercent > 0;
+  }
+
+  const [updated] = await db
+    .update(pitcherKPaperTradesTable)
+    .set(patch)
+    .where(and(eq(pitcherKPaperTradesTable.id, id), isNull(pitcherKPaperTradesTable.deletedAt)))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "Paper trade not found" });
+    return;
+  }
+
+  res.json(UpdatePaperTradeResponse.parse(updated));
 });
 
 router.delete("/paper-trades/:id", async (req, res): Promise<void> => {

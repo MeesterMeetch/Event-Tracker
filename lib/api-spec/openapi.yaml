@@ -593,6 +593,47 @@ paths:
               schema:
                 $ref: "#/components/schemas/PaperTradeSummary"
   /paper-trades/{id}:
+    patch:
+      operationId: updatePaperTrade
+      tags: [paper-trades]
+      summary: Correct a paper trade's logged price
+      description: >-
+        Fixes a mistyped American odds price on an existing paper trade without
+        deleting and re-logging it, preserving the original edge snapshot and
+        any captured closing-line data. If a closing line has already been
+        captured, CLV% and beat-close are recomputed from the corrected open
+        price; the captured closingOdds/closingProb are never modified.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaperTradeUpdate"
+      responses:
+        "200":
+          description: The corrected paper trade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperTrade"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Paper trade not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       operationId: deletePaperTrade
       tags: [paper-trades]
@@ -910,6 +951,20 @@ components:
           type: number
         kellyMultiplier:
           type: number
+    PaperTradeUpdate:
+      type: object
+      required: [americanOdds]
+      properties:
+        americanOdds:
+          description: >-
+            Corrected American odds price. Valid prices are at most -100 or at
+            least +100; the open interval (-100, 100) does not exist on the
+            American odds scale.
+          oneOf:
+            - type: number
+              maximum: -100
+            - type: number
+              minimum: 100
     PaperTradeSummary:
       type: object
       required:

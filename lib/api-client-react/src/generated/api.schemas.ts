@@ -128,6 +128,11 @@ export interface PaperTradeInput {
   kellyMultiplier: number;
 }
 
+export interface PaperTradeUpdate {
+  /** Corrected American odds price. Valid prices are at most -100 or at least +100; the open interval (-100, 100) does not exist on the American odds scale. */
+  americanOdds: number;
+}
+
 export interface PaperTradeSummary {
   total: number;
   open: number;

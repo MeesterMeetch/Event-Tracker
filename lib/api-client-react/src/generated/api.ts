@@ -43,6 +43,7 @@ import type {
   PaperTrade,
   PaperTradeInput,
   PaperTradeSummary,
+  PaperTradeUpdate,
   RankingsSport,
   Sport,
   StandingsGroup
@@ -1646,6 +1647,79 @@ export function useGetPaperTradeSummary<TData = Awaited<ReturnType<typeof getPap
 
 
 
+
+export const getUpdatePaperTradeUrl = (id: number,) => {
+
+
+
+
+  return `/api/paper-trades/${id}`
+}
+
+/**
+ * Fixes a mistyped American odds price on an existing paper trade without deleting and re-logging it, preserving the original edge snapshot and any captured closing-line data. If a closing line has already been captured, CLV% and beat-close are recomputed from the corrected open price; the captured closingOdds/closingProb are never modified.
+ * @summary Correct a paper trade's logged price
+ */
+export const updatePaperTrade = async (id: number,
+    paperTradeUpdate: PaperTradeUpdate, options?: RequestInit): Promise<PaperTrade> => {
+
+  return customFetch<PaperTrade>(getUpdatePaperTradeUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(paperTradeUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdatePaperTradeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePaperTrade>>, TError,{id: number;data: BodyType<PaperTradeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePaperTrade>>, TError,{id: number;data: BodyType<PaperTradeUpdate>}, TContext> => {
+
+const mutationKey = ['updatePaperTrade'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePaperTrade>>, {id: number;data: BodyType<PaperTradeUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updatePaperTrade(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePaperTradeMutationResult = NonNullable<Awaited<ReturnType<typeof updatePaperTrade>>>
+    export type UpdatePaperTradeMutationBody = BodyType<PaperTradeUpdate>
+    export type UpdatePaperTradeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Correct a paper trade's logged price
+ */
+export const useUpdatePaperTrade = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePaperTrade>>, TError,{id: number;data: BodyType<PaperTradeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePaperTrade>>,
+        TError,
+        {id: number;data: BodyType<PaperTradeUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdatePaperTradeMutationOptions(options));
+    }
 
 export const getDeletePaperTradeUrl = (id: number,) => {
 

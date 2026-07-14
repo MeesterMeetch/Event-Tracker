@@ -14,8 +14,9 @@ import type { PaperTrade } from "@workspace/api-client-react";
  * A refactor that drops the status check should fail here.
  */
 
-const { createMutate, deleteMutate, restoreMutate, toastMock, tradesRef } = vi.hoisted(() => ({
+const { createMutate, updateMutate, deleteMutate, restoreMutate, toastMock, tradesRef } = vi.hoisted(() => ({
   createMutate: vi.fn(),
+  updateMutate: vi.fn(),
   deleteMutate: vi.fn(),
   restoreMutate: vi.fn(),
   toastMock: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock("@workspace/api-client-react", () => ({
   useDeletePaperTrade: () => ({ mutate: deleteMutate, isPending: false }),
   useRestorePaperTrade: () => ({ mutate: restoreMutate, isPending: false }),
   useCreatePaperTrade: () => ({ mutate: createMutate, isPending: false }),
+  useUpdatePaperTrade: () => ({ mutate: updateMutate, isPending: false }),
   useGetPaperTradeSummary: () => ({ data: undefined }),
   useListEvents: () => ({ data: [], isLoading: false, isError: false }),
   useListModelEdges: () => ({ data: undefined, isLoading: false, isFetching: false, isError: false }),
@@ -96,6 +98,7 @@ const user = userEvent.setup({ pointerEventsCheck: 0 });
 
 beforeEach(() => {
   createMutate.mockReset();
+  updateMutate.mockReset();
   deleteMutate.mockClear();
   restoreMutate.mockClear();
   toastMock.mockClear();
@@ -177,6 +180,36 @@ describe("PaperTradesTable graded-delete guard", () => {
  * pick's id, and a failed restore must surface the destructive "Could not
  * undo" feedback. A refactor of the toast action wiring should fail here.
  */
+describe("PaperTradesTable price correction", () => {
+  it("opens the edit dialog from the row's pencil button and saves the corrected price", async () => {
+    renderTable([makeTrade({ id: 201, americanOdds: -1100 })]);
+
+    await user.click(screen.getByLabelText("Edit price for paper trade Gerrit Cole Over 6.5"));
+    const input = await screen.findByLabelText("American odds");
+    expect((input as HTMLInputElement).value).toBe("-1100");
+
+    await user.clear(input);
+    await user.type(input, "-110");
+    await user.click(screen.getByRole("button", { name: /save price/i }));
+
+    expect(updateMutate).toHaveBeenCalledTimes(1);
+    expect(updateMutate.mock.calls[0][0]).toEqual({ id: 201, data: { americanOdds: -110 } });
+  });
+
+  it("blocks impossible prices inside (-100, 100) with an inline error and no request", async () => {
+    renderTable([makeTrade({ id: 202 })]);
+
+    await user.click(screen.getByLabelText("Edit price for paper trade Gerrit Cole Over 6.5"));
+    const input = await screen.findByLabelText("American odds");
+    await user.clear(input);
+    await user.type(input, "50");
+    await user.click(screen.getByRole("button", { name: /save price/i }));
+
+    expect(updateMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toMatch(/-100 or below, or \+100 and up/);
+  });
+});
+
 describe("PaperTradesTable delete undo", () => {
   // Drive the delete for trade `id` and return the Undo ToastAction element
   // captured from the success toast.

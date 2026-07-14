@@ -36,7 +36,7 @@ async function buildApp(): Promise<Express> {
   return app;
 }
 
-type Method = "GET" | "POST" | "DELETE";
+type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
 async function request(
   app: Express,
@@ -193,6 +193,82 @@ describe("POST /paper-trades — guards against stat-corrupting bad data", () =>
     expect(otherBook.status).toBe(201);
     expect(otherPoint.status).toBe(201);
     expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(3);
+  });
+});
+
+describe("PATCH /paper-trades/:id — correcting a mistyped price without delete-and-relog", () => {
+  it("corrects the odds on an ungraded trade and leaves the closing fields alone", async () => {
+    const trade = seedTrade({ americanOdds: -1100 }); // fat-fingered -110
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "PATCH", `/api/paper-trades/${trade.id}`, { americanOdds: -110 });
+
+    expect(status).toBe(200);
+    const updated = body as { americanOdds: number; closingOdds: number | null; clvPercent: number | null };
+    expect(updated.americanOdds).toBe(-110);
+    expect(updated.closingOdds).toBeNull();
+    expect(updated.clvPercent).toBeNull();
+  });
+
+  it("rejects impossible prices inside (-100, 100), including 0, via the shared schema", async () => {
+    const trade = seedTrade();
+    const app = await buildApp();
+
+    for (const bad of [50, -50, 0, 99.5]) {
+      const { status } = await request(app, "PATCH", `/api/paper-trades/${trade.id}`, { americanOdds: bad });
+      expect(status).toBe(400);
+    }
+    expect(dbMod.__stores.pitcher_k_paper_trades[0].americanOdds).toBe(-110);
+  });
+
+  it("recomputes CLV% and beat-close from the corrected price when a close was captured, without touching the close", async () => {
+    // Logged as -1100 by mistake; close captured at -120. Against the typo the
+    // pick looks like a huge closing-line loss — the corrected price flips it.
+    const trade = seedTrade({
+      americanOdds: -1100,
+      closingOdds: -120,
+      closingProb: 0.5455,
+      clvPercent: -40.55,
+      beatClose: false,
+      status: "closed",
+    });
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "PATCH", `/api/paper-trades/${trade.id}`, { americanOdds: -110 });
+
+    expect(status).toBe(200);
+    const updated = body as {
+      americanOdds: number;
+      closingOdds: number | null;
+      closingProb: number | null;
+      clvPercent: number | null;
+      beatClose: boolean | null;
+      status: string;
+    };
+    expect(updated.americanOdds).toBe(-110);
+    // The captured market close is history — never rewritten by an edit.
+    expect(updated.closingOdds).toBe(-120);
+    expect(updated.closingProb).toBe(0.5455);
+    expect(updated.status).toBe("closed");
+    // CLV re-derived from the corrected open price: -110 beat a -120 close.
+    expect(updated.clvPercent).toBeGreaterThan(0);
+    expect(updated.beatClose).toBe(true);
+  });
+
+  it("404s a soft-deleted trade — it must be restored before it can be edited", async () => {
+    const trade = seedTrade({ deletedAt: new Date("2026-07-10T20:00:00Z") });
+    const app = await buildApp();
+
+    const { status } = await request(app, "PATCH", `/api/paper-trades/${trade.id}`, { americanOdds: -110 });
+
+    expect(status).toBe(404);
+  });
+
+  it("404s an unknown id and 400s a non-integer id", async () => {
+    const app = await buildApp();
+
+    expect((await request(app, "PATCH", "/api/paper-trades/999", { americanOdds: -110 })).status).toBe(404);
+    expect((await request(app, "PATCH", "/api/paper-trades/abc", { americanOdds: -110 })).status).toBe(400);
   });
 });
 

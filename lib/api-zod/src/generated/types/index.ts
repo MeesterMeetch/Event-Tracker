@@ -33,6 +33,7 @@ export * from './paperTrade';
 export * from './paperTradeInput';
 export * from './paperTradeStatus';
 export * from './paperTradeSummary';
+export * from './paperTradeUpdate';
 export * from './pitcherStart';
 export * from './probablePitcher';
 export * from './rankingsSport';

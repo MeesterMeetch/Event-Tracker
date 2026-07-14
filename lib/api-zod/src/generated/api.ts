@@ -636,6 +636,56 @@ export const GetPaperTradeSummaryResponse = zod.object({
 
 
 /**
+ * Fixes a mistyped American odds price on an existing paper trade without deleting and re-logging it, preserving the original edge snapshot and any captured closing-line data. If a closing line has already been captured, CLV% and beat-close are recomputed from the corrected open price; the captured closingOdds/closingProb are never modified.
+ * @summary Correct a paper trade's logged price
+ */
+export const UpdatePaperTradeParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const updatePaperTradeBodyAmericanOddsOneMax = -100;
+
+export const updatePaperTradeBodyAmericanOddsTwoMin = 100;
+
+
+
+export const UpdatePaperTradeBody = zod.object({
+  "americanOdds": zod.union([zod.number().max(updatePaperTradeBodyAmericanOddsOneMax),zod.number().min(updatePaperTradeBodyAmericanOddsTwoMin)]).describe('Corrected American odds price. Valid prices are at most -100 or at least +100; the open interval (-100, 100) does not exist on the American odds scale.')
+})
+
+export const UpdatePaperTradeResponse = zod.object({
+  "id": zod.number(),
+  "sport": zod.string(),
+  "gameId": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "pitcher": zod.string(),
+  "pitcherId": zod.number().nullable(),
+  "team": zod.string(),
+  "opponent": zod.string(),
+  "selection": zod.string(),
+  "point": zod.number(),
+  "book": zod.string(),
+  "americanOdds": zod.number(),
+  "modelProb": zod.number(),
+  "marketProb": zod.number().nullable(),
+  "edgePercent": zod.number().nullable(),
+  "isFlagged": zod.boolean().nullish().describe('The model\'s actual flag decision recorded at log time. Null for legacy rows logged before the flag was persisted.'),
+  "expectedStrikeouts": zod.number(),
+  "projectedBattersFaced": zod.number(),
+  "recommendedUnits": zod.number(),
+  "kellyMultiplier": zod.number(),
+  "closingOdds": zod.number().nullable(),
+  "closingProb": zod.number().nullable(),
+  "clvPercent": zod.number().nullable(),
+  "beatClose": zod.boolean().nullable(),
+  "status": zod.enum(['open', 'closed', 'expired']),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * Soft-deletes the trade: it disappears from lists and summary stats immediately, but the row (including any captured closing-line data) is kept for a short grace period so the delete can be undone via the restore endpoint. Soft-deleted rows are purged after the grace period, or immediately if the same pick is logged again.
  * @summary Delete a paper trade
  */

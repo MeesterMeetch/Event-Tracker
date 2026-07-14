@@ -142,10 +142,14 @@ export default function Dashboard() {
                     </TableCell>
                     <TableCell>{sport.bets}</TableCell>
                     <TableCell>{sport.won}-{sport.lost}-{sport.push}</TableCell>
-                    <TableCell className={`text-right ${sport.roiPercent > 0 ? 'text-positive' : sport.roiPercent < 0 ? 'text-negative' : ''}`}>
+                    {/* Same realized-stake rule as the mobile ledger card:
+                        only tint ROI/P&L once this sport has settled stake
+                        with a real pnl (settledUnits > 0), never off the
+                        W-L-P count alone. */}
+                    <TableCell className={`text-right ${sport.settledUnits > 0 && sport.roiPercent > 0 ? 'text-positive' : sport.settledUnits > 0 && sport.roiPercent < 0 ? 'text-negative' : ''}`}>
                       {formatPercent(sport.roiPercent)}
                     </TableCell>
-                    <TableCell className={`text-right ${sport.pnl > 0 ? 'text-positive' : sport.pnl < 0 ? 'text-negative' : ''}`}>
+                    <TableCell className={`text-right ${sport.settledUnits > 0 && sport.pnl > 0 ? 'text-positive' : sport.settledUnits > 0 && sport.pnl < 0 ? 'text-negative' : ''}`}>
                       {sport.pnl > 0 ? '+' : ''}{formatCurrency(sport.pnl)}
                     </TableCell>
                   </TableRow>

@@ -888,10 +888,12 @@ export default function BetsScreen() {
                 {showBySport ? (
                   <View style={{ marginTop: 4 }}>
                     {bySport.map((row) => {
-                      // Mirror the ledger card's muting: a sport with nothing
-                      // settled yet shows a neutral 0 P&L/ROI, never a green
-                      // or red number off zero results.
-                      const sportSettled = row.won + row.lost + row.push > 0;
+                      // Mirror the ledger card's muting rule exactly: tint
+                      // only off realized settled stake (settledUnits > 0),
+                      // never the W-L-P count — a bet settled with a
+                      // still-null pnl must not paint a green/red 0 next to
+                      // a non-zero record.
+                      const sportSettled = row.settledUnits > 0;
                       const pnlTone = !sportSettled || row.pnl === 0
                         ? colors.mutedForeground
                         : row.pnl > 0

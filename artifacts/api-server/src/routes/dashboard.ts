@@ -41,6 +41,9 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
       lost: sportBets.filter((b) => b.status === "lost").length,
       push: sportBets.filter((b) => b.status === "push").length,
       pending: sportBets.filter((b) => b.status === "pending").length,
+      // Realized settled stake — mirrors top-level totalUnits so clients can
+      // mute a sport's P&L/ROI until results are actually in.
+      settledUnits: sportUnits,
       roiPercent: roi(sportPnl, sportUnits),
       pnl: sportPnl,
     };

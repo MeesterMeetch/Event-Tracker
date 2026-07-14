@@ -388,6 +388,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "lost": zod.number(),
   "push": zod.number(),
   "pending": zod.number(),
+  "settledUnits": zod.number().describe('Realized settled stake for this sport — the sum of units on bets that are settled AND have a real pnl. This is the sport-level ROI denominator, mirroring the top-level totalUnits semantics; clients must key P&L\/ROI muting off this, not the W-L-P count, so a bet settled with a still-null pnl can\'t produce an unmuted green zero.'),
   "roiPercent": zod.number(),
   "pnl": zod.number()
 }))

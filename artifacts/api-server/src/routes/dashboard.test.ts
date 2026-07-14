@@ -79,6 +79,7 @@ interface SummaryBody {
     lost: number;
     push: number;
     pending: number;
+    settledUnits: number;
     roiPercent: number;
     pnl: number;
   }>;
@@ -251,10 +252,32 @@ describe("GET /dashboard/summary — per-sport breakdown", () => {
     expect(mlb.pending).toBe(1);
     // Settled only: 2 + (-1) = 1 pnl over 1 + 1 = 2 units → 50% ROI.
     expect(mlb.pnl).toBe(1);
+    expect(mlb.settledUnits).toBe(2);
     expect(mlb.roiPercent).toBe(50);
 
     const nba = body.bySport.find((s) => s.sport === "basketball_nba")!;
     expect(nba.pnl).toBe(5);
+    expect(nba.settledUnits).toBe(2);
     expect(nba.bets).toBe(1);
+  });
+
+  it("reports zero settledUnits for a sport whose settled bets have no pnl booked yet", async () => {
+    // The "green zero" trap: marked won but pnl still null — this sport has a
+    // non-zero W-L-P record yet no realized stake, so clients must be able to
+    // key muting off settledUnits, not the record.
+    seedBet({ sport: "baseball_mlb", status: "won", pnl: null, units: 2 });
+    seedBet({ sport: "basketball_nba", status: "won", pnl: 3, units: 1 });
+    const app = await buildApp();
+
+    const { body } = await getSummary(app);
+
+    const mlb = body.bySport.find((s) => s.sport === "baseball_mlb")!;
+    expect(mlb.won).toBe(1);
+    expect(mlb.settledUnits).toBe(0);
+    expect(mlb.pnl).toBe(0);
+    expect(mlb.roiPercent).toBe(0);
+
+    const nba = body.bySport.find((s) => s.sport === "basketball_nba")!;
+    expect(nba.settledUnits).toBe(1);
   });
 });

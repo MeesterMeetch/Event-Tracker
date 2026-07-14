@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
-import type { DashboardSummary } from '@workspace/api-client-react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { DashboardSummary, SportBreakdown } from '@workspace/api-client-react';
 
 /**
  * Locks in the ledger card's "no green zero before results" rule on the
@@ -110,6 +110,35 @@ function tile(label: string): string {
   return el.textContent ?? '';
 }
 
+function makeSportRow(overrides: Partial<SportBreakdown>): SportBreakdown {
+  return {
+    sport: 'baseball_mlb',
+    bets: 3,
+    won: 0,
+    lost: 0,
+    push: 0,
+    pending: 3,
+    settledUnits: 0,
+    roiPercent: 0,
+    pnl: 0,
+    ...overrides,
+  };
+}
+
+// Terminal palette tokens (constants/colors.ts) as jsdom reports them.
+const MUTED = 'rgb(161, 161, 170)'; // #a1a1aa mutedForeground
+const POSITIVE = 'rgb(0, 204, 102)'; // #00cc66
+const NEGATIVE = 'rgb(239, 68, 68)'; // #ef4444
+
+/** Expands the By Sport breakdown and returns the row's P&L and ROI colors. */
+function sportRowColors(pnlText: string, roiText: string) {
+  fireEvent.click(screen.getByLabelText('Show sport breakdown'));
+  return {
+    pnl: getComputedStyle(screen.getByText(pnlText)).color,
+    roi: getComputedStyle(screen.getByText(roiText)).color,
+  };
+}
+
 // No vitest globals, so testing-library's auto-cleanup never registers —
 // unmount explicitly or renders leak across tests.
 afterEach(cleanup);
@@ -185,5 +214,93 @@ describe('Bet Log ledger card — realized-stake muting', () => {
     expect(tile('Total P&L')).toContain('muted:no');
     expect(tile('ROI')).toContain('tone:none');
     expect(tile('ROI')).toContain('muted:no');
+  });
+});
+
+describe('Bet Log ledger card — By Sport rows use the realized-stake rule', () => {
+  it('keeps a sport row muted when bets settled but no stake is realized (pnl still null)', () => {
+    // Same API edge case as the card header, one level down: the sport shows
+    // a 2-1-0 record but settledUnits is 0 because every settled bet still
+    // has a null pnl. The 0 P&L / 0% ROI must render in the muted gray, not
+    // an unmuted/green tint next to that record.
+    summaryData = makeSummary({
+      won: 2,
+      lost: 1,
+      pending: 0,
+      bySport: [makeSportRow({ won: 2, lost: 1, pending: 0, settledUnits: 0 })],
+    });
+    render(<BetsScreen />);
+
+    const { pnl, roi } = sportRowColors('0.00u', '0.00%');
+    expect(pnl).toBe(MUTED);
+    expect(roi).toBe(MUTED);
+  });
+
+  it('tints a sport row green once realized stake is positive', () => {
+    summaryData = makeSummary({
+      won: 2,
+      lost: 1,
+      pending: 0,
+      totalUnits: 3,
+      totalPnl: 1.85,
+      roiPercent: 61.7,
+      bySport: [
+        makeSportRow({
+          won: 2,
+          lost: 1,
+          pending: 0,
+          settledUnits: 3,
+          pnl: 1.85,
+          roiPercent: 61.7,
+        }),
+      ],
+    });
+    render(<BetsScreen />);
+
+    const { pnl, roi } = sportRowColors('+1.85u', '+61.70%');
+    expect(pnl).toBe(POSITIVE);
+    expect(roi).toBe(POSITIVE);
+  });
+
+  it('tints a losing sport row red off realized stake', () => {
+    summaryData = makeSummary({
+      won: 0,
+      lost: 3,
+      pending: 0,
+      totalUnits: 3,
+      totalPnl: -3,
+      roiPercent: -100,
+      bySport: [
+        makeSportRow({
+          lost: 3,
+          pending: 0,
+          settledUnits: 3,
+          pnl: -3,
+          roiPercent: -100,
+        }),
+      ],
+    });
+    render(<BetsScreen />);
+
+    const { pnl, roi } = sportRowColors('-3.00u', '-100.00%');
+    expect(pnl).toBe(NEGATIVE);
+    expect(roi).toBe(NEGATIVE);
+  });
+
+  it('keeps a realized break-even sport row neutral gray', () => {
+    summaryData = makeSummary({
+      won: 1,
+      lost: 1,
+      pending: 0,
+      totalUnits: 2,
+      bySport: [
+        makeSportRow({ won: 1, lost: 1, pending: 0, settledUnits: 2 }),
+      ],
+    });
+    render(<BetsScreen />);
+
+    const { pnl, roi } = sportRowColors('0.00u', '0.00%');
+    expect(pnl).toBe(MUTED);
+    expect(roi).toBe(MUTED);
   });
 });

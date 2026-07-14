@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CreateBetBody, UpdateBetBody, UpdatePaperTradeBody } from "@workspace/api-zod";
+import { CreateBetBody, CreatePaperTradeBody, UpdateBetBody, UpdatePaperTradeBody } from "@workspace/api-zod";
 import {
   isValidAmericanOdds,
   isValidUnitsStake,
@@ -110,6 +110,71 @@ describe("bet edits and paper-trade edits ban the same impossible prices", () =>
         UpdatePaperTradeBody.safeParse({ americanOdds }).success,
         `UpdatePaperTradeBody drifted from isValidAmericanOdds on ${americanOdds}; check the ` +
           `PaperTradeUpdate schema in lib/api-spec/openapi.yaml.`,
+      ).toBe(expected);
+    },
+  );
+});
+
+/** A create payload for CreatePaperTradeBody that is valid except for whatever the test overrides. */
+const VALID_CREATE_PAPER = {
+  sport: "baseball_mlb",
+  gameId: "evt-parity-pt-1",
+  commenceTime: "2026-07-15T18:00:00Z",
+  homeTeam: "Los Angeles Dodgers",
+  awayTeam: "San Francisco Giants",
+  pitcher: "Clayton Kershaw",
+  team: "Los Angeles Dodgers",
+  opponent: "San Francisco Giants",
+  selection: "Over",
+  point: 6.5,
+  book: "draftkings",
+  americanOdds: -120,
+  modelProb: 0.58,
+  expectedStrikeouts: 7.2,
+  projectedBattersFaced: 24,
+  recommendedUnits: 0.5,
+  kellyMultiplier: 0.25,
+};
+
+function paperTradeCreateAccepts(overrides: Partial<typeof VALID_CREATE_PAPER>): boolean {
+  return CreatePaperTradeBody.safeParse({ ...VALID_CREATE_PAPER, ...overrides }).success;
+}
+
+/**
+ * Boundary prices for the bet-create vs paper-trade-create lockstep check.
+ * Includes every probe the ±100 gap rule pivots on.
+ */
+const CREATE_PARITY_ODDS = [-100.5, -100, -99.5, 0, 50, 99.5, 100, 100.5];
+
+describe("paper-trade create and bet create ban the same impossible prices", () => {
+  it.each(CREATE_PARITY_ODDS)(
+    "CreateBetBody and CreatePaperTradeBody agree on americanOdds %s",
+    (americanOdds) => {
+      const bet = createAccepts({ americanOdds });
+      const paper = paperTradeCreateAccepts({ americanOdds });
+      expect(
+        paper,
+        `CreateBetBody and CreatePaperTradeBody drifted apart on americanOdds ${americanOdds}: ` +
+          `CreateBetBody ${bet ? "accepts" : "rejects"} it but CreatePaperTradeBody ` +
+          `${paper ? "accepts" : "rejects"} it. Both schemas in lib/api-spec/openapi.yaml ` +
+          `must keep the identical oneOf ban on the open interval (-100, 100).`,
+      ).toBe(bet);
+    },
+  );
+
+  it.each(CREATE_PARITY_ODDS)(
+    "both create schemas agree with the shared form rule for americanOdds %s",
+    (americanOdds) => {
+      const expected = isValidAmericanOdds(americanOdds);
+      expect(
+        createAccepts({ americanOdds }),
+        `CreateBetBody drifted from isValidAmericanOdds on ${americanOdds}; check the ` +
+          `BetInput schema in lib/api-spec/openapi.yaml.`,
+      ).toBe(expected);
+      expect(
+        paperTradeCreateAccepts({ americanOdds }),
+        `CreatePaperTradeBody drifted from isValidAmericanOdds on ${americanOdds}; check the ` +
+          `PaperTradeInput schema in lib/api-spec/openapi.yaml.`,
       ).toBe(expected);
     },
   );

@@ -31,6 +31,7 @@ import type {
   GameEvent,
   HealthStatus,
   LeaderCategory,
+  LedgerAuditSummary,
   ListBetsParams,
   ListEdgesParams,
   ListEventsParams,
@@ -1247,6 +1248,84 @@ export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDash
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardSummaryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetLedgerAuditUrl = () => {
+
+
+
+
+  return `/api/ledger-audit`
+}
+
+/**
+ * Runs the same integrity checks as the audit script (impossible American odds, zero/negative units, settled bets with NULL pnl, pnl signs that contradict won/lost status) and returns per-category counts. All zeros means the ledger is clean.
+ * @summary Counts of corrupt ledger rows that would skew profit/ROI
+ */
+export const getLedgerAudit = async ( options?: RequestInit): Promise<LedgerAuditSummary> => {
+
+  return customFetch<LedgerAuditSummary>(getGetLedgerAuditUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLedgerAuditQueryKey = () => {
+    return [
+    `/api/ledger-audit`
+    ] as const;
+    }
+
+
+export const getGetLedgerAuditQueryOptions = <TData = Awaited<ReturnType<typeof getLedgerAudit>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLedgerAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLedgerAuditQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLedgerAudit>>> = ({ signal }) => getLedgerAudit({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLedgerAudit>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLedgerAuditQueryResult = NonNullable<Awaited<ReturnType<typeof getLedgerAudit>>>
+export type GetLedgerAuditQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Counts of corrupt ledger rows that would skew profit/ROI
+ */
+
+export function useGetLedgerAudit<TData = Awaited<ReturnType<typeof getLedgerAudit>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLedgerAudit>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLedgerAuditQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

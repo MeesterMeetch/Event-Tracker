@@ -441,6 +441,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSummary"
+  /ledger-audit:
+    get:
+      operationId: getLedgerAudit
+      tags: [dashboard]
+      summary: Counts of corrupt ledger rows that would skew profit/ROI
+      description: >
+        Runs the same integrity checks as the audit script (impossible American
+        odds, zero/negative units, settled bets with NULL pnl, pnl signs that
+        contradict won/lost status) and returns per-category counts. All zeros
+        means the ledger is clean.
+      responses:
+        "200":
+          description: Ledger audit counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LedgerAuditSummary"
   /analysis:
     post:
       operationId: generateGameAnalysis
@@ -690,6 +707,34 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
+    LedgerAuditSummary:
+      type: object
+      required:
+        - impossibleOddsBets
+        - zeroOrNegativeUnitBets
+        - settledNullPnlBets
+        - contradictoryPnlBets
+        - impossibleOddsPaperTrades
+        - total
+      properties:
+        impossibleOddsBets:
+          description: Bets with American odds strictly inside (-100, 100).
+          type: integer
+        zeroOrNegativeUnitBets:
+          description: Bets staked with zero or negative units.
+          type: integer
+        settledNullPnlBets:
+          description: Settled (won/lost/push) bets whose pnl is NULL.
+          type: integer
+        contradictoryPnlBets:
+          description: Bets whose pnl sign contradicts their won/lost status.
+          type: integer
+        impossibleOddsPaperTrades:
+          description: Pitcher-K paper trades with American odds strictly inside (-100, 100).
+          type: integer
+        total:
+          description: Sum of all categories; 0 means the ledger is clean.
+          type: integer
     ModelKLine:
       type: object
       required:

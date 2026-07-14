@@ -4,6 +4,7 @@ import { startClvCapture } from "./lib/clv";
 import { startModelClvCapture } from "./lib/model-clv";
 import { startGrading } from "./lib/grading";
 import { startTombstonePurge } from "./lib/tombstones";
+import { startLedgerAudit } from "./lib/ledger-audit";
 
 const rawPort = process.env["PORT"];
 
@@ -30,4 +31,5 @@ app.listen(port, (err) => {
   startModelClvCapture();
   startGrading();
   startTombstonePurge();
+  startLedgerAudit();
 });

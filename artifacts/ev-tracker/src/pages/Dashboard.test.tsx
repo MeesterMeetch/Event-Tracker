@@ -15,6 +15,17 @@ import type { DashboardSummary, SportBreakdown } from "@workspace/api-client-rea
 
 let summaryData: DashboardSummary | undefined;
 
+interface LedgerAudit {
+  impossibleOddsBets: number;
+  zeroOrNegativeUnitBets: number;
+  settledNullPnlBets: number;
+  contradictoryPnlBets: number;
+  impossibleOddsPaperTrades: number;
+  total: number;
+}
+
+let auditData: LedgerAudit | undefined;
+
 vi.mock("@workspace/api-client-react", () => ({
   useGetDashboardSummary: () => ({
     data: summaryData,
@@ -22,6 +33,7 @@ vi.mock("@workspace/api-client-react", () => ({
     isError: false,
   }),
   useListSports: () => ({ data: [] }),
+  useGetLedgerAudit: () => ({ data: auditData }),
 }));
 
 import Dashboard from "./Dashboard";
@@ -56,7 +68,55 @@ function statValues(container: HTMLElement) {
 
 // No vitest globals, so testing-library's auto-cleanup never registers —
 // unmount explicitly or renders leak across tests.
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  auditData = undefined;
+});
+
+describe("Dashboard corrupt-ledger banner", () => {
+  it("renders no banner when the audit is clean or still loading", () => {
+    summaryData = makeSummary({});
+    auditData = undefined; // audit not loaded yet
+    const first = render(<Dashboard />);
+    expect(first.container.querySelector('[data-testid="alert-ledger-audit"]')).toBeNull();
+    first.unmount();
+
+    auditData = {
+      impossibleOddsBets: 0,
+      zeroOrNegativeUnitBets: 0,
+      settledNullPnlBets: 0,
+      contradictoryPnlBets: 0,
+      impossibleOddsPaperTrades: 0,
+      total: 0,
+    };
+    const second = render(<Dashboard />);
+    expect(second.container.querySelector('[data-testid="alert-ledger-audit"]')).toBeNull();
+  });
+
+  it("surfaces per-category counts when corrupt rows exist", () => {
+    summaryData = makeSummary({});
+    auditData = {
+      impossibleOddsBets: 2,
+      zeroOrNegativeUnitBets: 0,
+      settledNullPnlBets: 1,
+      contradictoryPnlBets: 0,
+      impossibleOddsPaperTrades: 1,
+      total: 4,
+    };
+    const { container, getByText } = render(<Dashboard />);
+
+    const banner = container.querySelector('[data-testid="alert-ledger-audit"]');
+    expect(banner).not.toBeNull();
+    expect(getByText(/4 corrupt ledger entries are skewing profit\/ROI/)).toBeTruthy();
+    // Only non-zero categories are listed.
+    const description = banner!.textContent ?? "";
+    expect(description).toContain("2 bet(s) with impossible odds");
+    expect(description).toContain("1 settled bet(s) missing P&L");
+    expect(description).toContain("1 paper trade(s) with impossible odds");
+    expect(description).not.toContain("zero or negative units");
+    expect(description).not.toContain("contradicts their result");
+  });
+});
 
 describe("Dashboard stat cards — realized-stake muting", () => {
   it("mutes P&L and ROI with the awaiting hint when nothing is settled", () => {

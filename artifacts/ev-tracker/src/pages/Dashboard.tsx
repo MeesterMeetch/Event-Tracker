@@ -1,14 +1,21 @@
 import { useMemo } from "react";
-import { useGetDashboardSummary, useListSports } from "@workspace/api-client-react";
+import { useGetDashboardSummary, useGetLedgerAudit, useListSports } from "@workspace/api-client-react";
 import { formatSportKey } from "@workspace/format";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingUp, Target, Coins, Percent } from "lucide-react";
+import { TrendingUp, Target, Coins, Percent, AlertTriangle } from "lucide-react";
 
 export default function Dashboard() {
   const { data: summary, isLoading, isError } = useGetDashboardSummary();
+
+  // Automatic corrupt-ledger watchdog: the server runs the same checks as the
+  // manual audit script. Failures stay silent here (the banner only ever
+  // appears on a confirmed non-zero count) — the dashboard must not break if
+  // the audit endpoint is unreachable.
+  const { data: audit } = useGetLedgerAudit();
 
   // The free in-season sports list resolves keys like "baseball_mlb" to
   // display titles; formatSportKey covers keys that have dropped off the
@@ -58,6 +65,27 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold tracking-tight mb-2">Performance Terminal</h1>
         <p className="text-muted-foreground">Aggregated lifetime betting edge</p>
       </div>
+
+      {audit && audit.total > 0 && (
+        <Alert variant="destructive" data-testid="alert-ledger-audit">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>
+            {audit.total} corrupt ledger {audit.total === 1 ? 'entry is' : 'entries are'} skewing profit/ROI
+          </AlertTitle>
+          <AlertDescription>
+            {[
+              audit.impossibleOddsBets > 0 && `${audit.impossibleOddsBets} bet(s) with impossible odds`,
+              audit.zeroOrNegativeUnitBets > 0 && `${audit.zeroOrNegativeUnitBets} bet(s) with zero or negative units`,
+              audit.settledNullPnlBets > 0 && `${audit.settledNullPnlBets} settled bet(s) missing P&L`,
+              audit.contradictoryPnlBets > 0 && `${audit.contradictoryPnlBets} bet(s) whose P&L contradicts their result`,
+              audit.impossibleOddsPaperTrades > 0 && `${audit.impossibleOddsPaperTrades} paper trade(s) with impossible odds`,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            . Fix bets via the Bet Log edit dialog and paper trades via the scorecard's edit button — the totals above can't be trusted until then.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>

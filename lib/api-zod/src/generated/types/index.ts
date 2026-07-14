@@ -19,6 +19,7 @@ export * from './gameEvent';
 export * from './healthStatus';
 export * from './leaderCategory';
 export * from './leaderEntry';
+export * from './ledgerAuditSummary';
 export * from './listBetsParams';
 export * from './listEdgesParams';
 export * from './listEventsParams';

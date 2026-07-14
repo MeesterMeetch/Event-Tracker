@@ -79,7 +79,12 @@ type Cond =
   | { __op: "isNull"; col: string }
   | { __op: "isNotNull"; col: string }
   | { __op: "lt"; col: string; val: unknown }
+  | { __op: "lte"; col: string; val: unknown }
+  | { __op: "gt"; col: string; val: unknown }
+  | { __op: "gte"; col: string; val: unknown }
+  | { __op: "inArray"; col: string; vals: unknown[] }
   | { __op: "and"; conds: Cond[] }
+  | { __op: "or"; conds: Cond[] }
   | null;
 type Order = { __op: "desc"; col: string } | null;
 
@@ -130,16 +135,27 @@ export function makeFakeDb(): FakeDbModule {
         return row[cond.col] == null;
       case "isNotNull":
         return row[cond.col] != null;
-      case "lt": {
-        // SQL semantics: NULL < x is not true, so a null column never matches.
+      case "lt":
+      case "lte":
+      case "gt":
+      case "gte": {
+        // SQL semantics: comparisons against NULL are never true, so a null
+        // column (or null bound) never matches.
         const rv = row[cond.col];
         if (rv == null || cond.val == null) return false;
         const a = rv instanceof Date ? rv.getTime() : (rv as number);
         const b = cond.val instanceof Date ? cond.val.getTime() : (cond.val as number);
-        return a < b;
+        if (cond.__op === "lt") return a < b;
+        if (cond.__op === "lte") return a <= b;
+        if (cond.__op === "gt") return a > b;
+        return a >= b;
       }
+      case "inArray":
+        return cond.vals.includes(row[cond.col]);
       case "and":
         return cond.conds.every((c) => matchesCond(row, c));
+      case "or":
+        return cond.conds.some((c) => matchesCond(row, c));
       default:
         return true;
     }
@@ -319,7 +335,12 @@ export async function stubDrizzleOrm(): Promise<Record<string, unknown>> {
     isNull: (col: string) => ({ __op: "isNull", col }),
     isNotNull: (col: string) => ({ __op: "isNotNull", col }),
     lt: (col: string, val: unknown) => ({ __op: "lt", col, val }),
+    lte: (col: string, val: unknown) => ({ __op: "lte", col, val }),
+    gt: (col: string, val: unknown) => ({ __op: "gt", col, val }),
+    gte: (col: string, val: unknown) => ({ __op: "gte", col, val }),
+    inArray: (col: string, vals: unknown[]) => ({ __op: "inArray", col, vals }),
     and: (...conds: unknown[]) => ({ __op: "and", conds: conds.filter(Boolean) }),
+    or: (...conds: unknown[]) => ({ __op: "or", conds: conds.filter(Boolean) }),
     desc: (col: string) => ({ __op: "desc", col }),
   };
 }

@@ -27,10 +27,14 @@
  */
 import { db, pool, betsTable, pitcherKPaperTradesTable } from "@workspace/db";
 import type { Bet } from "@workspace/db";
-import { and, eq, gt, gte, lt, lte, inArray, isNull, or } from "drizzle-orm";
-
-const impossible = (col: typeof betsTable.americanOdds | typeof pitcherKPaperTradesTable.americanOdds) =>
-  and(gt(col, -100), lt(col, 100));
+// The what-counts-as-corrupt predicates are shared with the API server's
+// automatic background audit so the two can never drift apart.
+import {
+  impossibleOddsWhere,
+  zeroOrNegativeUnitsWhere,
+  settledNullPnlWhere,
+  contradictoryPnlWhere,
+} from "@workspace/db/audit";
 
 function fmtOdds(odds: number): string {
   return odds > 0 ? `+${odds}` : `${odds}`;
@@ -58,32 +62,27 @@ async function main() {
   const badBets = await db
     .select()
     .from(betsTable)
-    .where(impossible(betsTable.americanOdds));
+    .where(impossibleOddsWhere(betsTable.americanOdds));
 
   const zeroUnitBets = await db
     .select()
     .from(betsTable)
-    .where(lte(betsTable.units, 0));
+    .where(zeroOrNegativeUnitsWhere(betsTable));
 
   const settledNullPnlBets = await db
     .select()
     .from(betsTable)
-    .where(and(inArray(betsTable.status, ["won", "lost", "push"]), isNull(betsTable.pnl)));
+    .where(settledNullPnlWhere(betsTable));
 
   const contradictoryPnlBets = await db
     .select()
     .from(betsTable)
-    .where(
-      or(
-        and(eq(betsTable.status, "won"), lte(betsTable.pnl, 0)),
-        and(eq(betsTable.status, "lost"), gte(betsTable.pnl, 0)),
-      ),
-    );
+    .where(contradictoryPnlWhere(betsTable));
 
   const badTrades = await db
     .select()
     .from(pitcherKPaperTradesTable)
-    .where(impossible(pitcherKPaperTradesTable.americanOdds));
+    .where(impossibleOddsWhere(pitcherKPaperTradesTable.americanOdds));
 
   console.log("Audit: impossible ledger values\n");
 

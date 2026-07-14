@@ -397,6 +397,20 @@ export const GetDashboardSummaryResponse = zod.object({
 
 
 /**
+ * Runs the same integrity checks as the audit script (impossible American odds, zero/negative units, settled bets with NULL pnl, pnl signs that contradict won/lost status) and returns per-category counts. All zeros means the ledger is clean.
+ * @summary Counts of corrupt ledger rows that would skew profit/ROI
+ */
+export const GetLedgerAuditResponse = zod.object({
+  "impossibleOddsBets": zod.number().describe('Bets with American odds strictly inside (-100, 100).'),
+  "zeroOrNegativeUnitBets": zod.number().describe('Bets staked with zero or negative units.'),
+  "settledNullPnlBets": zod.number().describe('Settled (won\/lost\/push) bets whose pnl is NULL.'),
+  "contradictoryPnlBets": zod.number().describe('Bets whose pnl sign contradicts their won\/lost status.'),
+  "impossibleOddsPaperTrades": zod.number().describe('Pitcher-K paper trades with American odds strictly inside (-100, 100).'),
+  "total": zod.number().describe('Sum of all categories; 0 means the ledger is clean.')
+})
+
+
+/**
  * Produces an AI-written scouting and betting analysis for a single game, including probable starting pitchers and their recent form for MLB. Results are cached briefly per game to limit AI usage.
  * @summary Generate an AI analysis for a game
  */

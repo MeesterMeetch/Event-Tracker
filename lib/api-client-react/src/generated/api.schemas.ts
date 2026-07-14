@@ -5,6 +5,21 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface LedgerAuditSummary {
+  /** Bets with American odds strictly inside (-100, 100). */
+  impossibleOddsBets: number;
+  /** Bets staked with zero or negative units. */
+  zeroOrNegativeUnitBets: number;
+  /** Settled (won/lost/push) bets whose pnl is NULL. */
+  settledNullPnlBets: number;
+  /** Bets whose pnl sign contradicts their won/lost status. */
+  contradictoryPnlBets: number;
+  /** Pitcher-K paper trades with American odds strictly inside (-100, 100). */
+  impossibleOddsPaperTrades: number;
+  /** Sum of all categories; 0 means the ledger is clean. */
+  total: number;
+}
+
 export interface ModelKLine {
   point: number;
   selection: string;

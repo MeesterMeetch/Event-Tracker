@@ -3,7 +3,7 @@ import { useListBets, useUpdateBet, useDeleteBet, useRestoreBet, getListBetsQuer
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatOdds, formatPercent, formatPoint, formatCurrency, formatMarketLabel } from "@/lib/utils";
-import { isValidAmericanOdds, isValidUnitsStake } from "@workspace/format";
+import { isValidAmericanOdds, isValidUnitsStake, parsePnlInput } from "@workspace/format";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -31,13 +31,16 @@ const editBetSchema = z.object({
     .number()
     .refine(isValidAmericanOdds, "Odds must be -100 or below, or +100 and up (e.g. -110)"),
   units: z.coerce.number().refine(isValidUnitsStake, "Must wager at least 0.01 units"),
-  pnl: z.coerce.number().nullable().optional(),
+  // Free text on purpose, matching the phone's EditBetSheet: blank means
+  // "automatic" (the server keeps pnl in lockstep with status/odds/units),
+  // and only typed text becomes a deliberate manual override.
+  pnl: z.string().refine((text) => parsePnlInput(text).valid, "Enter a number, e.g. -0.5, or leave blank for automatic"),
   notes: z.string().optional().nullable(),
 });
 
 type EditBetFormValues = z.infer<typeof editBetSchema>;
 
-function EditBetDialog({ bet, open, onOpenChange }: { bet: Bet, open: boolean, onOpenChange: (open: boolean) => void }) {
+export function EditBetDialog({ bet, open, onOpenChange }: { bet: Bet, open: boolean, onOpenChange: (open: boolean) => void }) {
   const { toast } = useToast();
   const updateBet = useUpdateBet();
   const queryClient = useQueryClient();
@@ -48,19 +51,27 @@ function EditBetDialog({ bet, open, onOpenChange }: { bet: Bet, open: boolean, o
       status: bet.status,
       americanOdds: bet.americanOdds,
       units: bet.units,
-      pnl: bet.pnl,
+      // Starts empty on purpose: prefilling the current pnl would send it
+      // back on save as a manual override and silently freeze auto-grading.
+      pnl: "",
       notes: bet.notes,
     },
   });
 
   const onSubmit = (data: EditBetFormValues) => {
+    // pnl is omitted unless the bettor typed a correction: the server keeps
+    // it in lockstep with the new status/odds/units (and null while pending),
+    // but an explicit pnl takes precedence as a manual override.
+    const { value: parsedPnl, provided: pnlProvided } = parsePnlInput(
+      data.status === 'pending' ? '' : data.pnl,
+    );
     updateBet.mutate({
       id: bet.id,
       data: {
         status: data.status,
         americanOdds: data.americanOdds,
         units: data.units,
-        pnl: data.pnl !== undefined ? data.pnl : null,
+        ...(pnlProvided ? { pnl: parsedPnl } : {}),
         notes: data.notes || null,
       }
     }, {
@@ -147,9 +158,13 @@ function EditBetDialog({ bet, open, onOpenChange }: { bet: Bet, open: boolean, o
                 name="pnl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>P&L</FormLabel>
+                    <FormLabel>P&L (optional override)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)} />
+                      <Input
+                        placeholder={bet.pnl != null ? `Auto: ${formatCurrency(bet.pnl)}` : "Blank = automatic"}
+                        disabled={form.watch('status') === 'pending'}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

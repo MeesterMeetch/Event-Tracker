@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
-import type { DashboardSummary } from "@workspace/api-client-react";
+import type { DashboardSummary, SportBreakdown } from "@workspace/api-client-react";
 
 /**
  * Locks in the dashboard's "no green zero before results" rule on the web
@@ -148,5 +148,129 @@ describe("Dashboard stat cards — realized-stake muting", () => {
     expect(roi.className).not.toContain("text-negative");
     expect(roi.className).not.toContain("text-muted-foreground");
     expect(queryByText(/Awaiting results/)).toBeNull();
+  });
+});
+
+function makeSportRow(overrides: Partial<SportBreakdown>): SportBreakdown {
+  return {
+    sport: "baseball_mlb",
+    bets: 3,
+    won: 0,
+    lost: 0,
+    push: 0,
+    pending: 3,
+    pendingUnits: 0,
+    settledUnits: 0,
+    roiPercent: 0,
+    pnl: 0,
+    ...overrides,
+  };
+}
+
+/**
+ * Returns the ROI and P&L cells of the single Sport Breakdown row. Column
+ * order is fixed in Dashboard.tsx: Sport, Bets, Record, Pending, ROI, P&L —
+ * so ROI is the 5th cell and P&L the 6th (last).
+ */
+function sportRowCells(container: HTMLElement) {
+  const rows = container.querySelectorAll("tbody tr");
+  expect(rows.length).toBe(1);
+  const cells = rows[0].querySelectorAll<HTMLElement>("td");
+  expect(cells.length).toBe(6);
+  return { roi: cells[4], pnl: cells[5] };
+}
+
+describe("Sport Breakdown rows — realized-stake tinting", () => {
+  it("leaves ROI and P&L untinted when bets settled but no stake realized (pnl still null)", () => {
+    // Same API edge case as the stat cards, one level down: the sport shows a
+    // 2-1-0 record but settledUnits is 0 because every settled bet still has
+    // a null pnl. The $0.00 / 0.00% cells must carry no green/red class next
+    // to that record.
+    summaryData = makeSummary({
+      won: 2,
+      lost: 1,
+      pending: 0,
+      bySport: [makeSportRow({ won: 2, lost: 1, pending: 0, settledUnits: 0 })],
+    });
+    const { container, getByText } = render(<Dashboard />);
+
+    expect(getByText("2-1-0")).toBeTruthy();
+    const { roi, pnl } = sportRowCells(container);
+    expect(roi.textContent).toBe("0.00%");
+    expect(roi.className).not.toContain("text-positive");
+    expect(roi.className).not.toContain("text-negative");
+    expect(pnl.textContent).toBe("$0.00");
+    expect(pnl.className).not.toContain("text-positive");
+    expect(pnl.className).not.toContain("text-negative");
+  });
+
+  it("tints ROI and P&L green once the sport has positive realized stake", () => {
+    summaryData = makeSummary({
+      won: 2,
+      lost: 1,
+      pending: 0,
+      totalUnits: 3,
+      totalPnl: 1.85,
+      roiPercent: 61.7,
+      bySport: [
+        makeSportRow({
+          won: 2,
+          lost: 1,
+          pending: 0,
+          settledUnits: 3,
+          pnl: 1.85,
+          roiPercent: 61.7,
+        }),
+      ],
+    });
+    const { container } = render(<Dashboard />);
+
+    const { roi, pnl } = sportRowCells(container);
+    expect(roi.textContent).toBe("+61.70%");
+    expect(roi.className).toContain("text-positive");
+    expect(pnl.textContent).toBe("+$1.85");
+    expect(pnl.className).toContain("text-positive");
+  });
+
+  it("tints a losing sport row red off realized stake", () => {
+    summaryData = makeSummary({
+      won: 0,
+      lost: 3,
+      pending: 0,
+      totalUnits: 3,
+      totalPnl: -3,
+      roiPercent: -100,
+      bySport: [
+        makeSportRow({
+          lost: 3,
+          pending: 0,
+          settledUnits: 3,
+          pnl: -3,
+          roiPercent: -100,
+        }),
+      ],
+    });
+    const { container } = render(<Dashboard />);
+
+    const { roi, pnl } = sportRowCells(container);
+    expect(roi.className).toContain("text-negative");
+    expect(pnl.className).toContain("text-negative");
+  });
+
+  it("keeps a realized break-even sport row neutral (no tone)", () => {
+    summaryData = makeSummary({
+      won: 1,
+      lost: 1,
+      pending: 0,
+      totalUnits: 2,
+      bySport: [makeSportRow({ won: 1, lost: 1, pending: 0, settledUnits: 2 })],
+    });
+    const { container } = render(<Dashboard />);
+
+    const { roi, pnl } = sportRowCells(container);
+    expect(roi.className).not.toContain("text-positive");
+    expect(roi.className).not.toContain("text-negative");
+    expect(pnl.className).not.toContain("text-positive");
+    expect(pnl.className).not.toContain("text-negative");
   });
 });

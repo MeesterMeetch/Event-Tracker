@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { useListBets, useUpdateBet, useDeleteBet, useRestoreBet, getListBetsQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { useMemo, useState } from "react";
+import { useListBets, useListSports, useUpdateBet, useDeleteBet, useRestoreBet, getListBetsQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { formatSportKey } from "@workspace/format";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatOdds, formatPercent, formatPoint, formatCurrency, formatMarketLabel } from "@/lib/utils";
@@ -270,6 +271,19 @@ export default function BetLog() {
   const params = filter === 'all' ? undefined : { status: filter };
   
   const { data: bets, isLoading, isError } = useListBets(params);
+
+  // The free in-season sports list resolves keys like "baseball_mlb" to
+  // display titles ("MLB"); formatSportKey covers keys that have dropped off
+  // the list (out-of-season leagues still present in the ledger history).
+  // Same pattern as Dashboard's Sport Breakdown and the phone's bets screen,
+  // so raw sport keys never surface in the log.
+  const { data: sports } = useListSports();
+  const sportTitles = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of sports ?? []) map.set(s.key, s.title);
+    return map;
+  }, [sports]);
+
   
   const [editingBet, setEditingBet] = useState<Bet | null>(null);
   const [deletingBet, setDeletingBet] = useState<Bet | null>(null);
@@ -368,6 +382,9 @@ export default function BetLog() {
                   <TableCell>
                     <div className="font-sans font-medium text-xs whitespace-nowrap">
                       {bet.homeTeam}<br/>{bet.awayTeam}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground font-mono uppercase mt-0.5">
+                      {sportTitles.get(bet.sport) ?? formatSportKey(bet.sport)}
                     </div>
                   </TableCell>
                   <TableCell>

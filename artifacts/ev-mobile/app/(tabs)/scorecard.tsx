@@ -1,8 +1,13 @@
-import React from 'react';
-import { Platform, RefreshControl, ScrollView, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Platform, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useQueryClient } from '@tanstack/react-query';
 import {
+  getGetPaperTradeSummaryQueryKey,
+  getListPaperTradesQueryKey,
+  useDeletePaperTrade,
   useGetPaperTradeSummary,
   useListPaperTrades,
   type PaperTrade,
@@ -34,9 +39,23 @@ function statusStyle(status: PaperTrade['status'], colors: ReturnType<typeof use
   }
 }
 
-function TradeRow({ trade }: { trade: PaperTrade }) {
+function haptic() {
+  if (Platform.OS !== 'web') Haptics.selectionAsync();
+}
+
+function TradeRow({
+  trade,
+  onDelete,
+  deleting,
+}: {
+  trade: PaperTrade;
+  onDelete: () => void;
+  deleting: boolean;
+}) {
   const colors = useColors();
   const s = statusStyle(trade.status, colors);
+  // Two-step confirm: first tap arms the row, second tap deletes.
+  const [confirming, setConfirming] = useState(false);
   const clvColor =
     trade.clvPercent == null
       ? colors.mutedForeground
@@ -50,6 +69,7 @@ function TradeRow({ trade }: { trade: PaperTrade }) {
         borderTopWidth: 1,
         borderTopColor: colors.cardBorder,
         gap: 6,
+        opacity: deleting ? 0.45 : 1,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -69,9 +89,82 @@ function TradeRow({ trade }: { trade: PaperTrade }) {
           {trade.clvPercent == null ? 'CLV —' : `CLV ${formatPercent(trade.clvPercent)}`}
         </Text>
       </View>
-      <Text style={{ fontFamily: fonts.regular, fontSize: 10.5, color: colors.mutedForeground }}>
-        {trade.team} vs {trade.opponent} · {formatGameTime(trade.commenceTime)}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text
+          style={{
+            fontFamily: fonts.regular,
+            fontSize: 10.5,
+            color: colors.mutedForeground,
+            flex: 1,
+          }}
+        >
+          {trade.team} vs {trade.opponent} · {formatGameTime(trade.commenceTime)}
+        </Text>
+        {confirming ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontFamily: fonts.mono, fontSize: 10.5, color: colors.destructive }}>
+              REMOVE?
+            </Text>
+            <Pressable
+              hitSlop={8}
+              disabled={deleting}
+              onPress={() => {
+                haptic();
+                setConfirming(false);
+                onDelete();
+              }}
+              style={({ pressed }) => ({
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: colors.radius,
+                borderWidth: 1,
+                borderColor: 'rgba(239,68,68,0.4)',
+                backgroundColor: 'rgba(239,68,68,0.08)',
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 10.5, color: colors.destructive }}>
+                DELETE
+              </Text>
+            </Pressable>
+            <Pressable
+              hitSlop={8}
+              onPress={() => {
+                haptic();
+                setConfirming(false);
+              }}
+              style={({ pressed }) => ({
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: colors.radius,
+                borderWidth: 1,
+                borderColor: colors.border,
+                opacity: pressed ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 10.5, color: colors.mutedForeground }}>
+                KEEP
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            hitSlop={10}
+            disabled={deleting}
+            onPress={() => {
+              haptic();
+              setConfirming(true);
+            }}
+            style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1, paddingLeft: 12 })}
+          >
+            <Feather
+              name={deleting ? 'loader' : 'trash-2'}
+              size={14}
+              color={colors.mutedForeground}
+            />
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
@@ -79,6 +172,48 @@ function TradeRow({ trade }: { trade: PaperTrade }) {
 export default function ScorecardScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+
+  const deleteTrade = useDeletePaperTrade();
+  const [deletingId, setDeletingId] = useState<PaperTrade['id'] | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (feedback?.type !== 'success') return;
+    const t = setTimeout(() => setFeedback(null), 4000);
+    return () => clearTimeout(t);
+  }, [feedback]);
+
+  const removeTrade = (trade: PaperTrade) => {
+    if (deletingId) return;
+    setDeletingId(trade.id);
+    setFeedback(null);
+    deleteTrade.mutate(
+      { id: trade.id },
+      {
+        onSuccess: () => {
+          if (Platform.OS !== 'web') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          setFeedback({
+            type: 'success',
+            text: `Removed ${trade.pitcher} ${trade.selection} ${trade.point}K from the scorecard`,
+          });
+          queryClient.invalidateQueries({ queryKey: getListPaperTradesQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetPaperTradeSummaryQueryKey() });
+        },
+        onError: (err) => {
+          setFeedback({
+            type: 'error',
+            text: err?.data?.error || 'Could not remove this pick. Try again.',
+          });
+        },
+        onSettled: () => setDeletingId(null),
+      },
+    );
+  };
 
   const {
     data: summary,
@@ -215,6 +350,40 @@ export default function ScorecardScreen() {
             {/* Recent trades */}
             <Card>
               <SectionHeader icon="list" title="Recent Picks" />
+              {feedback ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 7,
+                    marginBottom: 10,
+                    paddingHorizontal: 10,
+                    paddingVertical: 8,
+                    borderRadius: colors.radius,
+                    borderWidth: 1,
+                    borderColor:
+                      feedback.type === 'success' ? 'rgba(0,204,102,0.35)' : 'rgba(239,68,68,0.35)',
+                    backgroundColor:
+                      feedback.type === 'success' ? 'rgba(0,204,102,0.07)' : 'rgba(239,68,68,0.07)',
+                  }}
+                >
+                  <Feather
+                    name={feedback.type === 'success' ? 'check-circle' : 'alert-triangle'}
+                    size={13}
+                    color={feedback.type === 'success' ? colors.positive : colors.destructive}
+                  />
+                  <Text
+                    style={{
+                      fontFamily: fonts.regular,
+                      fontSize: 11.5,
+                      color: feedback.type === 'success' ? colors.positive : colors.destructive,
+                      flex: 1,
+                    }}
+                  >
+                    {feedback.text}
+                  </Text>
+                </View>
+              ) : null}
               {recentTrades.length === 0 ? (
                 <Text style={{ fontFamily: fonts.regular, fontSize: 12.5, color: colors.mutedForeground }}>
                   No individual picks to show.
@@ -222,7 +391,12 @@ export default function ScorecardScreen() {
               ) : (
                 <View>
                   {recentTrades.map((t) => (
-                    <TradeRow key={t.id} trade={t} />
+                    <TradeRow
+                      key={t.id}
+                      trade={t}
+                      deleting={deletingId === t.id}
+                      onDelete={() => removeTrade(t)}
+                    />
                   ))}
                 </View>
               )}

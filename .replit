@@ -28,12 +28,12 @@ args = "typecheck"
 name = "test"
 author = "agent"
 
+[workflows.workflow.metadata]
+isValidation = true
+
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "pnpm --filter @workspace/api-server run test"
-
-[workflows.workflow.metadata]
-isValidation = true
 
 [[workflows.workflow]]
 name = "typecheck"

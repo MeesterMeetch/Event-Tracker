@@ -1,11 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,10 +17,12 @@ import * as Haptics from 'expo-haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   getGetPaperTradeSummaryQueryKey,
+  getListBetsQueryKey,
   getListEventsQueryKey,
   getListModelEdgesQueryKey,
   getListPaperTradesQueryKey,
   getListPropEdgesQueryKey,
+  useCreateBet,
   useCreatePaperTrade,
   useListEvents,
   useListModelEdges,
@@ -60,8 +65,9 @@ type ScanMode = 'model' | 'props';
 
 /**
  * Segmented switch between the strikeout model and the player-prop scanner.
- * Props are a separate, scan-only surface: they're priced per market when a
- * game is scanned and never feed the paper-trade scorecard or CLV tracking.
+ * Props are a separate surface: they're priced per market when a game is
+ * scanned, and promising ones can be logged to the bet log — but they never
+ * feed the paper-trade scorecard or CLV tracking.
  */
 function ModeSwitch({
   mode,
@@ -125,7 +131,19 @@ function ModeSwitch({
   );
 }
 
-function PropRow({ edge }: { edge: EdgeOpportunity }) {
+/** Bet-log selection label matching the web convention: "Aaron Judge Over 1.5". */
+const propSelectionLabel = (edge: EdgeOpportunity) =>
+  edge.player ? `${edge.player} ${edge.selection}` : edge.selection;
+
+function PropRow({
+  edge,
+  logState,
+  onLog,
+}: {
+  edge: EdgeOpportunity;
+  logState: LogState;
+  onLog: () => void;
+}) {
   const colors = useColors();
   return (
     <View
@@ -171,7 +189,251 @@ function PropRow({ edge }: { edge: EdgeOpportunity }) {
           {formatPercent(edge.evPercent)}
         </Text>
       </View>
+      <View style={{ width: 38, alignItems: 'flex-end' }}>
+        <LogButton
+          state={logState}
+          onPress={onLog}
+          loggedLabel="Logged to bet log"
+          idleLabel={`Log ${propSelectionLabel(edge)} to bet log`}
+        />
+      </View>
     </View>
+  );
+}
+
+/**
+ * Bottom-sheet form for logging a scanned prop to the bet log (units + notes),
+ * mirroring the web LogBetDialog. Props go to the bet log only — never the
+ * paper-trade scorecard, which stays reserved for the K model.
+ */
+function LogPropSheet({
+  edge,
+  onClose,
+  onLogged,
+}: {
+  edge: EdgeOpportunity;
+  onClose: () => void;
+  onLogged: (edge: EdgeOpportunity, units: number) => void;
+}) {
+  const colors = useColors();
+  const queryClient = useQueryClient();
+  const createBet = useCreateBet();
+  const [units, setUnits] = useState('1');
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const parsedUnits = Number(units.replace(',', '.'));
+  const unitsValid = Number.isFinite(parsedUnits) && parsedUnits >= 0.01;
+  const selectionLabel = propSelectionLabel(edge);
+
+  const submit = () => {
+    if (!unitsValid || createBet.isPending) return;
+    haptic();
+    setError(null);
+    createBet.mutate(
+      {
+        data: {
+          sport: edge.sport,
+          gameId: edge.gameId,
+          commenceTime: edge.commenceTime,
+          homeTeam: edge.homeTeam,
+          awayTeam: edge.awayTeam,
+          market: edge.market,
+          selection: selectionLabel,
+          point: edge.point,
+          americanOdds: edge.americanOdds,
+          units: parsedUnits,
+          fairOdds: edge.fairOdds,
+          evPercent: edge.evPercent,
+          book: edge.book,
+          notes: notes.trim() ? notes.trim() : null,
+        },
+      },
+      {
+        onSuccess: () => {
+          if (Platform.OS !== 'web') {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+          queryClient.invalidateQueries({ queryKey: getListBetsQueryKey() });
+          onLogged(edge, parsedUnits);
+        },
+        onError: (err) => {
+          setError(err?.data?.error || 'Could not log this bet. Try again.');
+        },
+      },
+    );
+  };
+
+  const label = {
+    fontFamily: fonts.regular,
+    fontSize: 10.5,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase' as const,
+    color: colors.mutedForeground,
+    marginBottom: 6,
+  };
+  const inputStyle = {
+    borderWidth: 1,
+    borderColor: colors.input,
+    borderRadius: colors.radius,
+    backgroundColor: colors.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: fonts.mono,
+    fontSize: 14,
+    color: colors.foreground,
+  };
+
+  return (
+    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1 }}
+      >
+        <Pressable
+          onPress={onClose}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+        >
+          <Pressable
+            onPress={() => {}}
+            style={{
+              backgroundColor: colors.card,
+              borderTopLeftRadius: 18,
+              borderTopRightRadius: 18,
+              borderWidth: 1,
+              borderColor: colors.cardBorder,
+              padding: 20,
+              paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+              gap: 14,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={{ fontFamily: fonts.semibold, fontSize: 16, color: colors.foreground }}>
+                Log Bet
+              </Text>
+              <Pressable onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
+                <Feather name="x" size={18} color={colors.mutedForeground} />
+              </Pressable>
+            </View>
+
+            {/* Prop summary */}
+            <View
+              style={{
+                borderRadius: colors.radius,
+                backgroundColor: colors.secondary,
+                padding: 12,
+                gap: 8,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text
+                  style={{ flex: 1, fontFamily: fonts.medium, fontSize: 13, color: colors.foreground }}
+                  numberOfLines={1}
+                >
+                  {selectionLabel} {formatPoint(edge.point, edge.market)}
+                </Text>
+                <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 13, color: colors.primary }}>
+                  {formatOdds(edge.americanOdds)}
+                </Text>
+              </View>
+              <Text
+                style={{ fontFamily: fonts.regular, fontSize: 11, color: colors.mutedForeground }}
+                numberOfLines={1}
+              >
+                {formatMarketLabel(edge.market)} · {edge.book} · {edge.awayTeam} @ {edge.homeTeam}
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  paddingTop: 8,
+                  borderTopWidth: 1,
+                  borderTopColor: colors.cardBorder,
+                }}
+              >
+                <Text style={{ fontFamily: fonts.mono, fontSize: 11, color: colors.mutedForeground }}>
+                  Fair {formatOdds(edge.fairOdds)}
+                </Text>
+                <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 11, color: colors.positive }}>
+                  EV {formatPercent(edge.evPercent)}
+                </Text>
+              </View>
+            </View>
+
+            <View>
+              <Text style={label}>Units</Text>
+              <TextInput
+                value={units}
+                onChangeText={setUnits}
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+                selectTextOnFocus
+                accessibilityLabel="Units"
+                style={inputStyle}
+                placeholderTextColor={colors.mutedForeground}
+              />
+              {!unitsValid ? (
+                <Text style={{ fontFamily: fonts.regular, fontSize: 11, color: colors.destructive, marginTop: 4 }}>
+                  Must wager at least 0.01 units.
+                </Text>
+              ) : null}
+            </View>
+
+            <View>
+              <Text style={label}>Notes (optional)</Text>
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+                accessibilityLabel="Notes"
+                placeholder="e.g. Line moving quickly, best price available"
+                placeholderTextColor={colors.mutedForeground}
+                style={[inputStyle, { fontFamily: fonts.regular, minHeight: 64, textAlignVertical: 'top' }]}
+              />
+            </View>
+
+            {error ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Feather name="alert-circle" size={14} color={colors.destructive} />
+                <Text style={{ flex: 1, fontFamily: fonts.regular, fontSize: 12, color: colors.destructive }}>
+                  {error}
+                </Text>
+              </View>
+            ) : null}
+
+            <Pressable
+              onPress={submit}
+              disabled={!unitsValid || createBet.isPending}
+              accessibilityRole="button"
+              accessibilityLabel="Log bet"
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                paddingVertical: 13,
+                borderRadius: colors.radius,
+                backgroundColor: colors.primary,
+                opacity: !unitsValid || createBet.isPending ? 0.5 : pressed ? 0.75 : 1,
+              })}
+            >
+              {createBet.isPending ? (
+                <ActivityIndicator size="small" color={colors.primaryForeground} />
+              ) : (
+                <Feather name="plus" size={15} color={colors.primaryForeground} />
+              )}
+              <Text style={{ fontFamily: fonts.semibold, fontSize: 14, color: colors.primaryForeground }}>
+                Log Bet
+              </Text>
+            </Pressable>
+
+            <Text style={{ fontFamily: fonts.regular, fontSize: 10.5, color: colors.mutedForeground, lineHeight: 15 }}>
+              Logged to your bet log — props stay out of the paper-trade Scorecard and CLV.
+            </Text>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -199,13 +461,32 @@ function PropsHeader() {
       <Text style={[cell, { flex: 1, textAlign: 'right' }]}>Fair</Text>
       <Text style={[cell, { flex: 1, textAlign: 'right' }]}>Odds</Text>
       <Text style={[cell, { flex: 0.9, textAlign: 'right' }]}>EV</Text>
+      <Text style={[cell, { width: 38, textAlign: 'right' }]}>Log</Text>
     </View>
   );
 }
 
-/** Scanned prop edges for one game — display-only, never logged to the scorecard. */
+const propKey = (edge: EdgeOpportunity) =>
+  `${edge.market}-${edge.player}-${edge.selection}-${edge.point}-${edge.book}`;
+
+/**
+ * Scanned prop edges for one game. Each row can be logged to the bet log
+ * (units + notes) — props still never touch the paper-trade scorecard or CLV.
+ */
 function PropResultsCard({ edges }: { edges: EdgeOpportunity[] }) {
   const colors = useColors();
+  // The sheet edits one prop at a time; `logged` keeps the row's button in a
+  // checked state so the same scan can't double-log a prop by accident.
+  const [logging, setLogging] = useState<EdgeOpportunity | null>(null);
+  const [logged, setLogged] = useState<Set<string>>(new Set());
+  const [confirmation, setConfirmation] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!confirmation) return;
+    const t = setTimeout(() => setConfirmation(null), 4000);
+    return () => clearTimeout(t);
+  }, [confirmation]);
+
   if (edges.length === 0) {
     return (
       <Card>
@@ -217,6 +498,10 @@ function PropResultsCard({ edges }: { edges: EdgeOpportunity[] }) {
       </Card>
     );
   }
+
+  const logStateFor = (edge: EdgeOpportunity): LogState =>
+    logged.has(propKey(edge)) ? 'logged' : 'idle';
+
   return (
     <Card style={{ gap: 10 }}>
       <View
@@ -237,17 +522,42 @@ function PropResultsCard({ edges }: { edges: EdgeOpportunity[] }) {
         >
           {edges.length} +EV prop{edges.length === 1 ? '' : 's'}
         </Text>
-        <Badge label="Scan only · not in scorecard" mono />
+        <Badge label="Logs to bet log · not scorecard" mono />
       </View>
       <View>
         <PropsHeader />
         {edges.map((edge, idx) => (
           <PropRow
-            key={`${edge.market}-${edge.player}-${edge.selection}-${edge.point}-${edge.book}-${idx}`}
+            key={`${propKey(edge)}-${idx}`}
             edge={edge}
+            logState={logStateFor(edge)}
+            onLog={() => {
+              haptic();
+              setLogging(edge);
+            }}
           />
         ))}
       </View>
+      {confirmation ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            paddingHorizontal: 10,
+            paddingVertical: 9,
+            borderRadius: colors.radius,
+            borderWidth: 1,
+            borderColor: 'rgba(0,204,102,0.35)',
+            backgroundColor: 'rgba(0,204,102,0.08)',
+          }}
+        >
+          <Feather name="check-circle" size={14} color={colors.positive} />
+          <Text style={{ flex: 1, fontFamily: fonts.regular, fontSize: 12, color: colors.positive }}>
+            {confirmation}
+          </Text>
+        </View>
+      ) : null}
       <Text
         style={{
           fontFamily: fonts.regular,
@@ -256,16 +566,39 @@ function PropResultsCard({ edges }: { edges: EdgeOpportunity[] }) {
           lineHeight: 15,
         }}
       >
-        Fair odds come from devigging each prop across books. Props aren't tracked in the
-        Scorecard and are excluded from CLV.
+        Fair odds come from devigging each prop across books. Logged props go to the bet log —
+        they aren't tracked in the Scorecard and are excluded from CLV.
       </Text>
+      {logging ? (
+        <LogPropSheet
+          edge={logging}
+          onClose={() => setLogging(null)}
+          onLogged={(edge, units) => {
+            setLogged((prev) => new Set(prev).add(propKey(edge)));
+            setLogging(null);
+            setConfirmation(
+              `Logged ${units}u on ${propSelectionLabel(edge)} ${formatPoint(edge.point, edge.market)} @ ${formatOdds(edge.americanOdds)}`,
+            );
+          }}
+        />
+      ) : null}
     </Card>
   );
 }
 
 type LogState = 'idle' | 'pending' | 'logged';
 
-function LogButton({ state, onPress }: { state: LogState; onPress: () => void }) {
+function LogButton({
+  state,
+  onPress,
+  loggedLabel = 'Logged to scorecard',
+  idleLabel = 'Log paper trade',
+}: {
+  state: LogState;
+  onPress: () => void;
+  loggedLabel?: string;
+  idleLabel?: string;
+}) {
   const colors = useColors();
   const disabled = state !== 'idle';
   return (
@@ -274,7 +607,7 @@ function LogButton({ state, onPress }: { state: LogState; onPress: () => void })
       disabled={disabled}
       hitSlop={8}
       accessibilityRole="button"
-      accessibilityLabel={state === 'logged' ? 'Logged to scorecard' : 'Log paper trade'}
+      accessibilityLabel={state === 'logged' ? loggedLabel : idleLabel}
       style={({ pressed }) => ({
         width: 30,
         height: 30,
@@ -797,7 +1130,7 @@ export default function EdgesScreen() {
         subtitle={
           mode === 'model'
             ? 'Fundamental pitcher-K projections vs the market, with Kelly staking. MLB only.'
-            : 'Devig-based +EV player props in any in-season league, scanned per game. Scan-only — props stay out of the Scorecard and CLV.'
+            : 'Devig-based +EV player props in any in-season league, scanned per game. Log picks to the bet log — props stay out of the Scorecard and CLV.'
         }
       />
       <ScrollView
@@ -1042,7 +1375,7 @@ export default function EdgesScreen() {
               subtitle={
                 mode === 'model'
                   ? "The model projects both probable starters' strikeouts and compares them to the market."
-                  : 'Props are devigged across books to find +EV lines. Scans are read-only — nothing here is logged to the Scorecard.'
+                  : 'Props are devigged across books to find +EV lines. Log promising ones to the bet log — nothing here touches the Scorecard.'
               }
             />
           </Card>

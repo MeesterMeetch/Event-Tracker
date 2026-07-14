@@ -1,9 +1,20 @@
 /**
- * One-time audit: find bets and pitcher-K paper trades logged with impossible
- * American odds — values strictly inside (-100, 100), like +50 or -12, which
- * no sportsbook quotes. New writes are rejected by the API/web/mobile forms,
- * but rows logged before that guard existed could still sit in the ledger and
- * skew profit/ROI forever.
+ * One-time audit: find bets and pitcher-K paper trades carrying impossible
+ * ledger values that would silently skew profit/ROI:
+ *
+ *   1. American odds strictly inside (-100, 100), like +50 or -12, which no
+ *      sportsbook quotes (both bets and pitcher-K paper trades).
+ *   2. Bets with zero or negative units.
+ *   3. Settled bets (won/lost/push) with a NULL pnl — they'd be invisible to
+ *      profit totals despite being decided.
+ *   4. Bets whose pnl sign contradicts their status: "won" with pnl <= 0 or
+ *      "lost" with pnl >= 0.
+ *
+ * (Phantom P&L on *pending* bets is handled by a separate cleanup and is
+ * deliberately not flagged here.)
+ *
+ * New writes are rejected by the API/web/mobile forms, but rows logged before
+ * those guards existed could still sit in the ledger.
  *
  * Usage:  pnpm --filter @workspace/scripts run audit-odds
  *
@@ -15,7 +26,8 @@
  * were found, 0 means the ledger is clean.
  */
 import { db, pool, betsTable, pitcherKPaperTradesTable } from "@workspace/db";
-import { and, gt, lt } from "drizzle-orm";
+import type { Bet } from "@workspace/db";
+import { and, eq, gt, gte, lt, lte, inArray, isNull, or } from "drizzle-orm";
 
 const impossible = (col: typeof betsTable.americanOdds | typeof pitcherKPaperTradesTable.americanOdds) =>
   and(gt(col, -100), lt(col, 100));
@@ -24,35 +36,78 @@ function fmtOdds(odds: number): string {
   return odds > 0 ? `+${odds}` : `${odds}`;
 }
 
+function fmtBetRow(b: Bet): string {
+  const del = b.deletedAt ? " [soft-deleted]" : "";
+  return `  #${b.id}${del} ${b.sport} ${b.awayTeam} @ ${b.homeTeam} | ${b.market} ${b.selection}${b.point != null ? ` ${b.point}` : ""} | odds ${fmtOdds(b.americanOdds)} | ${b.units}u | status ${b.status} | pnl ${b.pnl ?? "—"}`;
+}
+
+/** Print one bet-audit category; returns the number of offending rows. */
+function reportBetCategory(heading: string, rows: Bet[], guidance: string): number {
+  if (rows.length === 0) {
+    console.log(`bets — ${heading}: clean.`);
+  } else {
+    console.log(`bets — ${heading}: ${rows.length} offending row(s):`);
+    for (const b of rows) console.log(fmtBetRow(b));
+    console.log(`  → ${guidance}`);
+  }
+  console.log("");
+  return rows.length;
+}
+
 async function main() {
   const badBets = await db
     .select()
     .from(betsTable)
     .where(impossible(betsTable.americanOdds));
 
+  const zeroUnitBets = await db
+    .select()
+    .from(betsTable)
+    .where(lte(betsTable.units, 0));
+
+  const settledNullPnlBets = await db
+    .select()
+    .from(betsTable)
+    .where(and(inArray(betsTable.status, ["won", "lost", "push"]), isNull(betsTable.pnl)));
+
+  const contradictoryPnlBets = await db
+    .select()
+    .from(betsTable)
+    .where(
+      or(
+        and(eq(betsTable.status, "won"), lte(betsTable.pnl, 0)),
+        and(eq(betsTable.status, "lost"), gte(betsTable.pnl, 0)),
+      ),
+    );
+
   const badTrades = await db
     .select()
     .from(pitcherKPaperTradesTable)
     .where(impossible(pitcherKPaperTradesTable.americanOdds));
 
-  console.log("Audit: American odds strictly inside (-100, 100)\n");
+  console.log("Audit: impossible ledger values\n");
 
-  if (badBets.length === 0) {
-    console.log("bets: clean — no rows with impossible odds.");
-  } else {
-    console.log(`bets: ${badBets.length} offending row(s):`);
-    for (const b of badBets) {
-      const del = b.deletedAt ? " [soft-deleted]" : "";
-      console.log(
-        `  #${b.id}${del} ${b.sport} ${b.awayTeam} @ ${b.homeTeam} | ${b.market} ${b.selection}${b.point != null ? ` ${b.point}` : ""} | odds ${fmtOdds(b.americanOdds)} | ${b.units}u | status ${b.status} | pnl ${b.pnl ?? "—"}`,
-      );
-    }
-    console.log(
-      "  → Fix each via the web Bet Log edit dialog (correct the odds) or delete the bet if it was a typo.",
-    );
-  }
-
-  console.log("");
+  let betTotal = 0;
+  betTotal += reportBetCategory(
+    "American odds strictly inside (-100, 100)",
+    badBets,
+    "Fix each via the web Bet Log edit dialog (correct the odds) or delete the bet if it was a typo.",
+  );
+  betTotal += reportBetCategory(
+    "zero or negative units",
+    zeroUnitBets,
+    "Fix the stake via the web Bet Log edit dialog, or delete the bet if it was never real.",
+  );
+  betTotal += reportBetCategory(
+    "settled (won/lost/push) but pnl is NULL",
+    settledNullPnlBets,
+    "Re-grade the bet (set the result again via the edit dialog) so its pnl is recomputed and counted in profit/ROI.",
+  );
+  betTotal += reportBetCategory(
+    "pnl sign contradicts status (won with pnl <= 0, lost with pnl >= 0)",
+    contradictoryPnlBets,
+    "Re-grade the bet via the edit dialog — either the status or the pnl is wrong, and totals are being skewed either way.",
+  );
 
   if (badTrades.length === 0) {
     console.log("pitcher_k_paper_trades: clean — no rows with impossible odds.");
@@ -69,9 +124,9 @@ async function main() {
     );
   }
 
-  const total = badBets.length + badTrades.length;
+  const total = betTotal + badTrades.length;
   console.log(
-    `\n${total === 0 ? "Ledger is clean. Dashboard profit/ROI are unaffected by impossible odds." : `${total} row(s) need attention before profit/ROI can be trusted.`}`,
+    `\n${total === 0 ? "Ledger is clean. Dashboard profit/ROI are unaffected by impossible values." : `${total} row(s) need attention before profit/ROI can be trusted.`}`,
   );
   await pool.end();
   process.exitCode = total > 0 ? 1 : 0;

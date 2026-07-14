@@ -42,6 +42,21 @@ function seed(overrides: Record<string, unknown> = {}): Record<string, unknown> 
   });
 }
 
+function seedBet(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return dbMod.__seedBet({
+    sport: "baseball_mlb",
+    gameId: `evt-${Math.random()}`,
+    commenceTime: new Date("2026-07-10T18:00:00Z"),
+    market: "h2h",
+    selection: "Yankees",
+    americanOdds: -110,
+    units: 1,
+    status: "pending",
+    pnl: null,
+    ...overrides,
+  });
+}
+
 const HOUR = 60 * 60 * 1000;
 
 describe("purgeExpiredPaperTradeTombstones", () => {
@@ -76,18 +91,52 @@ describe("purgeExpiredPaperTradeTombstones", () => {
   });
 });
 
+describe("purgeExpiredBetTombstones", () => {
+  it("hard-deletes bet tombstones past the grace window and reports the count", async () => {
+    const { purgeExpiredBetTombstones } = await import("./tombstones");
+    seedBet({ id: 1, deletedAt: new Date(Date.now() - 2 * HOUR) });
+    seedBet({ id: 2, deletedAt: new Date(Date.now() - 3 * HOUR) });
+
+    const purged = await purgeExpiredBetTombstones();
+
+    expect(purged).toBe(2);
+    expect(dbMod.__stores.bets).toHaveLength(0);
+  });
+
+  it("keeps live bets and tombstones still inside the grace window", async () => {
+    const { purgeExpiredBetTombstones } = await import("./tombstones");
+    seedBet({ id: 1 }); // live row, deletedAt null
+    seedBet({ id: 2, deletedAt: new Date(Date.now() - 5 * 60 * 1000) }); // still undoable
+    seedBet({ id: 3, deletedAt: new Date(Date.now() - 2 * HOUR) }); // expired
+
+    const purged = await purgeExpiredBetTombstones();
+
+    expect(purged).toBe(1);
+    const remaining = dbMod.__stores.bets.map((r) => r.id);
+    expect(remaining).toEqual([1, 2]);
+  });
+
+  it("is a no-op on an empty table", async () => {
+    const { purgeExpiredBetTombstones } = await import("./tombstones");
+
+    await expect(purgeExpiredBetTombstones()).resolves.toBe(0);
+  });
+});
+
 describe("startTombstonePurge — the safety net when deletes stop", () => {
   it("purges expired tombstones on a timer without any delete traffic", async () => {
     vi.useFakeTimers();
     try {
       const { startTombstonePurge } = await import("./tombstones");
       seed({ id: 1, deletedAt: new Date(Date.now() - 2 * HOUR) });
+      seedBet({ id: 1, deletedAt: new Date(Date.now() - 2 * HOUR) });
 
       startTombstonePurge();
       // The startup pass (60s delay) is what cleans stragglers from before a restart.
       await vi.advanceTimersByTimeAsync(61 * 1000);
 
       expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(0);
+      expect(dbMod.__stores.bets).toHaveLength(0);
     } finally {
       vi.useRealTimers();
     }

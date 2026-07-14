@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { and, eq, isNull, isNotNull, lt } from "drizzle-orm";
+import { and, eq, isNull, isNotNull } from "drizzle-orm";
 import { db, betsTable } from "@workspace/db";
 import { calcPnl } from "../lib/grading-math";
+import { purgeExpiredBetTombstones } from "../lib/tombstones";
 import {
   ListBetsQueryParams,
   ListBetsResponse,
@@ -17,14 +18,6 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
-
-/**
- * How long a soft-deleted bet stays restorable. The client undo window is a
- * few seconds; an hour of server-side slack keeps the affordance forgiving
- * (slow devices, brief offline) without letting invisible rows accumulate.
- * Matches the paper-trade scorecard's grace window.
- */
-const RESTORE_GRACE_MS = 60 * 60 * 1000;
 
 router.get("/bets", async (req, res): Promise<void> => {
   const parsed = ListBetsQueryParams.safeParse(req.query);
@@ -201,8 +194,9 @@ router.delete("/bets/:id", async (req, res): Promise<void> => {
   }
 
   // Opportunistically purge tombstones past the grace window so soft-deleted
-  // rows can't accumulate invisibly.
-  await db.delete(betsTable).where(lt(betsTable.deletedAt, new Date(Date.now() - RESTORE_GRACE_MS)));
+  // rows can't accumulate invisibly. (The periodic scheduler in
+  // lib/tombstones.ts is the safety net when delete traffic stops.)
+  await purgeExpiredBetTombstones();
 
   // Soft delete: stamp deletedAt instead of dropping the row, so an immediate
   // undo can restore the exact record — logged odds, units, settled P&L, and
@@ -232,7 +226,7 @@ router.post("/bets/:id/restore", async (req, res): Promise<void> => {
   // tombstones past it first, so an old deleted bet can't be resurrected
   // long after the user believed it gone — even if no intervening delete
   // ever triggered the opportunistic purge.
-  await db.delete(betsTable).where(lt(betsTable.deletedAt, new Date(Date.now() - RESTORE_GRACE_MS)));
+  await purgeExpiredBetTombstones();
 
   // Only a soft-deleted row still inside the grace window can be restored;
   // the guard doubles as protection against double-tapping Undo (the second

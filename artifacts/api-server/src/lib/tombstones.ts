@@ -1,11 +1,13 @@
 import { lt } from "drizzle-orm";
-import { db, pitcherKPaperTradesTable } from "@workspace/db";
+import { db, betsTable, pitcherKPaperTradesTable } from "@workspace/db";
 import { logger } from "./logger";
 
 /**
- * How long a soft-deleted paper trade stays restorable. The client undo window
- * is a few seconds; an hour of server-side slack keeps the affordance forgiving
- * (slow devices, brief offline) without letting invisible rows accumulate.
+ * How long a soft-deleted paper trade or real bet stays restorable. The client
+ * undo window is a few seconds; an hour of server-side slack keeps the
+ * affordance forgiving (slow devices, brief offline) without letting invisible
+ * rows accumulate. Shared by the bet-log routes so both soft-delete designs
+ * enforce the same window.
  */
 export const RESTORE_GRACE_MS = 60 * 60 * 1000;
 
@@ -26,6 +28,22 @@ export async function purgeExpiredPaperTradeTombstones(): Promise<number> {
   return purged.length;
 }
 
+/**
+ * Hard-deletes bet-log tombstones (soft-deleted real bets) whose restore grace
+ * window has passed. Returns how many rows were purged.
+ *
+ * Like paper trades, bets are purged opportunistically on delete/restore in
+ * the bets routes AND on the shared timer below — the timer guarantees the
+ * last tombstones are cleaned up even if bet deletes stop entirely.
+ */
+export async function purgeExpiredBetTombstones(): Promise<number> {
+  const purged = await db
+    .delete(betsTable)
+    .where(lt(betsTable.deletedAt, new Date(Date.now() - RESTORE_GRACE_MS)))
+    .returning();
+  return purged.length;
+}
+
 const PURGE_INTERVAL_MS = 15 * 60 * 1000;
 
 let running = false;
@@ -37,7 +55,15 @@ async function runPurge(): Promise<void> {
     const purged = await purgeExpiredPaperTradeTombstones();
     if (purged > 0) logger.info({ purged }, "tombstones: purged expired paper-trade tombstones");
   } catch (err) {
-    logger.error({ err }, "tombstones: purge failed");
+    logger.error({ err }, "tombstones: paper-trade purge failed");
+  }
+  // Each table gets its own try/catch so a failure in one purge can never
+  // starve the other.
+  try {
+    const purged = await purgeExpiredBetTombstones();
+    if (purged > 0) logger.info({ purged }, "tombstones: purged expired bet tombstones");
+  } catch (err) {
+    logger.error({ err }, "tombstones: bet purge failed");
   } finally {
     running = false;
   }

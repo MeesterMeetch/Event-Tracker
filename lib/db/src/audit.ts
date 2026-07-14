@@ -18,11 +18,13 @@
  *      to profit totals.
  *   4. Bets whose pnl sign contradicts their status: "won" with pnl <= 0 or
  *      "lost" with pnl >= 0.
+ *   5. Push bets carrying a nonzero pnl — a push always returns the stake, so
+ *      any profit or loss on it is impossible.
  *
  * (Phantom P&L on *pending* bets is handled by a separate cleanup and is
  * deliberately not flagged here.)
  */
-import { and, eq, gt, gte, inArray, isNull, lt, lte, or, type SQL } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, or, type SQL } from "drizzle-orm";
 import type { betsTable, pitcherKPaperTradesTable } from "./schema";
 
 type BetsTable = typeof betsTable;
@@ -51,4 +53,12 @@ export function contradictoryPnlWhere(bets: BetsTable): SQL | undefined {
     and(eq(bets.status, "won"), lte(bets.pnl, 0)),
     and(eq(bets.status, "lost"), gte(bets.pnl, 0)),
   );
+}
+
+/**
+ * Push bets carrying a nonzero pnl — a push always returns the stake, so its
+ * pnl must be exactly 0 (a NULL pnl on a push is caught by settledNullPnlWhere).
+ */
+export function pushNonzeroPnlWhere(bets: BetsTable): SQL | undefined {
+  return and(eq(bets.status, "push"), isNotNull(bets.pnl), ne(bets.pnl, 0));
 }

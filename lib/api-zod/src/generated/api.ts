@@ -405,6 +405,7 @@ export const GetLedgerAuditResponse = zod.object({
   "zeroOrNegativeUnitBets": zod.number().describe('Bets staked with zero or negative units.'),
   "settledNullPnlBets": zod.number().describe('Settled (won\/lost\/push) bets whose pnl is NULL.'),
   "contradictoryPnlBets": zod.number().describe('Bets whose pnl sign contradicts their won\/lost status.'),
+  "pushNonzeroPnlBets": zod.number().describe('Push bets carrying a nonzero pnl (a push must have pnl = 0).'),
   "impossibleOddsPaperTrades": zod.number().describe('Pitcher-K paper trades with American odds strictly inside (-100, 100).'),
   "total": zod.number().describe('Sum of all categories; 0 means the ledger is clean.')
 })

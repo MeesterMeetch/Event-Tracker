@@ -35,9 +35,20 @@ describe("runScheduledLedgerAudit", () => {
     expect(logger.error).not.toHaveBeenCalled();
   });
 
+  it("does not flag a push with pnl exactly 0 or NULL pnl already caught elsewhere", async () => {
+    dbMod.__seedBet({ americanOdds: -110, units: 1, status: "push", pnl: 0 });
+    const { runScheduledLedgerAudit } = await import("./ledger-audit");
+    const { logger } = await import("./logger");
+
+    await runScheduledLedgerAudit();
+
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
   it("warns with per-category counts when corrupt rows exist", async () => {
     dbMod.__seedBet({ americanOdds: 50, units: 1, status: "pending", pnl: null });
     dbMod.__seedBet({ americanOdds: -110, units: 0, status: "pending", pnl: null });
+    dbMod.__seedBet({ americanOdds: -110, units: 1, status: "push", pnl: 0.5 });
     const { runScheduledLedgerAudit } = await import("./ledger-audit");
     const { logger } = await import("./logger");
 
@@ -51,9 +62,10 @@ describe("runScheduledLedgerAudit", () => {
     expect(payload).toMatchObject({
       impossibleOddsBets: 1,
       zeroOrNegativeUnitBets: 1,
-      total: 2,
+      pushNonzeroPnlBets: 1,
+      total: 3,
     });
-    expect(message).toContain("2 corrupt row(s)");
+    expect(message).toContain("3 corrupt row(s)");
   });
 
   it("logs an error (not a crash) when the audit query fails", async () => {

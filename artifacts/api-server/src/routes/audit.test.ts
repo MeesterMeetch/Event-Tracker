@@ -31,6 +31,7 @@ interface AuditBody {
   zeroOrNegativeUnitBets: number;
   settledNullPnlBets: number;
   contradictoryPnlBets: number;
+  pushNonzeroPnlBets: number;
   impossibleOddsPaperTrades: number;
   total: number;
 }
@@ -109,6 +110,7 @@ describe("GET /ledger-audit", () => {
       zeroOrNegativeUnitBets: 0,
       settledNullPnlBets: 0,
       contradictoryPnlBets: 0,
+      pushNonzeroPnlBets: 0,
       impossibleOddsPaperTrades: 0,
       total: 0,
     });
@@ -124,6 +126,8 @@ describe("GET /ledger-audit", () => {
     seedCleanBet({ status: "push", pnl: null }); // push counts as settled too
     seedCleanBet({ status: "won", pnl: -0.5 }); // won but negative pnl
     seedCleanBet({ status: "lost", pnl: 1.2 }); // lost but positive pnl
+    seedCleanBet({ status: "push", pnl: 0.75 }); // push carrying a profit
+    seedCleanBet({ status: "push", pnl: -1 }); // push carrying a loss
     dbMod.__seedPaperTrade({ americanOdds: 40, status: "pending" }); // impossible trade odds
     dbMod.__seedPaperTrade({ americanOdds: -140, status: "pending" }); // clean trade
 
@@ -136,8 +140,9 @@ describe("GET /ledger-audit", () => {
       zeroOrNegativeUnitBets: 2,
       settledNullPnlBets: 2,
       contradictoryPnlBets: 2,
+      pushNonzeroPnlBets: 2,
       impossibleOddsPaperTrades: 1,
-      total: 9,
+      total: 11,
     });
   });
 

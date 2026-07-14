@@ -76,6 +76,7 @@ const PAPER_COLS = [
 type Row = Record<string, unknown>;
 type Cond =
   | { __op: "eq"; col: string; val: unknown }
+  | { __op: "ne"; col: string; val: unknown }
   | { __op: "isNull"; col: string }
   | { __op: "isNotNull"; col: string }
   | { __op: "lt"; col: string; val: unknown }
@@ -131,6 +132,9 @@ export function makeFakeDb(): FakeDbModule {
     switch (cond.__op) {
       case "eq":
         return row[cond.col] === cond.val;
+      case "ne":
+        // SQL semantics: NULL <> x is never true.
+        return row[cond.col] != null && cond.val != null && row[cond.col] !== cond.val;
       case "isNull":
         return row[cond.col] == null;
       case "isNotNull":
@@ -332,6 +336,7 @@ export async function stubDrizzleOrm(): Promise<Record<string, unknown>> {
   return {
     ...actual,
     eq: (col: string, val: unknown) => ({ __op: "eq", col, val }),
+    ne: (col: string, val: unknown) => ({ __op: "ne", col, val }),
     isNull: (col: string) => ({ __op: "isNull", col }),
     isNotNull: (col: string) => ({ __op: "isNotNull", col }),
     lt: (col: string, val: unknown) => ({ __op: "lt", col, val }),

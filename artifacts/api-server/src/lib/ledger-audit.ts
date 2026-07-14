@@ -6,6 +6,7 @@ import {
   zeroOrNegativeUnitsWhere,
   settledNullPnlWhere,
   contradictoryPnlWhere,
+  pushNonzeroPnlWhere,
 } from "@workspace/db/audit";
 import { logger } from "./logger";
 
@@ -14,6 +15,7 @@ export interface LedgerAuditCounts {
   zeroOrNegativeUnitBets: number;
   settledNullPnlBets: number;
   contradictoryPnlBets: number;
+  pushNonzeroPnlBets: number;
   impossibleOddsPaperTrades: number;
   total: number;
 }
@@ -25,12 +27,13 @@ export interface LedgerAuditCounts {
  * moment it's restored.
  */
 export async function runLedgerAudit(): Promise<LedgerAuditCounts> {
-  const [badOddsBets, zeroUnitBets, settledNullPnl, contradictoryPnl, badOddsTrades] =
+  const [badOddsBets, zeroUnitBets, settledNullPnl, contradictoryPnl, pushNonzeroPnl, badOddsTrades] =
     await Promise.all([
       db.select().from(betsTable).where(impossibleOddsWhere(betsTable.americanOdds)),
       db.select().from(betsTable).where(zeroOrNegativeUnitsWhere(betsTable)),
       db.select().from(betsTable).where(settledNullPnlWhere(betsTable)),
       db.select().from(betsTable).where(contradictoryPnlWhere(betsTable)),
+      db.select().from(betsTable).where(pushNonzeroPnlWhere(betsTable)),
       db
         .select()
         .from(pitcherKPaperTradesTable)
@@ -42,6 +45,7 @@ export async function runLedgerAudit(): Promise<LedgerAuditCounts> {
     zeroOrNegativeUnitBets: zeroUnitBets.length,
     settledNullPnlBets: settledNullPnl.length,
     contradictoryPnlBets: contradictoryPnl.length,
+    pushNonzeroPnlBets: pushNonzeroPnl.length,
     impossibleOddsPaperTrades: badOddsTrades.length,
   };
   return {
@@ -51,6 +55,7 @@ export async function runLedgerAudit(): Promise<LedgerAuditCounts> {
       counts.zeroOrNegativeUnitBets +
       counts.settledNullPnlBets +
       counts.contradictoryPnlBets +
+      counts.pushNonzeroPnlBets +
       counts.impossibleOddsPaperTrades,
   };
 }

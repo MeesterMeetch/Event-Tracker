@@ -15,6 +15,8 @@ export interface LedgerAuditSummary {
   settledNullPnlBets: number;
   /** Bets whose pnl sign contradicts their won/lost status. */
   contradictoryPnlBets: number;
+  /** Push bets carrying a nonzero pnl (a push must have pnl = 0). */
+  pushNonzeroPnlBets: number;
   /** Pitcher-K paper trades with American odds strictly inside (-100, 100). */
   impossibleOddsPaperTrades: number;
   /** Sum of all categories; 0 means the ledger is clean. */

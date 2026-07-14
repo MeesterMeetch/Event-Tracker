@@ -714,6 +714,7 @@ components:
         - zeroOrNegativeUnitBets
         - settledNullPnlBets
         - contradictoryPnlBets
+        - pushNonzeroPnlBets
         - impossibleOddsPaperTrades
         - total
       properties:
@@ -728,6 +729,9 @@ components:
           type: integer
         contradictoryPnlBets:
           description: Bets whose pnl sign contradicts their won/lost status.
+          type: integer
+        pushNonzeroPnlBets:
+          description: Push bets carrying a nonzero pnl (a push must have pnl = 0).
           type: integer
         impossibleOddsPaperTrades:
           description: Pitcher-K paper trades with American odds strictly inside (-100, 100).

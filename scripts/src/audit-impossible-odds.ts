@@ -9,6 +9,8 @@
  *      profit totals despite being decided.
  *   4. Bets whose pnl sign contradicts their status: "won" with pnl <= 0 or
  *      "lost" with pnl >= 0.
+ *   5. Push bets carrying a nonzero pnl — a push always returns the stake, so
+ *      any profit or loss on it is impossible.
  *
  * (Phantom P&L on *pending* bets is handled by a separate cleanup and is
  * deliberately not flagged here.)
@@ -34,6 +36,7 @@ import {
   zeroOrNegativeUnitsWhere,
   settledNullPnlWhere,
   contradictoryPnlWhere,
+  pushNonzeroPnlWhere,
 } from "@workspace/db/audit";
 
 function fmtOdds(odds: number): string {
@@ -79,6 +82,11 @@ async function main() {
     .from(betsTable)
     .where(contradictoryPnlWhere(betsTable));
 
+  const pushNonzeroPnlBets = await db
+    .select()
+    .from(betsTable)
+    .where(pushNonzeroPnlWhere(betsTable));
+
   const badTrades = await db
     .select()
     .from(pitcherKPaperTradesTable)
@@ -105,6 +113,11 @@ async function main() {
   betTotal += reportBetCategory(
     "pnl sign contradicts status (won with pnl <= 0, lost with pnl >= 0)",
     contradictoryPnlBets,
+    "Re-grade the bet via the edit dialog — either the status or the pnl is wrong, and totals are being skewed either way.",
+  );
+  betTotal += reportBetCategory(
+    "push with nonzero pnl (a push must have pnl = 0)",
+    pushNonzeroPnlBets,
     "Re-grade the bet via the edit dialog — either the status or the pnl is wrong, and totals are being skewed either way.",
   );
 

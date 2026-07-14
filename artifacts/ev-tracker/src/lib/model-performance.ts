@@ -1,4 +1,5 @@
 import type { PaperTrade } from "@workspace/api-client-react";
+import { easternDayKey } from "./utils";
 
 // Pure aggregation helpers behind the Model Performance scorecard. These are the
 // numbers users read to decide whether the model beats the market, so they live
@@ -162,4 +163,64 @@ export function computeHeadline(filtered: PaperTrade[], graded: PaperTrade[]): H
     avgClv: mean(graded.map((t) => t.clvPercent ?? 0)),
     avgEdge: mean(filtered.filter((t) => t.edgePercent != null).map((t) => t.edgePercent as number)),
   };
+}
+
+export type TradeFilters = {
+  // Eastern-day lower/upper bounds as YYYY-MM-DD strings ("" = unbounded).
+  from: string;
+  to: string;
+  // Pitcher name, or "all" for no pitcher filter.
+  pitcher: string;
+  // "Over" / "Under", or "all" for no side filter.
+  selection: string;
+};
+
+/**
+ * Filter the trades feeding every card and chart. A trade is kept when it
+ * matches the chosen pitcher and side and falls within the from/to bounds. The
+ * date bounds are compared on the trade's US Eastern calendar day (so a
+ * late-night game lands on the correct baseball date) and are inclusive at both
+ * ends. Empty-string bounds and "all" selectors are treated as no filter.
+ */
+export function filterTrades(trades: PaperTrade[], filters: TradeFilters): PaperTrade[] {
+  return trades.filter((t) => {
+    if (filters.pitcher !== "all" && t.pitcher !== filters.pitcher) return false;
+    if (filters.selection !== "all" && t.selection !== filters.selection) return false;
+    const day = easternDayKey(String(t.commenceTime));
+    if (filters.from && day < filters.from) return false;
+    if (filters.to && day > filters.to) return false;
+    return true;
+  });
+}
+
+export type ClvPoint = {
+  idx: number;
+  label: string;
+  clv: number;
+  cumAvg: number;
+  pitcher: string;
+};
+
+/**
+ * The "CLV Over Time" series: for each graded trade (expected in chronological
+ * order of first pitch), the individual trade CLV and the running/cumulative
+ * average CLV up to and including that trade. An empty graded set yields an
+ * empty series so the chart never plots a NaN point. Values are rounded to two
+ * decimals to match the chart's display; a missing clvPercent counts as 0.
+ */
+export function computeClvSeries(graded: PaperTrade[]): ClvPoint[] {
+  let sum = 0;
+  return graded.map((t, i) => {
+    sum += t.clvPercent ?? 0;
+    const d = new Date(t.commenceTime);
+    return {
+      idx: i,
+      label: Number.isNaN(d.getTime())
+        ? ""
+        : d.toLocaleDateString([], { month: "short", day: "numeric" }),
+      clv: Math.round((t.clvPercent ?? 0) * 100) / 100,
+      cumAvg: Math.round((sum / (i + 1)) * 100) / 100,
+      pitcher: t.pitcher,
+    };
+  });
 }

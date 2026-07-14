@@ -5,8 +5,10 @@ import {
   beatCloseRate,
   buildBreakdown,
   computeBucketSeries,
+  computeClvSeries,
   computeFlaggedSplit,
   computeHeadline,
+  filterTrades,
   isFlaggedTrade,
   isGraded,
   mean,
@@ -304,5 +306,173 @@ describe("buildBreakdown", () => {
 
   it("returns an empty list when there are no trades", () => {
     expect(buildBreakdown([], (t) => t.pitcher)).toEqual([]);
+  });
+});
+
+const ALL: Parameters<typeof filterTrades>[1] = {
+  from: "",
+  to: "",
+  pitcher: "all",
+  selection: "all",
+};
+
+describe("filterTrades", () => {
+  it("returns every trade when no filter is set", () => {
+    const rows = [trade(), trade(), trade()];
+    expect(filterTrades(rows, ALL)).toHaveLength(3);
+  });
+
+  it("selects only the chosen side and leaves 'all' untouched", () => {
+    const rows = [
+      trade({ selection: "Over" }),
+      trade({ selection: "Under" }),
+      trade({ selection: "Over" }),
+    ];
+    expect(filterTrades(rows, { ...ALL, selection: "Over" }).map((t) => t.selection)).toEqual([
+      "Over",
+      "Over",
+    ]);
+    expect(filterTrades(rows, { ...ALL, selection: "Under" }).map((t) => t.selection)).toEqual([
+      "Under",
+    ]);
+    expect(filterTrades(rows, { ...ALL, selection: "all" })).toHaveLength(3);
+  });
+
+  it("filters by pitcher, leaving 'all' untouched", () => {
+    const rows = [trade({ pitcher: "A" }), trade({ pitcher: "B" }), trade({ pitcher: "A" })];
+    expect(filterTrades(rows, { ...ALL, pitcher: "A" }).map((t) => t.pitcher)).toEqual(["A", "A"]);
+    expect(filterTrades(rows, { ...ALL, pitcher: "all" })).toHaveLength(3);
+  });
+
+  it("filters on the Eastern calendar day, not the UTC day", () => {
+    // 2026-07-15T01:30:00Z is still July 14 in US Eastern (UTC-4 in summer),
+    // so a filter pinned to the 14th must keep it and a filter on the 15th drop it.
+    const lateNight = trade({ commenceTime: "2026-07-15T01:30:00Z" });
+    expect(filterTrades([lateNight], { ...ALL, from: "2026-07-14", to: "2026-07-14" })).toHaveLength(
+      1,
+    );
+    expect(filterTrades([lateNight], { ...ALL, from: "2026-07-15", to: "2026-07-15" })).toHaveLength(
+      0,
+    );
+  });
+
+  it("treats the from bound as inclusive at the lower edge", () => {
+    const rows = [
+      trade({ commenceTime: "2026-07-13T18:00:00Z" }), // Jul 13 ET
+      trade({ commenceTime: "2026-07-14T18:00:00Z" }), // Jul 14 ET
+      trade({ commenceTime: "2026-07-15T18:00:00Z" }), // Jul 15 ET
+    ];
+    const kept = filterTrades(rows, { ...ALL, from: "2026-07-14" });
+    expect(kept.map((t) => easternDayKeyOf(t))).toEqual(["2026-07-14", "2026-07-15"]);
+  });
+
+  it("treats the to bound as inclusive at the upper edge", () => {
+    const rows = [
+      trade({ commenceTime: "2026-07-13T18:00:00Z" }),
+      trade({ commenceTime: "2026-07-14T18:00:00Z" }),
+      trade({ commenceTime: "2026-07-15T18:00:00Z" }),
+    ];
+    const kept = filterTrades(rows, { ...ALL, to: "2026-07-14" });
+    expect(kept.map((t) => easternDayKeyOf(t))).toEqual(["2026-07-13", "2026-07-14"]);
+  });
+
+  it("keeps only the days inside an inclusive from/to window", () => {
+    const rows = [
+      trade({ commenceTime: "2026-07-13T18:00:00Z" }),
+      trade({ commenceTime: "2026-07-14T18:00:00Z" }),
+      trade({ commenceTime: "2026-07-15T18:00:00Z" }),
+      trade({ commenceTime: "2026-07-16T18:00:00Z" }),
+    ];
+    const kept = filterTrades(rows, { ...ALL, from: "2026-07-14", to: "2026-07-15" });
+    expect(kept.map((t) => easternDayKeyOf(t))).toEqual(["2026-07-14", "2026-07-15"]);
+  });
+
+  it("combines pitcher, side, and date filters", () => {
+    const rows = [
+      trade({ pitcher: "A", selection: "Over", commenceTime: "2026-07-14T18:00:00Z" }), // match
+      trade({ pitcher: "A", selection: "Under", commenceTime: "2026-07-14T18:00:00Z" }), // wrong side
+      trade({ pitcher: "B", selection: "Over", commenceTime: "2026-07-14T18:00:00Z" }), // wrong pitcher
+      trade({ pitcher: "A", selection: "Over", commenceTime: "2026-07-20T18:00:00Z" }), // out of range
+    ];
+    const kept = filterTrades(rows, {
+      from: "2026-07-14",
+      to: "2026-07-14",
+      pitcher: "A",
+      selection: "Over",
+    });
+    expect(kept).toHaveLength(1);
+    expect(kept[0].commenceTime).toBe("2026-07-14T18:00:00Z");
+  });
+});
+
+// Helper mirroring the component's chronological ordering of the graded set
+// before it feeds computeClvSeries.
+function chronological(rows: PaperTrade[]): PaperTrade[] {
+  return [...rows].sort(
+    (a, b) => new Date(a.commenceTime).getTime() - new Date(b.commenceTime).getTime(),
+  );
+}
+
+function easternDayKeyOf(t: PaperTrade): string {
+  return new Date(t.commenceTime).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
+
+describe("computeClvSeries", () => {
+  it("returns an empty series (no NaN points) for an empty graded set", () => {
+    expect(computeClvSeries([])).toEqual([]);
+  });
+
+  it("is a true running mean of CLV in the given order", () => {
+    const series = computeClvSeries([
+      graded({ clvPercent: 2 }),
+      graded({ clvPercent: 4 }),
+      graded({ clvPercent: 0 }),
+      graded({ clvPercent: -2 }),
+    ]);
+    // Each cumAvg is the mean of all CLVs up to and including that point.
+    expect(series.map((p) => p.cumAvg)).toEqual([2, 3, 2, 1]);
+    // Each point also carries its own trade CLV.
+    expect(series.map((p) => p.clv)).toEqual([2, 4, 0, -2]);
+    expect(series.map((p) => p.idx)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("tracks the cumulative average as chronologically-sorted trades accrue", () => {
+    const rows = chronological([
+      graded({ commenceTime: "2026-07-16T18:00:00Z", clvPercent: 6 }),
+      graded({ commenceTime: "2026-07-14T18:00:00Z", clvPercent: 2 }),
+      graded({ commenceTime: "2026-07-15T18:00:00Z", clvPercent: 4 }),
+    ]);
+    const series = computeClvSeries(rows);
+    expect(series.map((p) => p.clv)).toEqual([2, 4, 6]);
+    expect(series.map((p) => p.cumAvg)).toEqual([2, 3, 4]);
+  });
+
+  it("counts a missing CLV as 0 rather than emitting NaN", () => {
+    const series = computeClvSeries([graded({ clvPercent: null }), graded({ clvPercent: 4 })]);
+    expect(series[0].clv).toBe(0);
+    expect(series[0].cumAvg).toBe(0);
+    expect(series[1].cumAvg).toBe(2); // (0 + 4) / 2
+    for (const p of series) {
+      expect(Number.isNaN(p.clv)).toBe(false);
+      expect(Number.isNaN(p.cumAvg)).toBe(false);
+    }
+  });
+
+  it("rounds both trade CLV and cumulative average to two decimals", () => {
+    const series = computeClvSeries([graded({ clvPercent: 1 }), graded({ clvPercent: 2 })]);
+    // (1 + 2) / 2 = 1.5 exactly; a third point would surface rounding.
+    const three = computeClvSeries([
+      graded({ clvPercent: 1 }),
+      graded({ clvPercent: 1 }),
+      graded({ clvPercent: 2 }),
+    ]);
+    expect(series[1].cumAvg).toBe(1.5);
+    expect(three[2].cumAvg).toBe(1.33); // 4/3 = 1.333… → 1.33
+  });
+
+  it("emits an empty label for an unparseable commence time instead of throwing", () => {
+    const series = computeClvSeries([graded({ commenceTime: "not-a-date", clvPercent: 3 })]);
+    expect(series[0].label).toBe("");
+    expect(series[0].clv).toBe(3);
   });
 });

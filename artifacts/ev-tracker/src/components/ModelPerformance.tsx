@@ -20,14 +20,16 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { LineChart as LineChartIcon, Target, RotateCcw, User, Swords } from "lucide-react";
-import { easternDayKey, formatPercent, cn } from "@/lib/utils";
+import { formatPercent, cn } from "@/lib/utils";
 import {
   FLAG_EDGE_PERCENT,
   MIN_GRADED_SAMPLE,
   buildBreakdown,
   computeBucketSeries,
+  computeClvSeries,
   computeFlaggedSplit,
   computeHeadline,
+  filterTrades,
   isGraded,
   type BreakdownRow,
 } from "@/lib/model-performance";
@@ -277,16 +279,7 @@ export default function ModelPerformance() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [trades]);
 
-  const filtered = useMemo(() => {
-    return (trades ?? []).filter((t) => {
-      if (filters.pitcher !== "all" && t.pitcher !== filters.pitcher) return false;
-      if (filters.selection !== "all" && t.selection !== filters.selection) return false;
-      const day = easternDayKey(String(t.commenceTime));
-      if (filters.from && day < filters.from) return false;
-      if (filters.to && day > filters.to) return false;
-      return true;
-    });
-  }, [trades, filters]);
+  const filtered = useMemo(() => filterTrades(trades ?? [], filters), [trades, filters]);
 
   const graded = useMemo(() => {
     return filtered
@@ -296,22 +289,7 @@ export default function ModelPerformance() {
 
   // CLV over time: cumulative average CLV as graded trades accrue, in
   // chronological order of first pitch.
-  const clvSeries = useMemo(() => {
-    let sum = 0;
-    return graded.map((t, i) => {
-      sum += t.clvPercent ?? 0;
-      const d = new Date(t.commenceTime);
-      return {
-        idx: i,
-        label: Number.isNaN(d.getTime())
-          ? ""
-          : d.toLocaleDateString([], { month: "short", day: "numeric" }),
-        clv: Math.round((t.clvPercent ?? 0) * 100) / 100,
-        cumAvg: Math.round((sum / (i + 1)) * 100) / 100,
-        pitcher: t.pitcher,
-      };
-    });
-  }, [graded]);
+  const clvSeries = useMemo(() => computeClvSeries(graded), [graded]);
 
   const bucketSeries = useMemo(() => computeBucketSeries(graded), [graded]);
 

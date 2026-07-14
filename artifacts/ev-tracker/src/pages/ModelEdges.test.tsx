@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import type { PaperTrade } from "@workspace/api-client-react";
 
 /**
@@ -13,9 +14,10 @@ import type { PaperTrade } from "@workspace/api-client-react";
  * A refactor that drops the status check should fail here.
  */
 
-const { deleteMutate, restoreMutate, tradesRef } = vi.hoisted(() => ({
+const { deleteMutate, restoreMutate, toastMock, tradesRef } = vi.hoisted(() => ({
   deleteMutate: vi.fn(),
   restoreMutate: vi.fn(),
+  toastMock: vi.fn(),
   tradesRef: { current: [] as unknown[] },
 }));
 
@@ -33,10 +35,11 @@ vi.mock("@workspace/api-client-react", () => ({
   getGetPaperTradeSummaryQueryKey: () => ["paper-trade-summary"],
 }));
 
-// The toast system is exercised elsewhere; here we only care whether the
-// delete mutation fires, so keep it inert.
+// The toast render pipeline is exercised elsewhere; here we capture the
+// toast() payloads so the undo tests can pull the ToastAction element out of
+// the delete toast and drive its onClick directly.
 vi.mock("@/components/ui/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
+  useToast: () => ({ toast: toastMock }),
 }));
 
 // ModelPerformance pulls in charting; irrelevant to the delete guard.
@@ -92,6 +95,7 @@ const user = userEvent.setup({ pointerEventsCheck: 0 });
 beforeEach(() => {
   deleteMutate.mockClear();
   restoreMutate.mockClear();
+  toastMock.mockClear();
 });
 
 // No vitest globals, so testing-library's auto-cleanup never registers —
@@ -161,5 +165,77 @@ describe("PaperTradesTable graded-delete guard", () => {
     expect(deleteMutate).toHaveBeenCalledTimes(1);
     expect(deleteMutate.mock.calls[0][0]).toEqual({ id: 103 });
     expect(screen.queryByText("Delete a graded pick?")).toBeNull();
+  });
+});
+
+/**
+ * Locks in the delete → Undo flow: the toast shown after a successful delete
+ * carries an Undo action that must call the restore endpoint with the deleted
+ * pick's id, and a failed restore must surface the destructive "Could not
+ * undo" feedback. A refactor of the toast action wiring should fail here.
+ */
+describe("PaperTradesTable delete undo", () => {
+  // Drive the delete for trade `id` and return the Undo ToastAction element
+  // captured from the success toast.
+  async function deleteAndGetUndoAction(id: number) {
+    // The component only shows the undo toast from the delete mutation's
+    // onSuccess callback — simulate a successful server delete.
+    deleteMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
+
+    renderTable([makeTrade({ id, status: "open" })]);
+    await user.click(
+      screen.getByRole("button", { name: /delete paper trade gerrit cole over 6\.5/i }),
+    );
+
+    const deleteToast = toastMock.mock.calls.find(
+      ([args]) => args?.title === "Paper trade deleted",
+    );
+    expect(deleteToast).toBeDefined();
+    const action = deleteToast![0].action as ReactElement<{ onClick: () => void }>;
+    expect(action).toBeDefined();
+    return action;
+  }
+
+  afterEach(() => {
+    deleteMutate.mockReset();
+    restoreMutate.mockReset();
+  });
+
+  it("toast Undo calls the restore mutation with the deleted pick's id", async () => {
+    const action = await deleteAndGetUndoAction(104);
+
+    // Fire the Undo action the way the toast button would.
+    action.props.onClick();
+
+    expect(restoreMutate).toHaveBeenCalledTimes(1);
+    expect(restoreMutate.mock.calls[0][0]).toEqual({ id: 104 });
+  });
+
+  it("shows the restored toast when the restore succeeds", async () => {
+    restoreMutate.mockImplementation((_vars, opts) => opts?.onSuccess?.());
+    const action = await deleteAndGetUndoAction(105);
+
+    action.props.onClick();
+
+    const restoredToast = toastMock.mock.calls.find(
+      ([args]) => args?.title === "Paper trade restored",
+    );
+    expect(restoredToast).toBeDefined();
+  });
+
+  it("shows destructive 'Could not undo' feedback when the restore fails", async () => {
+    restoreMutate.mockImplementation((_vars, opts) =>
+      opts?.onError?.({ status: 410, data: { error: "Restore window has passed." } }),
+    );
+    const action = await deleteAndGetUndoAction(106);
+
+    action.props.onClick();
+
+    const failureToast = toastMock.mock.calls.find(
+      ([args]) => args?.title === "Could not undo",
+    );
+    expect(failureToast).toBeDefined();
+    expect(failureToast![0].variant).toBe("destructive");
+    expect(failureToast![0].description).toBe("Restore window has passed.");
   });
 });

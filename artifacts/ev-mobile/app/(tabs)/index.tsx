@@ -52,6 +52,8 @@ import {
   formatProb,
   formatTimeOnly,
 } from '@/lib/format';
+import { parseUnitsInput } from '@/lib/inputs';
+import { propSelectionLabel } from '@/lib/selection';
 
 const MODEL_SPORT = 'baseball_mlb';
 const KELLY_MULTIPLIER = 0.25;
@@ -131,9 +133,6 @@ function ModeSwitch({
   );
 }
 
-/** Bet-log selection label matching the web convention: "Aaron Judge Over 1.5". */
-const propSelectionLabel = (edge: EdgeOpportunity) =>
-  edge.player ? `${edge.player} ${edge.selection}` : edge.selection;
 
 function PropRow({
   edge,
@@ -224,8 +223,7 @@ function LogPropSheet({
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const parsedUnits = Number(units.replace(',', '.'));
-  const unitsValid = Number.isFinite(parsedUnits) && parsedUnits >= 0.01;
+  const { value: parsedUnits, valid: unitsValid } = parseUnitsInput(units);
   const selectionLabel = propSelectionLabel(edge);
 
   const submit = () => {

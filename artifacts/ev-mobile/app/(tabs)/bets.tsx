@@ -28,7 +28,15 @@ import {
 import { useColors } from '@/hooks/useColors';
 import { fonts } from '@/constants/fonts';
 import { Badge, Card, EmptyState, ErrorState, ScreenHeader, SectionHeader, Skeleton, StatTile } from '@/components/ui';
-import { formatGameTime, formatMarketLabel, formatOdds, formatPercent, formatPoint } from '@/lib/format';
+import {
+  formatGameTime,
+  formatMarketLabel,
+  formatOdds,
+  formatPercent,
+  formatPnlUnits,
+  formatPoint,
+} from '@/lib/format';
+import { parseOddsInput, parseUnitsInput } from '@/lib/inputs';
 
 function haptic() {
   if (Platform.OS !== 'web') Haptics.selectionAsync();
@@ -63,12 +71,6 @@ function statusStyle(status: BetStatus, colors: ReturnType<typeof useColors>) {
     default:
       return { label: 'Pending', color: colors.primary, border: 'rgba(26,140,255,0.35)' };
   }
-}
-
-/** Signed units string for wager P&L, e.g. "+1.36u" / "-1.00u". */
-function formatPnlUnits(pnl: number): string {
-  const rounded = Math.round(pnl * 100) / 100;
-  return `${rounded > 0 ? '+' : ''}${rounded.toFixed(2)}u`;
 }
 
 function BetRow({
@@ -309,10 +311,8 @@ function EditBetSheet({
   const [notes, setNotes] = useState(bet.notes ?? '');
   const [error, setError] = useState<string | null>(null);
 
-  const parsedUnits = Number(units.replace(',', '.'));
-  const unitsValid = Number.isFinite(parsedUnits) && parsedUnits >= 0.01;
-  const parsedOdds = Number(odds.replace(',', '.'));
-  const oddsValid = Number.isFinite(parsedOdds) && parsedOdds !== 0;
+  const { value: parsedUnits, valid: unitsValid } = parseUnitsInput(units);
+  const { value: parsedOdds, valid: oddsValid } = parseOddsInput(odds);
 
   const submit = () => {
     if (!unitsValid || !oddsValid || updateBet.isPending) return;

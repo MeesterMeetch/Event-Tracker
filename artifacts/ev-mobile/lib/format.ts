@@ -16,6 +16,12 @@ export {
   formatTimeOnly,
 } from '@workspace/format';
 
+/** Signed units string for wager P&L, e.g. "+1.36u" / "-1.00u" / "0.00u". */
+export function formatPnlUnits(pnl: number): string {
+  const rounded = Math.round(pnl * 100) / 100;
+  return `${rounded > 0 ? '+' : ''}${rounded.toFixed(2)}u`;
+}
+
 /** A probability in [0,1] as a one-decimal percentage, e.g. "62.5%". */
 export function formatProb(p: number | null | undefined): string {
   if (p == null) return '—';

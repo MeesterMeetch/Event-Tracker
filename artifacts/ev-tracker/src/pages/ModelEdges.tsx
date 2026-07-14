@@ -288,23 +288,18 @@ export function EditPaperTradeDialog({ trade, open, onOpenChange, onSaved }: {
   const { toast } = useToast();
   const updateTrade = useUpdatePaperTrade();
   const [oddsText, setOddsText] = useState(String(trade.americanOdds));
-  const [showError, setShowError] = useState(false);
 
   // Re-seed the input each time the dialog opens for a (possibly different) trade.
   useEffect(() => {
     if (open) {
       setOddsText(String(trade.americanOdds));
-      setShowError(false);
     }
   }, [open, trade.id, trade.americanOdds]);
 
   const parsed = parseOddsInput(oddsText);
 
   const save = () => {
-    if (!parsed.valid) {
-      setShowError(true);
-      return;
-    }
+    if (!parsed.valid) return;
     updateTrade.mutate(
       { id: trade.id, data: { americanOdds: parsed.value } },
       {
@@ -344,17 +339,14 @@ export function EditPaperTradeDialog({ trade, open, onOpenChange, onSaved }: {
             id="paper-trade-odds"
             inputMode="text"
             value={oddsText}
-            onChange={(e) => {
-              setOddsText(e.target.value);
-              setShowError(false);
-            }}
+            onChange={(e) => setOddsText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") save();
             }}
-            aria-invalid={showError && !parsed.valid}
+            aria-invalid={!parsed.valid}
             placeholder="-110"
           />
-          {showError && !parsed.valid && (
+          {!parsed.valid && (
             <p className="text-xs text-destructive" role="alert">
               Odds must be -100 or below, or +100 and up (e.g. -110).
             </p>
@@ -364,7 +356,7 @@ export function EditPaperTradeDialog({ trade, open, onOpenChange, onSaved }: {
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={updateTrade.isPending}>
             Cancel
           </Button>
-          <Button onClick={save} disabled={updateTrade.isPending}>
+          <Button onClick={save} disabled={updateTrade.isPending || !parsed.valid}>
             {updateTrade.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
             Save price
           </Button>

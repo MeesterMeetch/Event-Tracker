@@ -203,10 +203,27 @@ describe("PaperTradesTable price correction", () => {
     const input = await screen.findByLabelText("American odds");
     await user.clear(input);
     await user.type(input, "50");
-    await user.click(screen.getByRole("button", { name: /save price/i }));
 
     expect(updateMutate).not.toHaveBeenCalled();
     expect(screen.getByRole("alert").textContent).toMatch(/-100 or below, or \+100 and up/);
+  });
+
+  it("disables Save while the price is impossible and re-enables it when the user corrects the value", async () => {
+    renderTable([makeTrade({ id: 203, americanOdds: -110 })]);
+
+    await user.click(screen.getByLabelText("Edit price for paper trade Gerrit Cole Over 6.5"));
+    const input = await screen.findByLabelText("American odds");
+
+    // Type an impossible price — Save must become disabled.
+    await user.clear(input);
+    await user.type(input, "50");
+    const saveBtn = screen.getByRole("button", { name: /save price/i });
+    expect((saveBtn as HTMLButtonElement).disabled).toBe(true);
+
+    // Correct it to a valid price — Save must become enabled again.
+    await user.clear(input);
+    await user.type(input, "-110");
+    expect((saveBtn as HTMLButtonElement).disabled).toBe(false);
   });
 });
 

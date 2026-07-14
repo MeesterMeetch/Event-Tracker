@@ -38,7 +38,7 @@ vi.mock("@/components/ui/use-toast", () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { LogBetDialog } from "./LiveEdges";
+import { LogBetDialog, ScannerLogButton } from "./LiveEdges";
 
 function makeEdge(overrides: Partial<EdgeOpportunity> = {}): EdgeOpportunity {
   return {
@@ -79,6 +79,80 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+function renderScannerLogButton(edge: EdgeOpportunity) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={qc}>
+      <ScannerLogButton edge={edge} />
+    </QueryClientProvider>,
+  );
+}
+
+describe("ScannerLogButton — impossible-price guard", () => {
+  it("renders a disabled button for an impossible price inside (-100, 100)", async () => {
+    renderScannerLogButton(makeEdge({ americanOdds: -50 }));
+
+    const btn = screen.getByRole("button");
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
+    expect(btn.getAttribute("aria-disabled")).toBeTruthy();
+    expect(btn.textContent).toMatch(/invalid odds/i);
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["negative impossible", -1],
+    ["zero", 0],
+    ["positive impossible", 50],
+    ["-99 (just inside)", -99],
+    ["+99 (just inside)", 99],
+  ])("is disabled for %s (%i)", (_label, americanOdds) => {
+    renderScannerLogButton(makeEdge({ americanOdds }));
+
+    const btn = screen.getByRole("button");
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
+    expect(btn.getAttribute("aria-disabled")).toBeTruthy();
+  });
+
+  it("keeps the button enabled at the valid boundary price -100", async () => {
+    const user = userEvent.setup();
+    renderScannerLogButton(makeEdge({ americanOdds: -100 }));
+
+    // Should render the Log trigger (not the disabled fallback)
+    const trigger = screen.getByRole("button", { name: /^log$/i });
+    expect((trigger as HTMLButtonElement).disabled).toBe(false);
+
+    // Clicking opens the dialog — mutation not called until form submit
+    await user.click(trigger);
+    await screen.findByRole("dialog");
+    expect(createMutate).not.toHaveBeenCalled(); // not until form submit
+  });
+
+  it("keeps the button enabled at the valid boundary price +100", async () => {
+    const user = userEvent.setup();
+    renderScannerLogButton(makeEdge({ americanOdds: 100 }));
+
+    const trigger = screen.getByRole("button", { name: /^log$/i });
+    expect((trigger as HTMLButtonElement).disabled).toBe(false);
+
+    await user.click(trigger);
+    await screen.findByRole("dialog");
+  });
+
+  it("fires the mutation for a valid price when the form is submitted", async () => {
+    const user = userEvent.setup();
+    renderScannerLogButton(makeEdge({ americanOdds: -110 }));
+
+    await user.click(screen.getByRole("button", { name: /^log$/i }));
+    await screen.findByRole("dialog");
+
+    // Submit with the default units value (1)
+    await user.click(screen.getByRole("button", { name: /log bet/i }));
+
+    await waitFor(() => expect(createMutate).toHaveBeenCalledTimes(1));
+    expect(createMutate.mock.calls[0][0].data.americanOdds).toBe(-110);
+  });
+});
 
 describe("LiveEdges LogBetDialog validation messages", () => {
   it("shows the minimum-stake message for units below 0.01 and blocks the mutation", async () => {

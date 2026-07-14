@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatOdds, formatPercent, formatPoint, formatGameTime, formatMarketLabel } from "@/lib/utils";
-import { isValidUnitsStake, propSelectionLabel } from "@workspace/format";
+import { isValidUnitsStake, isValidAmericanOdds, propSelectionLabel } from "@workspace/format";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Activity, Plus, Loader2, Sparkles } from "lucide-react";
@@ -166,6 +166,35 @@ export function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, childr
         </Form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Exported for testing: renders a disabled "Invalid odds" button for prices
+// in the impossible range (-100, +100), and the full LogBetDialog otherwise.
+// The guard mirrors ModelEdges's paper-trade log button so both scanners
+// apply the same rule with the same visual treatment.
+export function ScannerLogButton({ edge }: { edge: EdgeOpportunity }) {
+  const valid = isValidAmericanOdds(edge.americanOdds);
+  if (!valid) {
+    return (
+      <Button
+        size="sm"
+        variant="secondary"
+        className="w-full opacity-50"
+        disabled
+        aria-disabled
+        aria-label={`Cannot log — invalid odds ${edge.americanOdds}`}
+      >
+        Invalid odds
+      </Button>
+    );
+  }
+  return (
+    <LogBetDialog edge={edge}>
+      <Button size="sm" variant="secondary" className="w-full">
+        Log
+      </Button>
+    </LogBetDialog>
   );
 }
 
@@ -536,11 +565,7 @@ export default function LiveEdges() {
                               Analyze
                             </Button>
                           </AnalyzeGameDialog>
-                          <LogBetDialog edge={edge}>
-                            <Button size="sm" variant="secondary" className="w-full">
-                              Log
-                            </Button>
-                          </LogBetDialog>
+                          <ScannerLogButton edge={edge} />
                         </div>
                       </TableCell>
                     </TableRow>
@@ -699,11 +724,7 @@ export default function LiveEdges() {
                                       Analyze
                                     </Button>
                                   </AnalyzeGameDialog>
-                                  <LogBetDialog edge={edge}>
-                                    <Button size="sm" variant="secondary" className="w-full">
-                                      Log
-                                    </Button>
-                                  </LogBetDialog>
+                                  <ScannerLogButton edge={edge} />
                                 </div>
                               </TableCell>
                             </TableRow>

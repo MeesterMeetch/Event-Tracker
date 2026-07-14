@@ -255,7 +255,10 @@ function ValidationSummary() {
   );
 }
 
-function PaperTradesTable() {
+// Exported so the component test can lock in the graded-delete guard:
+// closed (graded) picks must confirm before deleting; open/expired delete
+// immediately with an undo toast.
+export function PaperTradesTable() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: trades, isLoading } = useListPaperTrades();
@@ -382,6 +385,7 @@ function PaperTradesTable() {
                     size="sm"
                     variant="ghost"
                     className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                    aria-label={`Delete paper trade ${t.pitcher} ${t.selection} ${t.point}`}
                     onClick={() => (t.status === "closed" ? setConfirmTrade(t) : remove(t))}
                     disabled={deleteTrade.isPending}
                   >

@@ -44,7 +44,10 @@ function haptic() {
   if (Platform.OS !== 'web') Haptics.selectionAsync();
 }
 
-function TradeRow({
+// Exported so the component test can lock in the graded-delete guard:
+// closed (graded) picks show the blocking warning block when armed;
+// open/expired picks get the lightweight inline REMOVE? confirm.
+export function TradeRow({
   trade,
   onDelete,
   deleting,
@@ -155,6 +158,7 @@ function TradeRow({
           <Pressable
             hitSlop={10}
             disabled={deleting}
+            accessibilityLabel={`Delete pick ${trade.pitcher} ${trade.selection} ${trade.point}`}
             onPress={() => {
               haptic();
               setConfirming(true);

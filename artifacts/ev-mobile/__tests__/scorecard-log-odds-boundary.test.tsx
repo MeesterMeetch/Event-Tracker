@@ -86,7 +86,8 @@ vi.mock('@workspace/api-client-react', () => ({
   getGetPaperTradeSummaryQueryKey: () => ['paper-trade-summary'],
 }));
 
-import { ProjectionCard } from '../app/(tabs)/index';
+import { ProjectionCard, PropResultsCard } from '../app/(tabs)/index';
+import type { EdgeOpportunity } from '@workspace/api-client-react';
 
 // Partial text that the disabled button's accessible label begins with.
 const DISABLED_LABEL_PREFIX = 'Cannot log';
@@ -254,5 +255,112 @@ describe('ProjectionCard log button — valid prices at and beyond the boundary'
     await user.click(btn);
 
     expect(createPaperTradeMutate).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─── PropResultsCard — same impossible-odds guard ────────────────────────────
+
+function makePropEdge(americanOdds: number): EdgeOpportunity {
+  return {
+    sport: 'baseball_mlb',
+    gameId: 'g-prop-boundary',
+    commenceTime: '2026-07-15T23:10:00Z',
+    homeTeam: 'NYY',
+    awayTeam: 'BOS',
+    market: 'batter_strikeouts',
+    selection: 'Over',
+    point: 5.5,
+    player: 'Aaron Judge',
+    book: 'fanduel',
+    americanOdds,
+    fairOdds: -108,
+    evPercent: 3.2,
+  } as EdgeOpportunity;
+}
+
+describe('PropResultsCard log button — disabled state for impossible prices', () => {
+  it('shows a disabled prop-row button for odds of 0', () => {
+    render(<PropResultsCard edges={[makePropEdge(0)]} />);
+
+    // Idle label should be absent
+    expect(screen.queryByLabelText(/Log .* to bet log/i)).toBeNull();
+
+    // Disabled label must be present
+    const btn = screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX));
+    expect(btn).toBeDefined();
+  });
+
+  it('marks the prop-row button aria-disabled for odds of 0', () => {
+    render(<PropResultsCard edges={[makePropEdge(0)]} />);
+
+    const btn = screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX));
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('never opens the log sheet when the disabled prop-row button is activated for odds of 0', () => {
+    render(<PropResultsCard edges={[makePropEdge(0)]} />);
+
+    const btn = screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX));
+    fireEvent.click(btn);
+
+    // The LogPropSheet modal should not mount — "Log Bet" submit button absent
+    expect(screen.queryByLabelText('Log bet')).toBeNull();
+  });
+
+  it('shows a disabled prop-row button for odds of 50', () => {
+    render(<PropResultsCard edges={[makePropEdge(50)]} />);
+
+    expect(screen.queryByLabelText(/Log .* to bet log/i)).toBeNull();
+    expect(screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX))).toBeDefined();
+  });
+
+  it('marks the prop-row button aria-disabled for odds of 50', () => {
+    render(<PropResultsCard edges={[makePropEdge(50)]} />);
+
+    const btn = screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX));
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+  });
+
+  it('shows a disabled prop-row button for odds of -50', () => {
+    render(<PropResultsCard edges={[makePropEdge(-50)]} />);
+
+    expect(screen.queryByLabelText(/Log .* to bet log/i)).toBeNull();
+    expect(screen.getByLabelText(new RegExp(DISABLED_LABEL_PREFIX))).toBeDefined();
+  });
+});
+
+describe('PropResultsCard log button — valid prices at and beyond the boundary', () => {
+  it('accepts odds of -100: prop-row button is tappable and opens the log sheet', async () => {
+    render(<PropResultsCard edges={[makePropEdge(-100)]} />);
+
+    const btn = screen.getByLabelText(/Log .* to bet log/i);
+    expect(btn.getAttribute('aria-disabled')).not.toBe('true');
+
+    await user.click(btn);
+
+    // Sheet should open (Log Bet submit button is present)
+    expect(screen.getByLabelText('Log bet')).toBeDefined();
+  });
+
+  it('accepts odds of 100: prop-row button is tappable and opens the log sheet', async () => {
+    render(<PropResultsCard edges={[makePropEdge(100)]} />);
+
+    const btn = screen.getByLabelText(/Log .* to bet log/i);
+    expect(btn.getAttribute('aria-disabled')).not.toBe('true');
+
+    await user.click(btn);
+
+    expect(screen.getByLabelText('Log bet')).toBeDefined();
+  });
+
+  it('accepts a canonical valid price -110: prop-row button opens the log sheet', async () => {
+    render(<PropResultsCard edges={[makePropEdge(-110)]} />);
+
+    const btn = screen.getByLabelText(/Log .* to bet log/i);
+    expect(btn.getAttribute('aria-disabled')).not.toBe('true');
+
+    await user.click(btn);
+
+    expect(screen.getByLabelText('Log bet')).toBeDefined();
   });
 });

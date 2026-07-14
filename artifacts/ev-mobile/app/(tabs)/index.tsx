@@ -482,7 +482,7 @@ const propKey = (edge: EdgeOpportunity) =>
  * Scanned prop edges for one game. Each row can be logged to the bet log
  * (units + notes) — props still never touch the paper-trade scorecard or CLV.
  */
-function PropResultsCard({ edges }: { edges: EdgeOpportunity[] }) {
+export function PropResultsCard({ edges }: { edges: EdgeOpportunity[] }) {
   const colors = useColors();
   // The sheet edits one prop at a time; `logged` keeps the row's button in a
   // checked state so the same scan can't double-log a prop by accident.
@@ -509,7 +509,11 @@ function PropResultsCard({ edges }: { edges: EdgeOpportunity[] }) {
   }
 
   const logStateFor = (edge: EdgeOpportunity): LogState =>
-    logged.has(propKey(edge)) ? 'logged' : 'idle';
+    logged.has(propKey(edge))
+      ? 'logged'
+      : !isValidAmericanOdds(edge.americanOdds)
+        ? 'invalid'
+        : 'idle';
 
   return (
     <Card style={{ gap: 10 }}>

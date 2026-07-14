@@ -1305,7 +1305,7 @@ components:
           type: ["string", "null"]
     SportBreakdown:
       type: object
-      required: [sport, bets, won, lost, push, pending, settledUnits, roiPercent, pnl]
+      required: [sport, bets, won, lost, push, pending, pendingUnits, settledUnits, roiPercent, pnl]
       properties:
         sport:
           type: string
@@ -1319,6 +1319,13 @@ components:
           type: integer
         pending:
           type: integer
+        pendingUnits:
+          description: >-
+            Open exposure for this sport — the sum of units on pending
+            (unsettled) bets, excluding soft-deleted ones. Mirrors the
+            top-level pendingUnits so clients can show where open stake is
+            concentrated, not just how many bets are pending.
+          type: number
         settledUnits:
           description: >-
             Realized settled stake for this sport — the sum of units on bets

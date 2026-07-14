@@ -134,6 +134,7 @@ export default function Dashboard() {
                 <TableHead>Sport</TableHead>
                 <TableHead>Bets</TableHead>
                 <TableHead>Record (W-L-P)</TableHead>
+                <TableHead className="text-right">Pending</TableHead>
                 <TableHead className="text-right">ROI</TableHead>
                 <TableHead className="text-right">P&L</TableHead>
               </TableRow>
@@ -141,7 +142,7 @@ export default function Dashboard() {
             <TableBody>
               {summary.bySport.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     No data available.
                   </TableCell>
                 </TableRow>
@@ -153,6 +154,15 @@ export default function Dashboard() {
                     </TableCell>
                     <TableCell>{sport.bets}</TableCell>
                     <TableCell>{sport.won}-{sport.lost}-{sport.push}</TableCell>
+                    {/* Open exposure per sport — count plus units riding, so
+                        concentration is visible when bets span leagues. */}
+                    <TableCell className="text-right font-mono">
+                      {sport.pending > 0 ? (
+                        <span>{sport.pending} · +{sport.pendingUnits.toFixed(2)}u</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     {/* Same realized-stake rule as the mobile ledger card:
                         only tint ROI/P&L once this sport has settled stake
                         with a real pnl (settledUnits > 0), never off the

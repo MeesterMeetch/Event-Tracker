@@ -947,7 +947,9 @@ export default function BetsScreen() {
                                 numberOfLines={1}
                               >
                                 {row.won}-{row.lost}-{row.push}
-                                {row.pending > 0 ? ` · ${row.pending} pending` : ''}
+                                {/* Show units riding next to the pending count so
+                                    exposure concentration is visible per sport. */}
+                                {row.pending > 0 ? ` · ${row.pending} pending (${Math.round(row.pendingUnits * 100) / 100}u)` : ''}
                               </Text>
                             </View>
                             <Feather

@@ -79,6 +79,7 @@ interface SummaryBody {
     lost: number;
     push: number;
     pending: number;
+    pendingUnits: number;
     settledUnits: number;
     roiPercent: number;
     pnl: number;
@@ -254,11 +255,26 @@ describe("GET /dashboard/summary — per-sport breakdown", () => {
     expect(mlb.pnl).toBe(1);
     expect(mlb.settledUnits).toBe(2);
     expect(mlb.roiPercent).toBe(50);
+    // Open exposure: only the pending bet's 3 units ride for MLB.
+    expect(mlb.pendingUnits).toBe(3);
 
     const nba = body.bySport.find((s) => s.sport === "basketball_nba")!;
     expect(nba.pnl).toBe(5);
     expect(nba.settledUnits).toBe(2);
     expect(nba.bets).toBe(1);
+    expect(nba.pendingUnits).toBe(0);
+  });
+
+  it("excludes soft-deleted pending bets from a sport's pendingUnits", async () => {
+    seedBet({ sport: "baseball_mlb", status: "pending", pnl: null, units: 2 });
+    seedBet({ sport: "baseball_mlb", status: "pending", pnl: null, units: 5, deletedAt: new Date("2026-07-14T00:00:00Z") });
+    const app = await buildApp();
+
+    const { body } = await getSummary(app);
+
+    const mlb = body.bySport.find((s) => s.sport === "baseball_mlb")!;
+    expect(mlb.pending).toBe(1);
+    expect(mlb.pendingUnits).toBe(2);
   });
 
   it("reports zero settledUnits for a sport whose settled bets have no pnl booked yet", async () => {

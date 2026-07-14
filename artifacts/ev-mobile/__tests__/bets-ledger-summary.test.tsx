@@ -118,6 +118,7 @@ function makeSportRow(overrides: Partial<SportBreakdown>): SportBreakdown {
     lost: 0,
     push: 0,
     pending: 3,
+    pendingUnits: 0,
     settledUnits: 0,
     roiPercent: 0,
     pnl: 0,

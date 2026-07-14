@@ -123,8 +123,8 @@ const summaryBase: DashboardSummary = {
   avgClvPercent: null,
   clvSampleSize: 0,
   bySport: [
-    { sport: 'basketball_wnba', bets: 2, won: 0, lost: 1, push: 0, pending: 1, settledUnits: 1, pnl: -1, roiPercent: -100 },
-    { sport: 'baseball_mlb', bets: 1, won: 1, lost: 0, push: 0, pending: 0, settledUnits: 1, pnl: 0.91, roiPercent: 91 },
+    { sport: 'basketball_wnba', bets: 2, won: 0, lost: 1, push: 0, pending: 1, pendingUnits: 1, settledUnits: 1, pnl: -1, roiPercent: -100 },
+    { sport: 'baseball_mlb', bets: 1, won: 1, lost: 0, push: 0, pending: 0, pendingUnits: 0, settledUnits: 1, pnl: 0.91, roiPercent: 91 },
   ],
 } as DashboardSummary;
 

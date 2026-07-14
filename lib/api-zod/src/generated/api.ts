@@ -388,6 +388,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "lost": zod.number(),
   "push": zod.number(),
   "pending": zod.number(),
+  "pendingUnits": zod.number().describe('Open exposure for this sport — the sum of units on pending (unsettled) bets, excluding soft-deleted ones. Mirrors the top-level pendingUnits so clients can show where open stake is concentrated, not just how many bets are pending.'),
   "settledUnits": zod.number().describe('Realized settled stake for this sport — the sum of units on bets that are settled AND have a real pnl. This is the sport-level ROI denominator, mirroring the top-level totalUnits semantics; clients must key P&L\/ROI muting off this, not the W-L-P count, so a bet settled with a still-null pnl can\'t produce an unmuted green zero.'),
   "roiPercent": zod.number(),
   "pnl": zod.number()

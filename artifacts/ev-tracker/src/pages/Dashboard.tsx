@@ -56,12 +56,14 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Units</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Settled Stake</CardTitle>
             <Coins className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
+            {/* Server semantics: totalUnits sums SETTLED stake only — it is
+                the ROI denominator, not the pending exposure. */}
             <div className="text-2xl font-bold font-mono">{summary.totalUnits.toFixed(2)}u</div>
-            <p className="text-xs text-muted-foreground mt-1">Across {summary.totalBets} tracked bets</p>
+            <p className="text-xs text-muted-foreground mt-1">Units risked on settled bets — the ROI denominator</p>
           </CardContent>
         </Card>
 

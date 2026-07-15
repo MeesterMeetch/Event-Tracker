@@ -427,6 +427,8 @@ export function EditTradeSheet({
                   setOddsText(text);
                   setServerError(null);
                 }}
+                onSubmitEditing={save}
+                returnKeyType="done"
                 keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
                 autoCapitalize="none"
                 autoCorrect={false}

@@ -224,6 +224,23 @@ describe('EditTradeSheet price correction', () => {
     );
   });
 
+  it('pressing Enter with an impossible price does not call the update mutation and keeps the inline error visible', async () => {
+    render(<EditTradeSheet trade={makeTrade()} onClose={onClose} onSaved={onSaved} />);
+
+    const input = screen.getByLabelText('American odds');
+
+    // Type an impossible price (inside the -100..+100 dead zone) then press Enter.
+    await user.clear(input);
+    await user.type(input, '50');
+    await user.keyboard('{Enter}');
+
+    // The early-return guard in save() must have fired — no mutation call.
+    expect(updateMutate).not.toHaveBeenCalled();
+
+    // The inline validation message must still be visible.
+    expect(screen.getByText(inlineError)).toBeDefined();
+  });
+
   it('surfaces the server rejection inline instead of closing the sheet', async () => {
     updateImpl = (_vars, opts) =>
       opts?.onError?.({ data: { error: 'American odds cannot be between -99 and +99.' } });

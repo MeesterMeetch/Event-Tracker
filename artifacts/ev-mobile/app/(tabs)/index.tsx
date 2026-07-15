@@ -223,10 +223,11 @@ export function LogPropSheet({
   const [error, setError] = useState<string | null>(null);
 
   const { value: parsedUnits, valid: unitsValid } = parseUnitsInput(units);
+  const oddsValid = isValidAmericanOdds(edge.americanOdds);
   const selectionLabel = propSelectionLabel(edge);
 
   const submit = () => {
-    if (!unitsValid || createBet.isPending) return;
+    if (!unitsValid || !oddsValid || createBet.isPending) return;
     haptic();
     setError(null);
     createBet.mutate(
@@ -377,6 +378,8 @@ export function LogPropSheet({
                 keyboardType="decimal-pad"
                 inputMode="decimal"
                 selectTextOnFocus
+                returnKeyType="done"
+                onSubmitEditing={submit}
                 accessibilityLabel="Units"
                 style={inputStyle}
                 placeholderTextColor={colors.mutedForeground}
@@ -387,6 +390,15 @@ export function LogPropSheet({
                 </Text>
               ) : null}
             </View>
+
+            {!oddsValid ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Feather name="alert-circle" size={14} color={colors.destructive} />
+                <Text style={{ flex: 1, fontFamily: fonts.regular, fontSize: 12, color: colors.destructive }}>
+                  Odds must be −100 or below, or +100 and up (e.g. −110).
+                </Text>
+              </View>
+            ) : null}
 
             <View>
               <Text style={label}>Notes (optional)</Text>
@@ -412,7 +424,7 @@ export function LogPropSheet({
 
             <Pressable
               onPress={submit}
-              disabled={!unitsValid || createBet.isPending}
+              disabled={!unitsValid || !oddsValid || createBet.isPending}
               accessibilityRole="button"
               accessibilityLabel="Log bet"
               style={({ pressed }) => ({
@@ -423,7 +435,7 @@ export function LogPropSheet({
                 paddingVertical: 13,
                 borderRadius: colors.radius,
                 backgroundColor: colors.primary,
-                opacity: !unitsValid || createBet.isPending ? 0.5 : pressed ? 0.75 : 1,
+                opacity: !unitsValid || !oddsValid || createBet.isPending ? 0.5 : pressed ? 0.75 : 1,
               })}
             >
               {createBet.isPending ? (

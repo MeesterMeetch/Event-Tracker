@@ -241,6 +241,25 @@ describe('EditTradeSheet price correction', () => {
     expect(screen.getByText(inlineError)).toBeDefined();
   });
 
+  it('clearing the price field to empty keeps the Save button disabled and shows the inline error', async () => {
+    render(<EditTradeSheet trade={makeTrade()} onClose={onClose} onSaved={onSaved} />);
+
+    const btn = screen.getByLabelText('Save price');
+
+    // Clear the field entirely.
+    const input = screen.getByLabelText('American odds');
+    await user.clear(input);
+
+    // Empty string is not a valid price — inline error must appear.
+    expect(screen.getByText(inlineError)).toBeDefined();
+
+    // Save button must be disabled.
+    expect(btn.getAttribute('aria-disabled')).toBe('true');
+
+    // No mutation must have fired.
+    expect(updateMutate).not.toHaveBeenCalled();
+  });
+
   it('surfaces the server rejection inline instead of closing the sheet', async () => {
     updateImpl = (_vars, opts) =>
       opts?.onError?.({ data: { error: 'American odds cannot be between -99 and +99.' } });

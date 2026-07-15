@@ -43,7 +43,12 @@ export function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, childr
     },
   });
 
+  const oddsValid = isValidAmericanOdds(edge.americanOdds);
+
   const onSubmit = (data: LogBetFormValues) => {
+    // Defensive guard: the submit path must never reach the mutation with an
+    // impossible price even if the dialog was opened outside ScannerLogButton.
+    if (!oddsValid) return;
     // Prop bets carry the player in the logged selection so the bet log
     // reads "Aaron Judge Over 1.5", not just "Over 1.5". Shared with mobile —
     // the server's duplicate-open-bet guard keys off this exact string.
@@ -156,8 +161,13 @@ export function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, childr
                 </FormItem>
               )}
             />
+            {!oddsValid && (
+              <p className="text-xs text-destructive" role="alert">
+                Odds must be -100 or below, or +100 and up (e.g. -110).
+              </p>
+            )}
             <DialogFooter className="mt-6">
-              <Button type="submit" disabled={createBet.isPending} className="w-full sm:w-auto">
+              <Button type="submit" disabled={createBet.isPending || !oddsValid} className="w-full sm:w-auto">
                 {createBet.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                 Log Bet
               </Button>

@@ -154,6 +154,53 @@ describe("ScannerLogButton — impossible-price guard", () => {
   });
 });
 
+/**
+ * Locks in the impossible-odds guard inside LogBetDialog itself — independent
+ * of ScannerLogButton. If the dialog is ever opened directly (e.g. in a future
+ * context that bypasses the scanner button) with a price in the dead zone
+ * (-100, +100), the form must block the mutation, show an inline error, and
+ * disable the submit button. The Enter shortcut in the units field must also
+ * be blocked. A refactor that removes the oddsValid check should fail here.
+ */
+describe("LogBetDialog impossible-odds submit guard", () => {
+  it("shows an inline error and does not call the mutation when opened with impossible odds", async () => {
+    const user = await renderOpenDialog(makeEdge({ americanOdds: 50 }));
+
+    // The dialog is open — inline error must already be visible.
+    expect(screen.getByRole("alert").textContent).toMatch(/-100 or below, or \+100 and up/);
+
+    // Clicking the submit button must not fire the mutation.
+    await user.click(screen.getByRole("button", { name: /log bet/i }));
+    expect(createMutate).not.toHaveBeenCalled();
+  });
+
+  it("disables the Log Bet button when odds are impossible", async () => {
+    await renderOpenDialog(makeEdge({ americanOdds: -50 }));
+
+    const btn = screen.getByRole("button", { name: /log bet/i });
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("pressing Enter in the units field with impossible odds does not call the mutation", async () => {
+    const user = await renderOpenDialog(makeEdge({ americanOdds: 0 }));
+
+    const units = screen.getByLabelText(/units/i);
+    await user.clear(units);
+    await user.type(units, "2{Enter}");
+
+    expect(createMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toMatch(/-100 or below, or \+100 and up/);
+  });
+
+  it("keeps the submit button enabled and hides the error for a valid boundary price -100", async () => {
+    await renderOpenDialog(makeEdge({ americanOdds: -100 }));
+
+    const btn = screen.getByRole("button", { name: /log bet/i });
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
 describe("LiveEdges LogBetDialog validation messages", () => {
   it("shows the minimum-stake message for units below 0.01 and blocks the mutation", async () => {
     const user = await renderOpenDialog(makeEdge());

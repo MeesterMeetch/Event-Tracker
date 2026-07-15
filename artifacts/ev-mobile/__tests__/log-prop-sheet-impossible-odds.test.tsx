@@ -247,6 +247,85 @@ describe('LogPropSheet — impossible odds disable the Log Bet button', () => {
   });
 });
 
+// ─── Impossible odds: Enter / interaction on Notes field must not submit ──────
+
+describe('LogPropSheet — impossible odds block any submission path via the notes field', () => {
+  it('does not call the mutation after typing in the notes field and pressing Enter with odds of 0', async () => {
+    render(
+      <LogPropSheet
+        edge={makeEdge(0)}
+        onClose={onClose}
+        onLogged={onLogged}
+        onDuplicate={onDuplicate}
+      />,
+    );
+
+    // The notes TextInput is multiline — Enter appends a newline, not a submit.
+    // Regardless of how the user interacts with it, the guard must hold.
+    const notesInput = screen.getByLabelText('Notes');
+    await user.click(notesInput);
+    await user.type(notesInput, 'great price{Enter}');
+
+    expect(createBetMutate).not.toHaveBeenCalled();
+  });
+
+  it('does not call the mutation after typing in the notes field with odds of 50', async () => {
+    render(
+      <LogPropSheet
+        edge={makeEdge(50)}
+        onClose={onClose}
+        onLogged={onLogged}
+        onDuplicate={onDuplicate}
+      />,
+    );
+
+    const notesInput = screen.getByLabelText('Notes');
+    await user.click(notesInput);
+    await user.type(notesInput, 'test note{Enter}');
+
+    expect(createBetMutate).not.toHaveBeenCalled();
+  });
+
+  it('does not call the mutation after typing in the notes field with odds of -50', async () => {
+    render(
+      <LogPropSheet
+        edge={makeEdge(-50)}
+        onClose={onClose}
+        onLogged={onLogged}
+        onDuplicate={onDuplicate}
+      />,
+    );
+
+    const notesInput = screen.getByLabelText('Notes');
+    await user.click(notesInput);
+    await user.type(notesInput, 'another note{Enter}');
+
+    expect(createBetMutate).not.toHaveBeenCalled();
+  });
+
+  it('does not call the mutation when moving focus from notes to units and pressing Enter with impossible odds', async () => {
+    render(
+      <LogPropSheet
+        edge={makeEdge(0)}
+        onClose={onClose}
+        onLogged={onLogged}
+        onDuplicate={onDuplicate}
+      />,
+    );
+
+    // Fill notes, tab back to units field, press Enter — mutation must still be blocked.
+    const notesInput = screen.getByLabelText('Notes');
+    await user.click(notesInput);
+    await user.type(notesInput, 'some context');
+
+    const unitsInput = screen.getByLabelText('Units');
+    await user.click(unitsInput);
+    await user.keyboard('{Enter}');
+
+    expect(createBetMutate).not.toHaveBeenCalled();
+  });
+});
+
 // ─── Valid boundary odds must still pass ─────────────────────────────────────
 
 describe('LogPropSheet — valid boundary odds allow submission', () => {

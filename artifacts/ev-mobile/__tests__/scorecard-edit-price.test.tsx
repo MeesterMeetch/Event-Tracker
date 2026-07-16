@@ -288,6 +288,35 @@ describe('EditTradeSheet price correction', () => {
     expect(onSaved).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it('shows the fallback message when the server returns a vague error with no descriptive body', async () => {
+    // Simulate a 500 with no data.error — the onError handler falls back to the
+    // hardcoded string rather than going silent.
+    updateImpl = (_vars, opts) => opts?.onError?.({});
+    render(<EditTradeSheet trade={makeTrade()} onClose={onClose} onSaved={onSaved} />);
+
+    await typeOddsAndSave('-115');
+
+    expect(
+      screen.getByText('Could not correct this price. Try again.'),
+    ).toBeDefined();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shows the fallback message when the server returns a null error object', async () => {
+    // Simulate a network-level failure where onError receives null.
+    updateImpl = (_vars, opts) => opts?.onError?.(null);
+    render(<EditTradeSheet trade={makeTrade()} onClose={onClose} onSaved={onSaved} />);
+
+    await typeOddsAndSave('-115');
+
+    expect(
+      screen.getByText('Could not correct this price. Try again.'),
+    ).toBeDefined();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
 
 describe('TradeRow edit affordance', () => {

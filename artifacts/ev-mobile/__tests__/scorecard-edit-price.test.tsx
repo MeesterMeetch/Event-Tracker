@@ -241,6 +241,23 @@ describe('EditTradeSheet price correction', () => {
     expect(screen.getByText(inlineError)).toBeDefined();
   });
 
+  it('pressing Enter with an empty price field does not call the update mutation and keeps the inline error visible', async () => {
+    render(<EditTradeSheet trade={makeTrade()} onClose={onClose} onSaved={onSaved} />);
+
+    const input = screen.getByLabelText('American odds');
+
+    // Clear the field entirely, leaving it blank, then press Enter.
+    await user.clear(input);
+    await user.keyboard('{Enter}');
+
+    // An empty string is not a valid odds value — save() must bail before
+    // calling the mutation.
+    expect(updateMutate).not.toHaveBeenCalled();
+
+    // The inline validation message must still be visible.
+    expect(screen.getByText(inlineError)).toBeDefined();
+  });
+
   it('clearing the price field to empty keeps the Save button disabled and shows the inline error', async () => {
     render(<EditTradeSheet trade={makeTrade()} onClose={onClose} onSaved={onSaved} />);
 

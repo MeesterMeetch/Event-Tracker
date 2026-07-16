@@ -243,6 +243,24 @@ describe("PaperTradesTable price correction", () => {
     // The inline validation message must still be visible.
     expect(screen.getByRole("alert").textContent).toMatch(/-100 or below, or \+100 and up/);
   });
+
+  it("pressing Enter with an empty price field does not call the update mutation and keeps the inline error visible", async () => {
+    renderTable([makeTrade({ id: 205, americanOdds: -110 })]);
+
+    await user.click(screen.getByLabelText("Edit price for paper trade Gerrit Cole Over 6.5"));
+    const input = await screen.findByLabelText("American odds");
+
+    // Clear the field entirely, leaving it blank, then press Enter.
+    await user.clear(input);
+    await user.keyboard("{Enter}");
+
+    // An empty string is not a valid odds value — save() must bail before
+    // calling the mutation.
+    expect(updateMutate).not.toHaveBeenCalled();
+
+    // The inline validation alert must remain visible.
+    expect(screen.getByRole("alert").textContent).toMatch(/-100 or below, or \+100 and up/);
+  });
 });
 
 describe("PaperTradesTable delete undo", () => {

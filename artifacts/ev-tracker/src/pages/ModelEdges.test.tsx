@@ -48,7 +48,7 @@ vi.mock("@/components/ui/use-toast", () => ({
 // ModelPerformance pulls in charting; irrelevant to the delete guard.
 vi.mock("@/components/ModelPerformance", () => ({ default: () => null }));
 
-import { PaperTradesTable, ProjectionCard } from "./ModelEdges";
+import { PaperTradesTable, ProjectionCard, EditPaperTradeDialog } from "./ModelEdges";
 import type { ModelPitcherProjection } from "@workspace/api-client-react";
 
 function makeTrade(overrides: Partial<PaperTrade>): PaperTrade {
@@ -443,6 +443,100 @@ describe("ProjectionCard duplicate-log toast", () => {
  * A refactor that removes the isValidAmericanOdds check from the button's
  * disabled prop should fail here.
  */
+/**
+ * Locks in the server-rejection path of EditPaperTradeDialog: when the PATCH
+ * mutation comes back with a server error the dialog must stay open (so the
+ * user can correct and retry), surface the error message, and never call
+ * onSaved. If the onError handler is refactored to close the dialog or to
+ * skip the toast, these tests will catch the regression.
+ *
+ * Mirrors the equivalent test on the mobile EditTradeSheet.
+ */
+describe("EditPaperTradeDialog server-rejection path", () => {
+  function renderDialog(onOpenChange = vi.fn(), onSaved = vi.fn()) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={qc}>
+        <EditPaperTradeDialog
+          trade={makeTrade({ id: 301, americanOdds: -110 })}
+          open
+          onOpenChange={onOpenChange}
+          onSaved={onSaved}
+        />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("keeps the dialog open when the server rejects the corrected price", async () => {
+    updateMutate.mockImplementation((_vars, opts) =>
+      opts?.onError?.({ status: 400, data: { error: "Price is outside allowed range." } }),
+    );
+    const onOpenChange = vi.fn();
+    renderDialog(onOpenChange);
+
+    // Type a valid price and submit so the mutation fires.
+    const input = screen.getByLabelText("American odds");
+    await user.clear(input);
+    await user.type(input, "-120");
+    await user.click(screen.getByRole("button", { name: /save price/i }));
+
+    // The dialog must remain open — onOpenChange(false) must not have been called.
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it("surfaces the server's error message in a destructive toast", async () => {
+    updateMutate.mockImplementation((_vars, opts) =>
+      opts?.onError?.({ status: 400, data: { error: "Price is outside allowed range." } }),
+    );
+    renderDialog();
+
+    const input = screen.getByLabelText("American odds");
+    await user.clear(input);
+    await user.type(input, "-120");
+    await user.click(screen.getByRole("button", { name: /save price/i }));
+
+    const errorToast = toastMock.mock.calls.find(
+      ([args]) => args?.title === "Failed to correct price",
+    );
+    expect(errorToast).toBeDefined();
+    expect(errorToast![0].variant).toBe("destructive");
+    expect(errorToast![0].description).toBe("Price is outside allowed range.");
+  });
+
+  it("does not call onSaved when the server rejects the price", async () => {
+    updateMutate.mockImplementation((_vars, opts) =>
+      opts?.onError?.({ status: 400, data: { error: "Price is outside allowed range." } }),
+    );
+    const onSaved = vi.fn();
+    renderDialog(vi.fn(), onSaved);
+
+    const input = screen.getByLabelText("American odds");
+    await user.clear(input);
+    await user.type(input, "-120");
+    await user.click(screen.getByRole("button", { name: /save price/i }));
+
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it("falls back to 'An unknown error occurred.' when the server gives no message", async () => {
+    updateMutate.mockImplementation((_vars, opts) =>
+      opts?.onError?.({ status: 500, data: {} }),
+    );
+    renderDialog();
+
+    const input = screen.getByLabelText("American odds");
+    await user.clear(input);
+    await user.type(input, "-120");
+    await user.click(screen.getByRole("button", { name: /save price/i }));
+
+    const errorToast = toastMock.mock.calls.find(
+      ([args]) => args?.title === "Failed to correct price",
+    );
+    expect(errorToast).toBeDefined();
+    expect(errorToast![0].description).toBe("An unknown error occurred.");
+  });
+});
+
 describe("ProjectionCard impossible-odds disabled state", () => {
   function makeProjectionWithOdds(americanOdds: number): ModelPitcherProjection {
     return {

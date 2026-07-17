@@ -327,6 +327,48 @@ describe("PaperTradesTable delete undo", () => {
     expect(failureToast![0].variant).toBe("destructive");
     expect(failureToast![0].description).toBe("Restore window has passed.");
   });
+
+  /**
+   * The grace-window restore endpoint purges expired tombstones before
+   * attempting the update, so an expired undo returns 404 with
+   * { error: "This pick can no longer be restored." }.  The handler must
+   * surface that body text rather than swallowing it silently.
+   */
+  it("surfaces the server error message when the grace window has expired (404)", async () => {
+    restoreMutate.mockImplementation((_vars, opts) =>
+      opts?.onError?.({ status: 404, data: { error: "This pick can no longer be restored." } }),
+    );
+    const action = await deleteAndGetUndoAction(107);
+
+    action.props.onClick();
+
+    const failureToast = toastMock.mock.calls.find(
+      ([args]) => args?.title === "Could not undo",
+    );
+    expect(failureToast).toBeDefined();
+    expect(failureToast![0].variant).toBe("destructive");
+    // The server's body { error } must be forwarded verbatim — not swallowed.
+    expect(failureToast![0].description).toBe("This pick can no longer be restored.");
+  });
+
+  it("falls back to the default message when the error body carries no text", async () => {
+    // e.g. a network error or an unexpected server response with no body
+    restoreMutate.mockImplementation((_vars, opts) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      opts?.onError?.({ status: 500, data: {} } as any),
+    );
+    const action = await deleteAndGetUndoAction(108);
+
+    action.props.onClick();
+
+    const failureToast = toastMock.mock.calls.find(
+      ([args]) => args?.title === "Could not undo",
+    );
+    expect(failureToast).toBeDefined();
+    expect(failureToast![0].variant).toBe("destructive");
+    // No body → fallback must be shown so the toast is never blank.
+    expect(failureToast![0].description).toBe("This pick can no longer be restored.");
+  });
 });
 
 /**

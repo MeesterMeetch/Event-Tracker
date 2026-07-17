@@ -198,6 +198,26 @@ describe("DeleteBetDialog server error fallback", () => {
     // Dialog must stay open so the user can retry.
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
+
+  it("shows the server's message when delete onError carries err.data.error", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    deleteMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+        opts?.onError?.({ data: { error: "Bet is already settled" } });
+      },
+    );
+    renderDeleteDialog(makeBet(), onOpenChange);
+
+    await user.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const [toastCall] = toastMock.mock.calls;
+    expect(toastCall[0].description).toBe("Bet is already settled");
+    expect(toastCall[0].variant).toBe("destructive");
+    // Dialog must stay open so the user can retry.
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
 });
 
 describe("undoDelete (restore) server error fallback", () => {
@@ -304,6 +324,37 @@ describe("undoDelete (restore) server error fallback", () => {
     expect(restoreErrorToast.description).toBe("This bet can no longer be restored.");
     expect(restoreErrorToast.variant).toBe("destructive");
   });
+
+  it("shows the server's message when restore onError carries err.data.error", async () => {
+    const user = userEvent.setup();
+
+    deleteMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+    restoreMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+        opts?.onError?.({ data: { error: "Restore window has expired" } });
+      },
+    );
+
+    renderBetLog([makeBet()]);
+    await openDeleteDialogAndConfirm(user);
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const deleteSuccessToast = toastMock.mock.calls[0][0];
+
+    const { unmount: unmountAction } = render(deleteSuccessToast.action);
+    await user.click(screen.getByRole("button", { name: /undo/i }));
+    unmountAction();
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(2));
+    const restoreErrorToast = toastMock.mock.calls[1][0];
+    expect(restoreErrorToast.title).toBe("Could not undo");
+    expect(restoreErrorToast.description).toBe("Restore window has expired");
+    expect(restoreErrorToast.variant).toBe("destructive");
+  });
 });
 
 describe("EditBetDialog server error fallback", () => {
@@ -352,6 +403,26 @@ describe("EditBetDialog server error fallback", () => {
     expect(toastCall[0].description).toBe("An unknown error occurred.");
     expect(toastCall[0].variant).toBe("destructive");
     // Dialog must stay open — onOpenChange should never be called with false.
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it("shows the server's message when onError carries err.data.error", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    updateMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+        opts?.onError?.({ data: { error: "Bet is already settled" } });
+      },
+    );
+    renderDialog(makeBet(), onOpenChange);
+
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const [toastCall] = toastMock.mock.calls;
+    expect(toastCall[0].description).toBe("Bet is already settled");
+    expect(toastCall[0].variant).toBe("destructive");
+    // Dialog must stay open — save failed, user must see the error.
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 });

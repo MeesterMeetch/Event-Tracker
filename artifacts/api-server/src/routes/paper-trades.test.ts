@@ -546,6 +546,24 @@ describe("POST /paper-trades/:id/restore — undo brings the exact trade back", 
     expect(status).toBe(400);
   });
 
+  it("410s when the grace window has passed and removes the stale tombstone", async () => {
+    // Soft-deleted two hours ago — well past the 1-hour restore grace window.
+    // The handler must purge the expired tombstone and return a clear error so
+    // the client can't silently bring back a row whose undo window is long gone.
+    seedTrade({ id: 1, deletedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) });
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "POST", "/api/paper-trades/1/restore");
+
+    // 4xx with a structured error body — not a silent 404 with no explanation.
+    expect(status).toBeGreaterThanOrEqual(400);
+    expect(status).toBeLessThan(500);
+    expect((body as { error: string }).error).toMatch(/no longer be restored/i);
+
+    // The expired tombstone must be hard-deleted, not left lingering.
+    expect(dbMod.__stores.pitcher_k_paper_trades).toHaveLength(0);
+  });
+
   it("cannot restore a pick that was re-logged after deletion — no duplicate row", async () => {
     seedTrade({ id: 1, gameId: PT_BODY.gameId, commenceTime: new Date(PT_BODY.commenceTime) });
     const app = await buildApp();

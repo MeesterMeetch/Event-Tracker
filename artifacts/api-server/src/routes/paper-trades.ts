@@ -234,6 +234,12 @@ router.post("/paper-trades/:id/restore", async (req, res): Promise<void> => {
     return;
   }
 
+  // Enforce the grace window at the restore boundary itself: purge any
+  // tombstones past the window first so an expired row can never be
+  // resurrected, even if the periodic scheduler hasn't fired yet or the
+  // delete handler never triggered the opportunistic purge.
+  await purgeExpiredPaperTradeTombstones();
+
   // Only a soft-deleted row can be restored; the guard doubles as protection
   // against double-tapping Undo (the second tap 404s instead of doing harm).
   const [restored] = await db

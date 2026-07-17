@@ -314,7 +314,7 @@ export function EditPaperTradeDialog({ trade, open, onOpenChange, onSaved }: {
         onError: (err) => {
           toast({
             title: "Failed to correct price",
-            description: err.data?.error || "An unknown error occurred.",
+            description: err?.data?.error || "An unknown error occurred.",
             variant: "destructive",
           });
         },

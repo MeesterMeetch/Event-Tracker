@@ -535,6 +535,52 @@ describe("EditPaperTradeDialog server-rejection path", () => {
     expect(errorToast).toBeDefined();
     expect(errorToast![0].description).toBe("An unknown error occurred.");
   });
+
+  it("falls back to 'An unknown error occurred.' when onError receives a bare empty object", async () => {
+    updateMutate.mockImplementation((_vars, opts) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      opts?.onError?.({} as any),
+    );
+    const onOpenChange = vi.fn();
+    const onSaved = vi.fn();
+    renderDialog(onOpenChange, onSaved);
+
+    const input = screen.getByLabelText("American odds");
+    await user.clear(input);
+    await user.type(input, "-120");
+    await user.click(screen.getByRole("button", { name: /save price/i }));
+
+    const errorToast = toastMock.mock.calls.find(
+      ([args]) => args?.title === "Failed to correct price",
+    );
+    expect(errorToast).toBeDefined();
+    expect(errorToast![0].description).toBe("An unknown error occurred.");
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it("falls back to 'An unknown error occurred.' when onError receives null", async () => {
+    updateMutate.mockImplementation((_vars, opts) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      opts?.onError?.(null as any),
+    );
+    const onOpenChange = vi.fn();
+    const onSaved = vi.fn();
+    renderDialog(onOpenChange, onSaved);
+
+    const input = screen.getByLabelText("American odds");
+    await user.clear(input);
+    await user.type(input, "-120");
+    await user.click(screen.getByRole("button", { name: /save price/i }));
+
+    const errorToast = toastMock.mock.calls.find(
+      ([args]) => args?.title === "Failed to correct price",
+    );
+    expect(errorToast).toBeDefined();
+    expect(errorToast![0].description).toBe("An unknown error occurred.");
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
 });
 
 describe("ProjectionCard impossible-odds disabled state", () => {

@@ -388,6 +388,55 @@ describe("undoDelete (restore) server error fallback", () => {
     expect(restoreErrorToast.variant).toBe("destructive");
   });
 
+  it("shows an error toast when Undo is clicked a second time after the restore window expires", async () => {
+    const user = userEvent.setup();
+
+    // Delete succeeds
+    deleteMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+    // First restore call succeeds (the initial Undo click within the window)
+    restoreMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void; onError?: (err: unknown) => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+    // Second restore call fails — the grace period has now expired
+    restoreMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void; onError?: (err: unknown) => void }) => {
+        opts?.onError?.({ data: { error: "Restore window has expired" } });
+      },
+    );
+
+    renderBetLog([makeBet()]);
+    await openDeleteDialogAndConfirm(user);
+
+    // deleteMutate.onSuccess fired → "Bet Deleted" toast with Undo action
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const deleteSuccessToast = toastMock.mock.calls[0][0];
+    expect(deleteSuccessToast.title).toBe("Bet Deleted");
+
+    // Render the Undo ToastAction and simulate it staying on screen
+    const { unmount: unmountAction } = render(deleteSuccessToast.action);
+
+    // First click → within the restore window → succeeds
+    await user.click(screen.getByRole("button", { name: /undo/i }));
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(2));
+    expect(toastMock.mock.calls[1][0].title).toBe("Bet restored");
+
+    // Second click → restore window has expired → error toast must appear
+    await user.click(screen.getByRole("button", { name: /undo/i }));
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(3));
+    const expiredErrorToast = toastMock.mock.calls[2][0];
+    expect(expiredErrorToast.title).toBe("Could not undo");
+    expect(expiredErrorToast.description).toBe("Restore window has expired");
+    expect(expiredErrorToast.variant).toBe("destructive");
+
+    unmountAction();
+  });
+
   it("shows fallback toast when restore onError carries an empty err.data.error string", async () => {
     const user = userEvent.setup();
 

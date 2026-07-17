@@ -355,6 +355,70 @@ describe("undoDelete (restore) server error fallback", () => {
     expect(restoreErrorToast.description).toBe("Restore window has expired");
     expect(restoreErrorToast.variant).toBe("destructive");
   });
+
+  it("shows fallback toast when restore onError receives a bare Error object", async () => {
+    const user = userEvent.setup();
+
+    deleteMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+    restoreMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+        opts?.onError?.(new Error("Network request failed"));
+      },
+    );
+
+    renderBetLog([makeBet()]);
+    await openDeleteDialogAndConfirm(user);
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const deleteSuccessToast = toastMock.mock.calls[0][0];
+
+    const { unmount: unmountAction } = render(deleteSuccessToast.action);
+    await user.click(screen.getByRole("button", { name: /undo/i }));
+    unmountAction();
+
+    // A bare Error has no .data.error, so the fallback text must appear.
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(2));
+    const restoreErrorToast = toastMock.mock.calls[1][0];
+    expect(restoreErrorToast.title).toBe("Could not undo");
+    expect(restoreErrorToast.description).toBe("This bet can no longer be restored.");
+    expect(restoreErrorToast.variant).toBe("destructive");
+  });
+
+  it("shows fallback toast when restore onError carries an empty err.data.error string", async () => {
+    const user = userEvent.setup();
+
+    deleteMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+    restoreMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+        opts?.onError?.({ data: { error: "" } });
+      },
+    );
+
+    renderBetLog([makeBet()]);
+    await openDeleteDialogAndConfirm(user);
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const deleteSuccessToast = toastMock.mock.calls[0][0];
+
+    const { unmount: unmountAction } = render(deleteSuccessToast.action);
+    await user.click(screen.getByRole("button", { name: /undo/i }));
+    unmountAction();
+
+    // An empty string is falsy, so the logical-OR must produce the fallback.
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(2));
+    const restoreErrorToast = toastMock.mock.calls[1][0];
+    expect(restoreErrorToast.title).toBe("Could not undo");
+    expect(restoreErrorToast.description).toBe("This bet can no longer be restored.");
+    expect(restoreErrorToast.variant).toBe("destructive");
+  });
 });
 
 describe("EditBetDialog server error fallback", () => {

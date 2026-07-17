@@ -199,7 +199,7 @@ export function EditBetDialog({ bet, open, onOpenChange }: { bet: Bet, open: boo
   );
 }
 
-function DeleteBetDialog({ bet, open, onOpenChange, onUndo }: { bet: Bet, open: boolean, onOpenChange: (open: boolean) => void, onUndo: (bet: Bet) => void }) {
+export function DeleteBetDialog({ bet, open, onOpenChange, onUndo }: { bet: Bet, open: boolean, onOpenChange: (open: boolean) => void, onUndo: (bet: Bet) => void }) {
   const { toast } = useToast();
   const deleteBet = useDeleteBet();
   const queryClient = useQueryClient();
@@ -227,7 +227,7 @@ function DeleteBetDialog({ bet, open, onOpenChange, onUndo }: { bet: Bet, open: 
       onError: (err) => {
         toast({
           title: "Delete failed",
-          description: err.data?.error || "An unknown error occurred.",
+          description: (err as { data?: { error?: string } } | null)?.data?.error || "An unknown error occurred.",
           variant: "destructive",
         });
       }
@@ -310,7 +310,7 @@ export default function BetLog() {
         onError: (err) => {
           toast({
             title: "Could not undo",
-            description: err.data?.error || "This bet can no longer be restored.",
+            description: (err as { data?: { error?: string } } | null)?.data?.error || "This bet can no longer be restored.",
             variant: "destructive",
           });
         },

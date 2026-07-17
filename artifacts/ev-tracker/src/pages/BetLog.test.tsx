@@ -13,19 +13,23 @@ import type { Bet } from "@workspace/api-client-react";
  * auto-grading — the exact bug this file guards against.
  */
 
-const { updateMutate, toastMock } = vi.hoisted(() => ({
+const { updateMutate, deleteMutate, restoreMutate, toastMock, listBetsData } = vi.hoisted(() => ({
   updateMutate: vi.fn(),
+  deleteMutate: vi.fn(),
+  restoreMutate: vi.fn(),
   toastMock: vi.fn(),
+  // Mutable ref so individual tests can inject bets into BetLog renders.
+  listBetsData: { current: [] as Bet[] },
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
   useUpdateBet: () => ({ mutate: updateMutate, isPending: false }),
   getListBetsQueryKey: () => ["bets"],
   getGetDashboardSummaryQueryKey: () => ["dashboard-summary"],
-  // Pulled in by the rest of BetLog.tsx at module scope.
-  useListBets: () => ({ data: [], isLoading: false }),
-  useDeleteBet: () => ({ mutate: vi.fn(), isPending: false }),
-  useRestoreBet: () => ({ mutate: vi.fn(), isPending: false }),
+  useListBets: () => ({ data: listBetsData.current, isLoading: false, isError: false }),
+  useListSports: () => ({ data: [] }),
+  useDeleteBet: () => ({ mutate: deleteMutate, isPending: false }),
+  useRestoreBet: () => ({ mutate: restoreMutate, isPending: false }),
 }));
 
 vi.mock("@/components/ui/use-toast", () => ({
@@ -33,7 +37,7 @@ vi.mock("@/components/ui/use-toast", () => ({
 }));
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { EditBetDialog } from "./BetLog";
+import BetLog, { EditBetDialog, DeleteBetDialog } from "./BetLog";
 
 function makeBet(overrides: Partial<Bet> = {}): Bet {
   return {
@@ -68,6 +72,8 @@ function renderDialog(bet: Bet, onOpenChange: (open: boolean) => void = () => {}
 
 beforeEach(() => {
   updateMutate.mockClear();
+  deleteMutate.mockClear();
+  restoreMutate.mockClear();
   toastMock.mockClear();
 });
 
@@ -129,6 +135,174 @@ describe("EditBetDialog P&L override", () => {
 
     await waitFor(() => expect(updateMutate).toHaveBeenCalledTimes(1));
     expect("pnl" in updateMutate.mock.calls[0][0].data).toBe(false);
+  });
+});
+
+function renderDeleteDialog(
+  bet: Bet,
+  onOpenChange: (open: boolean) => void = () => {},
+  onUndo: (bet: Bet) => void = () => {},
+) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <DeleteBetDialog bet={bet} open onOpenChange={onOpenChange} onUndo={onUndo} />
+    </QueryClientProvider>,
+  );
+}
+
+describe("DeleteBetDialog server error fallback", () => {
+  /**
+   * Guards against vague / structureless server errors on delete going silent.
+   * When onError receives {} or null (no err.data.error field), a destructive
+   * toast must still fire and the dialog must NOT close — the bet row is still
+   * present in the log and the user needs to know the deletion failed.
+   */
+
+  it("shows fallback toast and keeps dialog open when delete onError receives {}", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    deleteMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+        opts?.onError?.({});
+      },
+    );
+    renderDeleteDialog(makeBet(), onOpenChange);
+
+    await user.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const [toastCall] = toastMock.mock.calls;
+    expect(toastCall[0].description).toBe("An unknown error occurred.");
+    expect(toastCall[0].variant).toBe("destructive");
+    // Dialog must stay open so the user can retry.
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it("shows fallback toast and keeps dialog open when delete onError receives null", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    deleteMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+        opts?.onError?.(null);
+      },
+    );
+    renderDeleteDialog(makeBet(), onOpenChange);
+
+    await user.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const [toastCall] = toastMock.mock.calls;
+    expect(toastCall[0].description).toBe("An unknown error occurred.");
+    expect(toastCall[0].variant).toBe("destructive");
+    // Dialog must stay open so the user can retry.
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+});
+
+describe("undoDelete (restore) server error fallback", () => {
+  /**
+   * Guards against vague / structureless server errors on restore going silent.
+   * undoDelete lives inside BetLog and is wired as onUndo on DeleteBetDialog.
+   * These tests go through the full BetLog render so they exercise the actual
+   * undoDelete implementation — not a mirror of it.
+   *
+   * Flow: render BetLog with one bet → open dropdown → click Delete → confirm
+   * delete (deleteMutate calls onSuccess) → render the toast's Undo action
+   * element and click it → undoDelete fires → restoreMutate calls onError →
+   * assert fallback toast.
+   */
+
+  function renderBetLog(bets: Bet[]) {
+    listBetsData.current = bets;
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(
+      <QueryClientProvider client={qc}>
+        <BetLog />
+      </QueryClientProvider>,
+    );
+  }
+
+  afterEach(() => {
+    listBetsData.current = [];
+  });
+
+  async function openDeleteDialogAndConfirm(user: ReturnType<typeof userEvent.setup>) {
+    // Open the row's actions dropdown
+    await user.click(screen.getByRole("button", { name: /open menu/i }));
+    // Click "Delete" in the dropdown
+    await user.click(screen.getByRole("menuitem", { name: /delete/i }));
+    // Confirm in the dialog (has two Delete-labelled buttons now — pick the
+    // destructive one inside the dialog footer, which is the only button
+    // whose accessible name is exactly "Delete").
+    const deleteButtons = screen.getAllByRole("button", { name: /^delete$/i });
+    await user.click(deleteButtons[deleteButtons.length - 1]);
+  }
+
+  it("shows fallback toast when restore onError receives {}", async () => {
+    const user = userEvent.setup();
+
+    deleteMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+    restoreMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+        opts?.onError?.({});
+      },
+    );
+
+    renderBetLog([makeBet()]);
+    await openDeleteDialogAndConfirm(user);
+
+    // deleteMutate.onSuccess fired → toast with Undo action
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const deleteSuccessToast = toastMock.mock.calls[0][0];
+    expect(deleteSuccessToast.title).toBe("Bet Deleted");
+
+    // Render the Undo ToastAction element and click it → undoDelete fires
+    const { unmount: unmountAction } = render(deleteSuccessToast.action);
+    await user.click(screen.getByRole("button", { name: /undo/i }));
+    unmountAction();
+
+    // restoreMutate.onError fires the fallback "This bet can no longer be restored."
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(2));
+    const restoreErrorToast = toastMock.mock.calls[1][0];
+    expect(restoreErrorToast.title).toBe("Could not undo");
+    expect(restoreErrorToast.description).toBe("This bet can no longer be restored.");
+    expect(restoreErrorToast.variant).toBe("destructive");
+  });
+
+  it("shows fallback toast when restore onError receives null", async () => {
+    const user = userEvent.setup();
+
+    deleteMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+    restoreMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+        opts?.onError?.(null);
+      },
+    );
+
+    renderBetLog([makeBet()]);
+    await openDeleteDialogAndConfirm(user);
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const deleteSuccessToast = toastMock.mock.calls[0][0];
+
+    const { unmount: unmountAction } = render(deleteSuccessToast.action);
+    await user.click(screen.getByRole("button", { name: /undo/i }));
+    unmountAction();
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(2));
+    const restoreErrorToast = toastMock.mock.calls[1][0];
+    expect(restoreErrorToast.title).toBe("Could not undo");
+    expect(restoreErrorToast.description).toBe("This bet can no longer be restored.");
+    expect(restoreErrorToast.variant).toBe("destructive");
   });
 });
 

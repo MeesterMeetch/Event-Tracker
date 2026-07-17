@@ -199,4 +199,51 @@ describe('Bet Log delete → Undo flow', () => {
       screen.getByText('Could not undo — this bet can no longer be restored.'),
     ).toBeDefined();
   });
+
+  /**
+   * Guards against structureless server errors going silent on the phone.
+   * When onError receives an empty object {} (no err.data.error field), the
+   * optional-chain evaluates to undefined and the fallback message must fire.
+   * The bet must NOT be shown as restored.
+   */
+  it('shows the fallback banner and no restored confirmation when restore onError receives {}', async () => {
+    restoreImpl = (_vars, opts) => opts?.onError?.({} as any);
+    render(<BetsScreen />);
+
+    await deleteTheBet('Gerrit Cole Over');
+    invalidateQueries.mockClear();
+
+    await user.click(screen.getByLabelText('Undo delete'));
+
+    expect(restoreMutate).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByText('Could not undo — this bet can no longer be restored.'),
+    ).toBeDefined();
+    // Bet was not restored, so no restored confirmation and no re-invalidation.
+    expect(screen.queryByText(/Restored.*bet log/)).toBeNull();
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Same guard but for a null payload — the most degenerate case a server
+   * response can produce. Optional chaining on null must still yield the
+   * fallback rather than throwing or going silent.
+   */
+  it('shows the fallback banner and no restored confirmation when restore onError receives null', async () => {
+    restoreImpl = (_vars, opts) => opts?.onError?.(null as any);
+    render(<BetsScreen />);
+
+    await deleteTheBet('Gerrit Cole Over');
+    invalidateQueries.mockClear();
+
+    await user.click(screen.getByLabelText('Undo delete'));
+
+    expect(restoreMutate).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByText('Could not undo — this bet can no longer be restored.'),
+    ).toBeDefined();
+    // Bet was not restored, so no restored confirmation and no re-invalidation.
+    expect(screen.queryByText(/Restored.*bet log/)).toBeNull();
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
 });

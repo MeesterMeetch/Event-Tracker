@@ -85,7 +85,7 @@ export function EditBetDialog({ bet, open, onOpenChange }: { bet: Bet, open: boo
       onError: (err) => {
         toast({
           title: "Update failed",
-          description: err.data?.error || "An unknown error occurred.",
+          description: (err as { data?: { error?: string } } | null)?.data?.error || "An unknown error occurred.",
           variant: "destructive",
         });
       }

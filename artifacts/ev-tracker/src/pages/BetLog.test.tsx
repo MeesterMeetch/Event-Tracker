@@ -57,11 +57,11 @@ function makeBet(overrides: Partial<Bet> = {}): Bet {
   } as Bet;
 }
 
-function renderDialog(bet: Bet) {
+function renderDialog(bet: Bet, onOpenChange: (open: boolean) => void = () => {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <EditBetDialog bet={bet} open onOpenChange={() => {}} />
+      <EditBetDialog bet={bet} open onOpenChange={onOpenChange} />
     </QueryClientProvider>,
   );
 }
@@ -129,5 +129,55 @@ describe("EditBetDialog P&L override", () => {
 
     await waitFor(() => expect(updateMutate).toHaveBeenCalledTimes(1));
     expect("pnl" in updateMutate.mock.calls[0][0].data).toBe(false);
+  });
+});
+
+describe("EditBetDialog server error fallback", () => {
+  /**
+   * Guards against vague / structureless server errors going silent.
+   * When the onError callback receives an empty object `{}` or `null`
+   * (no err.data.error field), the dialog must still surface the
+   * fallback "An unknown error occurred." message via toast AND must
+   * NOT close — the user needs to know the save failed.
+   */
+
+  it("shows fallback toast and keeps dialog open when onError receives {}", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    updateMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+        opts?.onError?.({});
+      },
+    );
+    renderDialog(makeBet(), onOpenChange);
+
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const [toastCall] = toastMock.mock.calls;
+    expect(toastCall[0].description).toBe("An unknown error occurred.");
+    expect(toastCall[0].variant).toBe("destructive");
+    // Dialog must stay open — onOpenChange should never be called with false.
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it("shows fallback toast and keeps dialog open when onError receives null", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    updateMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onError?: (err: unknown) => void }) => {
+        opts?.onError?.(null);
+      },
+    );
+    renderDialog(makeBet(), onOpenChange);
+
+    await user.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const [toastCall] = toastMock.mock.calls;
+    expect(toastCall[0].description).toBe("An unknown error occurred.");
+    expect(toastCall[0].variant).toBe("destructive");
+    // Dialog must stay open — onOpenChange should never be called with false.
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 });

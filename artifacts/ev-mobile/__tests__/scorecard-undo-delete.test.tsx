@@ -224,3 +224,58 @@ describe('Scorecard delete → Undo flow', () => {
     ).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Expired-window restore error — feedback banner surface (scorecard)
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirrors bets-restore-expired-window.test.tsx for the mobile Paper Scorecard
+ * screen. Locks in two contracts:
+ *  1. When the server replies with { data: { error: "Restore window has
+ *     expired" } } the feedback banner shows that exact string verbatim — not
+ *     the hardcoded fallback.
+ *  2. When the error carries no server body the banner falls back to the
+ *     friendly "Could not undo — this pick can no longer be restored." copy
+ *     so the user is never left with a blank or silent failure.
+ */
+describe('restore-pick expired-window — feedback banner', () => {
+  it('shows the server expired-window message verbatim when err.data.error is set', async () => {
+    restoreImpl = (_vars, opts) =>
+      opts?.onError?.({ data: { error: 'Restore window has expired' } });
+    render(<ScorecardScreen />);
+
+    await deleteThePick();
+    invalidateQueries.mockClear();
+
+    await user.click(screen.getByText('UNDO'));
+
+    expect(restoreMutate).toHaveBeenCalledTimes(1);
+    // The server's exact expired-window message must appear in the banner.
+    expect(screen.getByText('Restore window has expired')).toBeDefined();
+    // The generic fallback must NOT be shown.
+    expect(
+      screen.queryByText('Could not undo — this pick can no longer be restored.'),
+    ).toBeNull();
+    // A failed restore must not offer a second UNDO tap.
+    expect(screen.queryByText('UNDO')).toBeNull();
+    // Nothing was restored, so nothing is re-invalidated.
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  it('shows the friendly fallback when the error carries no server body', async () => {
+    restoreImpl = (_vars, opts) =>
+      opts?.onError?.(new Error('Network request failed'));
+    render(<ScorecardScreen />);
+
+    await deleteThePick();
+
+    await user.click(screen.getByText('UNDO'));
+
+    expect(
+      screen.getByText('Could not undo — this pick can no longer be restored.'),
+    ).toBeDefined();
+    expect(screen.queryByText('Restore window has expired')).toBeNull();
+    expect(screen.queryByText('UNDO')).toBeNull();
+  });
+});

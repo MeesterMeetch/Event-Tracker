@@ -171,6 +171,11 @@ describe('Scorecard delete → Undo flow', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['paper-trade-summary'] });
   });
 
+  // Sync: keep this test's invalidateQueries assertions aligned with the
+  // equivalent test in __tests__/bets-undo-delete.test.tsx
+  // ("tapping UNDO fires the restore mutation for that bet and re-invalidates
+  // the queries") — both must assert the same two-key invalidation contract so
+  // a refactor that drops one call fails in both screens, not just one.
   it('tapping UNDO fires the restore mutation for that pick and re-invalidates the queries', async () => {
     restoreImpl = (vars, opts) => opts?.onSuccess?.(makeTrade({ id: vars.id }));
     render(<ScorecardScreen />);

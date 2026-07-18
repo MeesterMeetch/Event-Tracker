@@ -727,6 +727,58 @@ describe("PaperTradesTable delete happy-path invalidates both queries", () => {
 });
 
 /**
+ * Locks in the two-key invalidation contract on PaperTradesTable's edit-price
+ * happy-path. After a successful updateTrade mutation, onSaved() (which is
+ * PaperTradesTable's own invalidate()) must call invalidateQueries for both
+ * ['paper-trades'] and ['paper-trade-summary']. Dropping either call leaves
+ * the summary tile (beat-close rate, avg CLV, etc.) stale until the next
+ * unrelated refetch.
+ *
+ * Mirrors the delete and restore invalidation tests above — a refactor that
+ * removes the invalidate() call from EditPaperTradeDialog's onSaved callback
+ * should fail here while leaving the delete/restore tests green.
+ */
+describe("PaperTradesTable edit-price happy-path invalidates both queries", () => {
+  afterEach(() => {
+    updateMutate.mockReset();
+  });
+
+  it("successful price correction invalidates both paper-trades and paper-trade-summary", async () => {
+    updateMutate.mockImplementation((_vars: unknown, opts?: { onSuccess?: () => void }) =>
+      opts?.onSuccess?.(),
+    );
+
+    tradesRef.current = [makeTrade({ id: 500, americanOdds: -110 })];
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PaperTradesTable />
+      </QueryClientProvider>,
+    );
+
+    // Open the edit dialog via the pencil button.
+    await user.click(screen.getByLabelText("Edit price for paper trade Gerrit Cole Over 6.5"));
+
+    // Type a corrected valid price and submit.
+    const input = await screen.findByLabelText("American odds");
+    await user.clear(input);
+    await user.type(input, "-120");
+
+    // Clear the spy so we only capture invalidations triggered by the save,
+    // not any that may have fired during the initial render.
+    invalidateSpy.mockClear();
+
+    await user.click(screen.getByRole("button", { name: /save price/i }));
+
+    // onSaved (= PaperTradesTable's invalidate) must have been called with both keys.
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["paper-trades"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["paper-trade-summary"] });
+  });
+});
+
+/**
  * Locks in the two-key invalidation contract on ProjectionCard's logTrade
  * happy-path. After a successful create call, both ['paper-trades'] and
  * ['paper-trade-summary'] must be passed to invalidateQueries so the trades

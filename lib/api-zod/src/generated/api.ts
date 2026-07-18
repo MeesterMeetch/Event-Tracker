@@ -50,6 +50,7 @@ export const ListEdgesResponseItem = zod.object({
   "player": zod.string().nullable().describe('Player name for player-prop edges; null for team markets.'),
   "americanOdds": zod.number(),
   "book": zod.string(),
+  "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
   "evPercent": zod.number()
 })
@@ -96,6 +97,7 @@ export const ListPropEdgesResponseItem = zod.object({
   "player": zod.string().nullable().describe('Player name for player-prop edges; null for team markets.'),
   "americanOdds": zod.number(),
   "book": zod.string(),
+  "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
   "evPercent": zod.number()
 })
@@ -433,6 +435,7 @@ export const GenerateGameAnalysisBody = zod.object({
   "player": zod.string().nullable().describe('Player name for player-prop edges; null for team markets.'),
   "americanOdds": zod.number(),
   "book": zod.string(),
+  "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
   "evPercent": zod.number()
 }))
@@ -531,7 +534,8 @@ export const ListModelEdgesResponseItem = zod.object({
   "edgePercent": zod.number().nullable(),
   "fullKellyFraction": zod.number(),
   "recommendedUnits": zod.number(),
-  "isFlagged": zod.boolean()
+  "isFlagged": zod.boolean(),
+  "dkOdds": zod.number().nullish().describe('DraftKings price for this line at scan time; null if DK does not quote it.')
 }))
 })
 export const ListModelEdgesResponse = zod.array(ListModelEdgesResponseItem)

@@ -129,6 +129,9 @@ export function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, childr
           </div>
           <div className="flex justify-between text-xs mt-2 pt-2 border-t border-border">
             <span className="text-muted-foreground">Fair: {formatOdds(edge.fairOdds)}</span>
+            {edge.dkOdds != null && (
+              <span className="text-muted-foreground font-mono">DK: {formatOdds(edge.dkOdds)}</span>
+            )}
             <span className="text-positive font-mono font-semibold">EV: {formatPercent(edge.evPercent)}</span>
           </div>
         </div>
@@ -515,6 +518,7 @@ export default function LiveEdges() {
                   <TableHead>Market</TableHead>
                   <TableHead>Selection</TableHead>
                   <TableHead>Book</TableHead>
+                  <TableHead className="text-right text-muted-foreground">DK</TableHead>
                   <TableHead className="text-right">Fair</TableHead>
                   <TableHead className="text-right">Odds</TableHead>
                   <TableHead className="text-right">EV%</TableHead>
@@ -558,6 +562,9 @@ export default function LiveEdges() {
                         {edge.selection} {formatPoint(edge.point, edge.market)}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{edge.book}</TableCell>
+                      <TableCell className="text-right font-mono text-muted-foreground">
+                        {edge.dkOdds != null ? formatOdds(edge.dkOdds) : "—"}
+                      </TableCell>
                       <TableCell className="text-right text-muted-foreground">
                         {formatOdds(edge.fairOdds)}
                       </TableCell>
@@ -717,6 +724,9 @@ export default function LiveEdges() {
                                 {edge.selection} {formatPoint(edge.point, edge.market)}
                               </TableCell>
                               <TableCell className="text-muted-foreground">{edge.book}</TableCell>
+                              <TableCell className="text-right font-mono text-muted-foreground">
+                                {edge.dkOdds != null ? formatOdds(edge.dkOdds) : "—"}
+                              </TableCell>
                               <TableCell className="text-right text-muted-foreground">
                                 {formatOdds(edge.fairOdds)}
                               </TableCell>

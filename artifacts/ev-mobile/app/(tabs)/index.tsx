@@ -364,6 +364,11 @@ export function LogPropSheet({
                 <Text style={{ fontFamily: fonts.mono, fontSize: 11, color: colors.mutedForeground }}>
                   Fair {formatOdds(edge.fairOdds)}
                 </Text>
+                {edge.dkOdds != null ? (
+                  <Text style={{ fontFamily: fonts.mono, fontSize: 11, color: colors.mutedForeground }}>
+                    DK {formatOdds(edge.dkOdds)}
+                  </Text>
+                ) : null}
                 <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 11, color: colors.positive }}>
                   EV {formatPercent(edge.evPercent)}
                 </Text>
@@ -731,6 +736,11 @@ function LineRow({
         <Text style={{ fontFamily: fonts.monoSemibold, fontSize: 12.5, color: colors.primary }}>
           {formatOdds(line.americanOdds)}
         </Text>
+        {line.dkOdds != null ? (
+          <Text style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.mutedForeground, marginTop: 1 }}>
+            DK {formatOdds(line.dkOdds)}
+          </Text>
+        ) : null}
       </View>
       <View style={{ width: 38, alignItems: 'flex-end' }}>
         <LogButton state={logState} onPress={onLog} />

@@ -14,6 +14,8 @@ export interface EdgeOpportunity {
   player: string | null;
   americanOdds: number;
   book: string;
+  /** DraftKings price for this outcome at scan time; null if DK doesn't quote it. */
+  dkOdds: number | null;
   fairOdds: number;
   evPercent: number;
 }
@@ -39,6 +41,7 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
     for (const market of MARKETS) {
       const fairProbSamples = new Map<string, number[]>();
       const best = new Map<string, { americanOdds: number; book: string }>();
+      const dk = new Map<string, number>();
       const meta = new Map<string, { name: string; point: number | null }>();
 
       for (const bookmaker of event.bookmakers) {
@@ -62,6 +65,10 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
           const currentBestDecimal = currentBest ? americanToDecimal(currentBest.americanOdds) : -Infinity;
           if (americanToDecimal(outcome.price) > currentBestDecimal) {
             best.set(key, { americanOdds: outcome.price, book: bookmaker.title });
+          }
+
+          if (bookmaker.key === "draftkings") {
+            dk.set(key, outcome.price);
           }
         }
       }
@@ -89,6 +96,7 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
             player: null,
             americanOdds: bestForKey.americanOdds,
             book: bestForKey.book,
+            dkOdds: dk.get(key) ?? null,
             fairOdds: probToAmerican(avgFairProb),
             evPercent: Math.round(evPercent * 100) / 100,
           });

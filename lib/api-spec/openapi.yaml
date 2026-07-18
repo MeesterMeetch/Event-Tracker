@@ -774,6 +774,10 @@ components:
           type: number
         isFlagged:
           type: boolean
+        dkOdds:
+          type: number
+          nullable: true
+          description: DraftKings price for this line at scan time; null if DK does not quote it.
     ModelPitcherProjection:
       type: object
       required:
@@ -1227,6 +1231,10 @@ components:
           type: number
         book:
           type: string
+        dkOdds:
+          type: number
+          nullable: true
+          description: DraftKings price for this outcome at scan time; null if DK does not quote it.
         fairOdds:
           type: number
         evPercent:

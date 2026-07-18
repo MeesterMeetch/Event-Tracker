@@ -194,6 +194,7 @@ export function ProjectionCard({ projection }: { projection: ModelPitcherProject
               <TableHead className="text-right">Market</TableHead>
               <TableHead className="text-right">Edge</TableHead>
               <TableHead className="text-right">Odds</TableHead>
+              <TableHead className="text-right text-muted-foreground">DK</TableHead>
               <TableHead>Book</TableHead>
               <TableHead className="text-right">Kelly</TableHead>
               <TableHead className="w-[70px]"></TableHead>
@@ -212,6 +213,9 @@ export function ProjectionCard({ projection }: { projection: ModelPitcherProject
                   {formatPercent(line.edgePercent)}
                 </TableCell>
                 <TableCell className="text-right font-mono text-primary">{formatOdds(line.americanOdds)}</TableCell>
+                <TableCell className="text-right font-mono text-muted-foreground">
+                  {line.dkOdds != null ? formatOdds(line.dkOdds) : "—"}
+                </TableCell>
                 <TableCell className="text-muted-foreground text-xs">{line.book}</TableCell>
                 <TableCell className="text-right font-mono">{line.recommendedUnits > 0 ? `${line.recommendedUnits}u` : "—"}</TableCell>
                 <TableCell>

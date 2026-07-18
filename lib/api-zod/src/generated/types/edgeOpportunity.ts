@@ -23,6 +23,8 @@ export interface EdgeOpportunity {
   player: string | null;
   americanOdds: number;
   book: string;
+  /** DraftKings price for this outcome at scan time; null if DK does not quote it. */
+  dkOdds?: number | null;
   fairOdds: number;
   evPercent: number;
 }

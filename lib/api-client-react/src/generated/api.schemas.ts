@@ -38,6 +38,8 @@ export interface ModelKLine {
   fullKellyFraction: number;
   recommendedUnits: number;
   isFlagged: boolean;
+  /** DraftKings price for this line at scan time; null if DK does not quote it. */
+  dkOdds?: number | null;
 }
 
 export interface ModelPitcherProjection {
@@ -291,6 +293,8 @@ export interface EdgeOpportunity {
   player: string | null;
   americanOdds: number;
   book: string;
+  /** DraftKings price for this outcome at scan time; null if DK does not quote it. */
+  dkOdds?: number | null;
   fairOdds: number;
   evPercent: number;
 }

@@ -22,6 +22,8 @@ export interface ModelKLine {
   recommendedUnits: number;
   /** True when the edge clears the threshold and 2+ books quote the line. */
   isFlagged: boolean;
+  /** DraftKings price for this line at scan time; null if DK doesn't quote it. */
+  dkOdds: number | null;
 }
 
 export interface ModelPitcherProjection {
@@ -79,6 +81,7 @@ interface SideAgg {
   books: Set<string>;
   bestAmerican: number | null;
   bestBook: string;
+  dkAmerican: number | null;
 }
 
 /**
@@ -92,7 +95,7 @@ function buildMarketConsensus(event: OddsEvent): Map<string, SideAgg> {
   const ensure = (key: string): SideAgg => {
     let a = agg.get(key);
     if (!a) {
-      a = { fairSamples: [], books: new Set(), bestAmerican: null, bestBook: "" };
+      a = { fairSamples: [], books: new Set(), bestAmerican: null, bestBook: "", dkAmerican: null };
       agg.set(key, a);
     }
     return a;
@@ -128,6 +131,9 @@ function buildMarketConsensus(event: OddsEvent): Map<string, SideAgg> {
           if (side.bestAmerican == null || decimal > americanToDecimal(side.bestAmerican)) {
             side.bestAmerican = o.price;
             side.bestBook = bookmaker.title;
+          }
+          if (bookmaker.key === "draftkings") {
+            side.dkAmerican = o.price;
           }
         }
       }
@@ -221,6 +227,7 @@ function projectSide(
         selection,
         americanOdds: side2.bestAmerican,
         book: side2.bestBook,
+        dkOdds: side2.dkAmerican,
         marketProb,
         modelProb: Math.round(modelProb * 1e4) / 1e4,
         edgePercent,

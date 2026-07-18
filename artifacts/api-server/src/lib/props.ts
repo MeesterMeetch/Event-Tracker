@@ -46,6 +46,7 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
   const fairProbSamples = new Map<string, number[]>();
   const sampleBooks = new Map<string, Set<string>>();
   const best = new Map<string, { americanOdds: number; book: string }>();
+  const dk = new Map<string, number>();
   const meta = new Map<string, { market: string; player: string; name: string; point: number | null }>();
 
   for (const bookmaker of event.bookmakers) {
@@ -86,6 +87,10 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
           if (americanToDecimal(outcome.price) > currentBestDecimal) {
             best.set(key, { americanOdds: outcome.price, book: bookmaker.title });
           }
+
+          if (bookmaker.key === "draftkings") {
+            dk.set(key, outcome.price);
+          }
         }
       }
     }
@@ -117,6 +122,7 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
         player: info.player,
         americanOdds: bestForKey.americanOdds,
         book: bestForKey.book,
+        dkOdds: dk.get(key) ?? null,
         fairOdds: probToAmerican(avgFairProb),
         evPercent: Math.round(evPercent * 100) / 100,
       });

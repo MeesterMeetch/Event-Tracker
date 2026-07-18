@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from "react";
-import { useListSports, useListEdges, useListEvents, useListPropEdges, useListRankingsSports, useListStandings, useCreateBet, useGenerateGameAnalysis, getListEdgesQueryKey, getListEventsQueryKey, getListPropEdgesQueryKey, getListStandingsQueryKey } from "@workspace/api-client-react";
+import { useListSports, useListEdges, useListEvents, useListPropEdges, useListRankingsSports, useListStandings, useCreateBet, useGenerateGameAnalysis, getListEdgesQueryKey, getListEventsQueryKey, getListPropEdgesQueryKey, getListStandingsQueryKey, getListBetsQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -34,6 +35,7 @@ export function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, childr
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const createBet = useCreateBet();
+  const queryClient = useQueryClient();
   
   const form = useForm<LogBetFormValues>({
     resolver: zodResolver(logBetSchema),
@@ -76,6 +78,8 @@ export function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, childr
           title: "Bet Logged",
           description: `Successfully logged ${data.units}u on ${selectionLabel}.`,
         });
+        queryClient.invalidateQueries({ queryKey: getListBetsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
         setOpen(false);
         form.reset();
       },

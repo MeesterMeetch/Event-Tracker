@@ -470,6 +470,125 @@ describe("undoDelete (restore) server error fallback", () => {
   });
 });
 
+describe("DeleteBetDialog delete — query invalidation", () => {
+  /**
+   * Guards against the delete onSuccess handler forgetting to invalidate one of
+   * the two queries that back the scorecard. Both getListBetsQueryKey() and
+   * getGetDashboardSummaryQueryKey() must be invalidated so the bet log table
+   * and the dashboard summary both reflect the removal without a manual refresh.
+   */
+
+  function renderBetLogWith(bets: Bet[], qc: QueryClient) {
+    listBetsData.current = bets;
+    return render(
+      <QueryClientProvider client={qc}>
+        <BetLog />
+      </QueryClientProvider>,
+    );
+  }
+
+  afterEach(() => {
+    listBetsData.current = [];
+  });
+
+  async function openDeleteDialogAndConfirm(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: /open menu/i }));
+    await user.click(screen.getByRole("menuitem", { name: /delete/i }));
+    const deleteButtons = screen.getAllByRole("button", { name: /^delete$/i });
+    await user.click(deleteButtons[deleteButtons.length - 1]);
+  }
+
+  it("invalidates both bet-list and dashboard-summary queries when delete succeeds", async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+
+    deleteMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+
+    renderBetLogWith([makeBet()], qc);
+    await openDeleteDialogAndConfirm(user);
+
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    expect(toastMock.mock.calls[0][0].title).toBe("Bet Deleted");
+
+    const invalidatedKeys = invalidate.mock.calls.map((c) => (c[0] as { queryKey: unknown }).queryKey);
+    expect(invalidatedKeys).toContainEqual(["bets"]);
+    expect(invalidatedKeys).toContainEqual(["dashboard-summary"]);
+  });
+});
+
+describe("undoDelete (restore) success — query invalidation", () => {
+  /**
+   * Guards against the restore onSuccess handler forgetting to re-fetch one
+   * of the two queries that depend on the bet list. Both getListBetsQueryKey()
+   * and getGetDashboardSummaryQueryKey() must be invalidated so the scorecard
+   * and the log table both reflect the restored bet without a manual refresh.
+   */
+
+  function renderBetLogWith(bets: Bet[], qc: QueryClient) {
+    listBetsData.current = bets;
+    return render(
+      <QueryClientProvider client={qc}>
+        <BetLog />
+      </QueryClientProvider>,
+    );
+  }
+
+  afterEach(() => {
+    listBetsData.current = [];
+  });
+
+  async function openDeleteDialogAndConfirm(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: /open menu/i }));
+    await user.click(screen.getByRole("menuitem", { name: /delete/i }));
+    const deleteButtons = screen.getAllByRole("button", { name: /^delete$/i });
+    await user.click(deleteButtons[deleteButtons.length - 1]);
+  }
+
+  it("invalidates both bet-list and dashboard-summary queries when restore succeeds", async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+
+    deleteMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+    restoreMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+
+    renderBetLogWith([makeBet()], qc);
+    await openDeleteDialogAndConfirm(user);
+
+    // delete onSuccess fires → "Bet Deleted" toast with Undo action
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    const deleteSuccessToast = toastMock.mock.calls[0][0];
+    expect(deleteSuccessToast.title).toBe("Bet Deleted");
+
+    // Render the Undo action element and click it → restore onSuccess fires
+    const { unmount: unmountAction } = render(deleteSuccessToast.action);
+    await user.click(screen.getByRole("button", { name: /undo/i }));
+    unmountAction();
+
+    // "Bet restored" toast must appear
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(2));
+    expect(toastMock.mock.calls[1][0].title).toBe("Bet restored");
+
+    // Both queries must be invalidated so the UI re-fetches without a manual refresh
+    const invalidatedKeys = invalidate.mock.calls.map((c) => (c[0] as { queryKey: unknown }).queryKey);
+    expect(invalidatedKeys).toContainEqual(["bets"]);
+    expect(invalidatedKeys).toContainEqual(["dashboard-summary"]);
+  });
+});
+
 describe("EditBetDialog server error fallback", () => {
   /**
    * Guards against vague / structureless server errors going silent.

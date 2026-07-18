@@ -31,6 +31,8 @@ vi.mock("@workspace/api-client-react", () => ({
   getListEventsQueryKey: () => ["events"],
   getListPropEdgesQueryKey: () => ["prop-edges"],
   getListStandingsQueryKey: () => ["standings"],
+  getListBetsQueryKey: () => ["bets"],
+  getGetDashboardSummaryQueryKey: () => ["dashboard-summary"],
 }));
 
 vi.mock("@/components/ui/use-toast", () => ({
@@ -198,6 +200,45 @@ describe("LogBetDialog impossible-odds submit guard", () => {
     const btn = screen.getByRole("button", { name: /log bet/i });
     expect((btn as HTMLButtonElement).disabled).toBe(false);
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("LogBetDialog log-pick success — query invalidation", () => {
+  /**
+   * Guards against the log-bet onSuccess handler forgetting to re-fetch the
+   * bet log or the dashboard summary. Both getListBetsQueryKey() and
+   * getGetDashboardSummaryQueryKey() must be invalidated so the scorecard and
+   * the bet log table both reflect the new bet without a manual refresh.
+   */
+
+  it("invalidates both bet-list and dashboard-summary queries when the bet is logged", async () => {
+    const user = userEvent.setup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+
+    createMutate.mockImplementationOnce(
+      (_vars: unknown, opts?: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+
+    render(
+      <QueryClientProvider client={qc}>
+        <LogBetDialog edge={makeEdge()}>
+          <button type="button">Log</button>
+        </LogBetDialog>
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^log$/i }));
+    await screen.findByRole("dialog");
+    await user.click(screen.getByRole("button", { name: /log bet/i }));
+
+    await waitFor(() => expect(createMutate).toHaveBeenCalledTimes(1));
+
+    const invalidatedKeys = invalidate.mock.calls.map((c) => (c[0] as { queryKey: unknown }).queryKey);
+    expect(invalidatedKeys).toContainEqual(["bets"]);
+    expect(invalidatedKeys).toContainEqual(["dashboard-summary"]);
   });
 });
 

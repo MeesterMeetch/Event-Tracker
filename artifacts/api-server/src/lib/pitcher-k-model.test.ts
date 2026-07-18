@@ -28,6 +28,7 @@ function pitcher(overrides: Partial<PitcherKInputs>): PitcherKInputs {
     rollingBattersFaced: 0,
     rollingStarts: 0,
     rollingBfPerStart: null,
+    rollingInningsPitched: null,
     seasonStrikeouts: null,
     seasonBattersFaced: null,
     seasonGamesStarted: null,

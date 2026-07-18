@@ -827,6 +827,10 @@ components:
           type: integer
         sampleBattersFaced:
           type: integer
+        kPer9:
+          type: number
+          nullable: true
+          description: Raw rolling K/9 (strikeouts per 9 innings) from the sample window. Null when innings-pitched data is unavailable.
         opponentDataAvailable:
           type: boolean
         insufficientData:

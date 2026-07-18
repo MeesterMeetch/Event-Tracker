@@ -24,6 +24,8 @@ export interface PitcherKInputs {
   rollingStarts: number;
   /** Average batters faced per start over the rolling window. */
   rollingBfPerStart: number | null;
+  /** Decimal innings pitched across the rolling window. Null when not available from the feed. */
+  rollingInningsPitched: number | null;
   seasonStrikeouts: number | null;
   seasonBattersFaced: number | null;
   seasonGamesStarted: number | null;
@@ -52,6 +54,8 @@ export interface KProjection {
   /** Batters faced in the rolling window (how much recent data backs this). */
   sampleBattersFaced: number;
   sampleStarts: number;
+  /** Raw K/9 from the rolling window (strikeouts per 9 IP). Null when IP data was unavailable. */
+  kPer9: number | null;
   /** Binomial trial count used for the distribution. */
   trials: number;
   /** Binomial success probability used for the distribution (= expectedK/trials). */
@@ -153,6 +157,11 @@ export function projectPitcherK(pitcher: PitcherKInputs, opponent: OpponentKInpu
   const trials = Math.max(1, Math.round(projBF));
   const perTrialProb = clamp(expectedStrikeouts / trials, 1e-6, 1 - 1e-6);
 
+  const kPer9 =
+    pitcher.rollingInningsPitched != null && pitcher.rollingInningsPitched > 0
+      ? (pitcher.rollingStrikeouts / pitcher.rollingInningsPitched) * 9
+      : null;
+
   return {
     ratePerBF,
     baseRatePerBF: projRate,
@@ -161,6 +170,7 @@ export function projectPitcherK(pitcher: PitcherKInputs, opponent: OpponentKInpu
     expectedStrikeouts,
     sampleBattersFaced: pitcher.rollingBattersFaced,
     sampleStarts: pitcher.rollingStarts,
+    kPer9,
     trials,
     perTrialProb,
   };

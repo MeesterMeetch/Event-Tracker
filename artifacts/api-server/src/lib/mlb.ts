@@ -251,6 +251,8 @@ export interface PitcherKStats {
   rollingBattersFaced: number;
   rollingStarts: number;
   rollingBfPerStart: number | null;
+  /** Decimal innings pitched across the rolling window (e.g. 38.667 for 38⅔ IP). */
+  rollingInningsPitched: number | null;
   seasonStrikeouts: number | null;
   seasonBattersFaced: number | null;
   seasonGamesStarted: number | null;
@@ -332,6 +334,7 @@ async function fetchPitcherKStats(personId: number, name: string, team: string, 
     rollingBattersFaced: 0,
     rollingStarts: 0,
     rollingBfPerStart: null,
+    rollingInningsPitched: null,
     seasonStrikeouts: null,
     seasonBattersFaced: null,
     seasonGamesStarted: null,
@@ -369,6 +372,8 @@ async function fetchPitcherKStats(personId: number, name: string, team: string, 
         let so = 0;
         let bf = 0;
         let n = 0;
+        let totalOuts = 0;
+        let hasIp = false;
         for (const sp of starts) {
           const st = sp.stat ?? {};
           const b = battersFacedFrom(st);
@@ -376,11 +381,14 @@ async function fetchPitcherKStats(personId: number, name: string, team: string, 
           so += int(st.strikeOuts) ?? 0;
           bf += b;
           n += 1;
+          const outs = ipToOuts(str(st.inningsPitched));
+          if (outs != null) { totalOuts += outs; hasIp = true; }
         }
         stats.rollingStrikeouts = so;
         stats.rollingBattersFaced = bf;
         stats.rollingStarts = n;
         stats.rollingBfPerStart = n > 0 ? bf / n : null;
+        stats.rollingInningsPitched = hasIp ? totalOuts / 3 : null;
       }
     }
   } catch (err) {

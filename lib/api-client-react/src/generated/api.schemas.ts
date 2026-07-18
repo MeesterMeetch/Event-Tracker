@@ -57,6 +57,8 @@ export interface ModelPitcherProjection {
   opponentFactor: number;
   sampleStarts: number;
   sampleBattersFaced: number;
+  /** Raw rolling K/9 (strikeouts per 9 innings) from the sample window. Null when innings-pitched data is unavailable. */
+  kPer9?: number | null;
   opponentDataAvailable: boolean;
   /** True when the pitcher's strikeout-rate inputs were missing or degraded (no rolling starts and no season/career sample). The model abstains from projecting rather than emit a confident number off zeroed inputs; numeric fields are placeholders and lines is empty. */
   insufficientData: boolean;

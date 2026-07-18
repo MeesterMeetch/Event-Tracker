@@ -942,6 +942,11 @@ export function ProjectionCard({ projection }: { projection: ModelPitcherProject
         <Text style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.mutedForeground }}>
           K/BF {(projection.ratePerBF * 100).toFixed(1)}%
         </Text>
+        {projection.kPer9 != null ? (
+          <Text style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.mutedForeground }}>
+            K/9 {projection.kPer9.toFixed(1)}
+          </Text>
+        ) : null}
         <Text style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.mutedForeground }}>
           {projection.sampleStarts} starts / {projection.sampleBattersFaced} BF
         </Text>

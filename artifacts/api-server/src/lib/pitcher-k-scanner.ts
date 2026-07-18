@@ -40,6 +40,8 @@ export interface ModelPitcherProjection {
   opponentFactor: number;
   sampleStarts: number;
   sampleBattersFaced: number;
+  /** Raw K/9 from the rolling sample window. Null when IP data was unavailable. */
+  kPer9: number | null;
   /** Whether opponent handedness K% data was available for the adjustment. */
   opponentDataAvailable: boolean;
   /**
@@ -166,6 +168,7 @@ function projectSide(
       opponentFactor: 1,
       sampleStarts: pitcher.rollingStarts,
       sampleBattersFaced: pitcher.rollingBattersFaced,
+      kPer9: null,
       opponentDataAvailable: false,
       insufficientData: true,
       lines: [],
@@ -179,6 +182,7 @@ function projectSide(
       rollingBattersFaced: pitcher.rollingBattersFaced,
       rollingStarts: pitcher.rollingStarts,
       rollingBfPerStart: pitcher.rollingBfPerStart,
+      rollingInningsPitched: pitcher.rollingInningsPitched,
       seasonStrikeouts: pitcher.seasonStrikeouts,
       seasonBattersFaced: pitcher.seasonBattersFaced,
       seasonGamesStarted: pitcher.seasonGamesStarted,
@@ -245,6 +249,7 @@ function projectSide(
     opponentFactor: Math.round(projection.opponentFactor * 1e3) / 1e3,
     sampleStarts: projection.sampleStarts,
     sampleBattersFaced: projection.sampleBattersFaced,
+    kPer9: projection.kPer9 != null ? Math.round(projection.kPer9 * 10) / 10 : null,
     opponentDataAvailable:
       side.opponent != null && (pitcher.throws === "L" ? side.opponent.kPctVsLhp : side.opponent.kPctVsRhp) != null,
     insufficientData: false,

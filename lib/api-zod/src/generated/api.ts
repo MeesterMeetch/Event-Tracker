@@ -518,6 +518,7 @@ export const ListModelEdgesResponseItem = zod.object({
   "opponentFactor": zod.number(),
   "sampleStarts": zod.number(),
   "sampleBattersFaced": zod.number(),
+  "kPer9": zod.number().nullish().describe('Raw rolling K\/9 (strikeouts per 9 innings) from the sample window. Null when innings-pitched data is unavailable.'),
   "opponentDataAvailable": zod.boolean(),
   "insufficientData": zod.boolean().describe('True when the pitcher\'s strikeout-rate inputs were missing or degraded (no rolling starts and no season\/career sample). The model abstains from projecting rather than emit a confident number off zeroed inputs; numeric fields are placeholders and lines is empty.\n'),
   "lines": zod.array(zod.object({

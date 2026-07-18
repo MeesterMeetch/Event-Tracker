@@ -680,6 +680,52 @@ describe("PaperTradesTable restore happy-path invalidates both queries", () => {
   });
 });
 
+/**
+ * Locks in the two-key invalidation contract on the web PaperTradesTable
+ * delete happy-path. After a successful delete on an open trade, both
+ * ['paper-trades'] and ['paper-trade-summary'] must be passed to
+ * invalidateQueries so the trades list and the summary tile both refresh.
+ *
+ * Paired with the restore-phase equivalent above
+ * ("PaperTradesTable restore happy-path invalidates both queries") — a
+ * refactor that removes the invalidate() call from remove() should fail here
+ * while leaving the restore test green, making the regression immediately
+ * visible.
+ *
+ * Mirrors artifacts/ev-mobile/__tests__/scorecard-undo-delete.test.tsx
+ * ("shows the success banner with an UNDO action after deleting a pick")
+ * which asserts the same two-key contract on the phone.
+ */
+describe("PaperTradesTable delete happy-path invalidates both queries", () => {
+  afterEach(() => {
+    deleteMutate.mockReset();
+  });
+
+  it("successful delete invalidates both paper-trades and paper-trade-summary", async () => {
+    deleteMutate.mockImplementation((_vars: unknown, opts?: { onSuccess?: () => void }) =>
+      opts?.onSuccess?.(),
+    );
+
+    tradesRef.current = [makeTrade({ id: 400, status: "open" })];
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PaperTradesTable />
+      </QueryClientProvider>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /delete paper trade gerrit cole over 6\.5/i }),
+    );
+
+    // Delete succeeded → both queries must be invalidated.
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["paper-trades"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["paper-trade-summary"] });
+  });
+});
+
 describe("ProjectionCard impossible-odds disabled state", () => {
   function makeProjectionWithOdds(americanOdds: number): ModelPitcherProjection {
     return {

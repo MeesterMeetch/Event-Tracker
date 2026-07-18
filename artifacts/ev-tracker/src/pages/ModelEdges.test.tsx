@@ -726,6 +726,80 @@ describe("PaperTradesTable delete happy-path invalidates both queries", () => {
   });
 });
 
+/**
+ * Locks in the two-key invalidation contract on ProjectionCard's logTrade
+ * happy-path. After a successful create call, both ['paper-trades'] and
+ * ['paper-trade-summary'] must be passed to invalidateQueries so the trades
+ * list and the summary tile both refresh.
+ *
+ * Mirrors the delete and restore invalidation tests above — a refactor that
+ * drops either invalidateQueries call from logTrade's onSuccess should fail
+ * here while leaving the delete/restore tests green, making the regression
+ * immediately visible.
+ */
+describe("ProjectionCard log-trade happy-path invalidates both queries", () => {
+  afterEach(() => {
+    createMutate.mockReset();
+  });
+
+  it("successful logTrade invalidates both paper-trades and paper-trade-summary", async () => {
+    createMutate.mockImplementation((_vars: unknown, opts?: { onSuccess?: () => void }) =>
+      opts?.onSuccess?.(),
+    );
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    const projection: ModelPitcherProjection = {
+      gameId: "g1",
+      sport: "baseball_mlb",
+      commenceTime: "2026-07-14T23:10:00Z",
+      homeTeam: "NYY",
+      awayTeam: "BOS",
+      pitcher: "Gerrit Cole",
+      team: "NYY",
+      opponent: "BOS",
+      throws: "R",
+      projectedBattersFaced: 24,
+      expectedStrikeouts: 7.1,
+      ratePerBF: 0.29,
+      opponentFactor: 1.02,
+      sampleStarts: 12,
+      sampleBattersFaced: 290,
+      opponentDataAvailable: true,
+      insufficientData: false,
+      lines: [
+        {
+          point: 6.5,
+          selection: "Over",
+          americanOdds: -110,
+          book: "fanduel",
+          marketProb: 0.52,
+          modelProb: 0.58,
+          edgePercent: 6,
+          fullKellyFraction: 0.12,
+          recommendedUnits: 1,
+          isFlagged: true,
+        },
+      ],
+    } as unknown as ModelPitcherProjection;
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ProjectionCard projection={projection} />
+      </QueryClientProvider>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /log paper trade gerrit cole over 6\.5/i }),
+    );
+
+    // Successful create → both queries must be invalidated.
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["paper-trades"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["paper-trade-summary"] });
+  });
+});
+
 describe("ProjectionCard impossible-odds disabled state", () => {
   function makeProjectionWithOdds(americanOdds: number): ModelPitcherProjection {
     return {

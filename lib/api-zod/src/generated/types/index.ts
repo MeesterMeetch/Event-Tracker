@@ -32,6 +32,7 @@ export * from './modelKLine';
 export * from './modelPitcherProjection';
 export * from './paperTrade';
 export * from './paperTradeInput';
+export * from './paperTradeOutcome';
 export * from './paperTradeStatus';
 export * from './paperTradeSummary';
 export * from './paperTradeUpdate';

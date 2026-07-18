@@ -72,6 +72,19 @@ export const PaperTradeStatus = {
   expired: 'expired',
 } as const;
 
+/**
+ * Settled result of the selection against the actual total.
+ */
+export type PaperTradeOutcome = typeof PaperTradeOutcome[keyof typeof PaperTradeOutcome] | null;
+
+
+export const PaperTradeOutcome = {
+  won: 'won',
+  lost: 'lost',
+  push: 'push',
+  void: 'void',
+} as const;
+
 export interface PaperTrade {
   id: number;
   sport: string;
@@ -110,6 +123,10 @@ export interface PaperTrade {
   clvPercent: number | null;
   /** @nullable */
   beatClose: boolean | null;
+  /** Pitcher's actual strikeout total once the game is final. */
+  actualStrikeouts?: number | null;
+  /** Settled result of the selection against the actual total. */
+  outcome?: PaperTradeOutcome;
   status: PaperTradeStatus;
   createdAt: string;
 }

@@ -575,3 +575,105 @@ export async function fetchMlbLeaders(season: number): Promise<MlbLeaderCategory
 
   return out;
 }
+
+// ---- Actual strikeout results ----
+//
+// Uses the same schedule-match + doubleheader disambiguation approach as
+// getMatchupPitchers, then reads the boxscore for the pitcher's actual line.
+// Returns a discriminated union rather than nulls/zeros so consumers are
+// forced to handle every state explicitly (see the "MLB K inputs degrade
+// silently" memory note — this API deliberately does NOT repeat that mistake).
+
+interface ScheduleStatusGame {
+  gamePk: number;
+  gameDate?: string;
+  status?: { abstractGameState?: string };
+  teams?: {
+    home?: { team?: { id?: number; name?: string } };
+    away?: { team?: { id?: number; name?: string } };
+  };
+}
+
+interface ScheduleStatusResponse {
+  dates?: Array<{ games?: ScheduleStatusGame[] }>;
+}
+
+interface BoxscoreResponse {
+  teams?: {
+    home?: BoxscoreTeam;
+    away?: BoxscoreTeam;
+  };
+}
+
+interface BoxscoreTeam {
+  players?: Record<
+    string,
+    {
+      person?: { id?: number };
+      stats?: { pitching?: Record<string, unknown> };
+    }
+  >;
+}
+
+export type PitcherGameResult =
+  /** Game is final and the pitcher pitched; strikeouts is his actual total. */
+  | { kind: "final"; strikeouts: number; gamePk: number }
+  /** Game found but not final yet — retry on a later run. */
+  | { kind: "notFinal"; gamePk: number }
+  /** Game is final but the pitcher never appeared (scratched / skipped). */
+  | { kind: "didNotPitch"; gamePk: number }
+  /** No matching game on the schedule for that date and matchup. */
+  | { kind: "gameNotFound" };
+
+/**
+ * Resolves a pitcher's actual strikeout total for a given matchup. Matches the
+ * game the same way getMatchupPitchers does: eastern-date schedule lookup,
+ * team-name match, closest scheduled start for doubleheaders.
+ */
+export async function fetchPitcherGameStrikeouts(
+  pitcherId: number,
+  homeTeam: string,
+  awayTeam: string,
+  commenceTime: string,
+): Promise<PitcherGameResult> {
+  const date = easternDate(commenceTime);
+  const schedule = await mlbFetch<ScheduleStatusResponse>(`/schedule?sportId=${MLB_SPORT_ID}&date=${date}`);
+
+  const games = schedule.dates?.flatMap((d) => d.games ?? []) ?? [];
+  const wanted = new Set([norm(homeTeam), norm(awayTeam)]);
+  const matches = games.filter((g) => {
+    const h = norm(g.teams?.home?.team?.name ?? "");
+    const a = norm(g.teams?.away?.team?.name ?? "");
+    return wanted.has(h) && wanted.has(a);
+  });
+  if (matches.length === 0) return { kind: "gameNotFound" };
+
+  // Doubleheader disambiguation: closest scheduled start to the logged time.
+  const target = new Date(commenceTime).getTime();
+  const timeDelta = (g: ScheduleStatusGame) =>
+    g.gameDate ? Math.abs(new Date(g.gameDate).getTime() - target) : Number.POSITIVE_INFINITY;
+  const game = matches.reduce((best, g) => (timeDelta(g) < timeDelta(best) ? g : best));
+
+  if (game.status?.abstractGameState !== "Final") {
+    return { kind: "notFinal", gamePk: game.gamePk };
+  }
+
+  const box = await mlbFetch<BoxscoreResponse>(`/game/${game.gamePk}/boxscore`);
+  for (const side of ["home", "away"] as const) {
+    const players = box.teams?.[side]?.players ?? {};
+    for (const player of Object.values(players)) {
+      if (player.person?.id !== pitcherId) continue;
+      const pitching = player.stats?.pitching;
+      // A player entry exists for benched players too; an empty pitching stat
+      // block (no battersFaced) means he did not pitch.
+      const bf = int(pitching?.battersFaced);
+      if (pitching == null || bf == null || bf === 0) {
+        return { kind: "didNotPitch", gamePk: game.gamePk };
+      }
+      const strikeouts = int(pitching.strikeOuts);
+      if (strikeouts == null) return { kind: "didNotPitch", gamePk: game.gamePk };
+      return { kind: "final", strikeouts, gamePk: game.gamePk };
+    }
+  }
+  return { kind: "didNotPitch", gamePk: game.gamePk };
+}

@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { PaperTradeOutcome } from './paperTradeOutcome';
 import type { PaperTradeStatus } from './paperTradeStatus';
 
 export interface PaperTrade {
@@ -45,6 +46,10 @@ export interface PaperTrade {
   clvPercent: number | null;
   /** @nullable */
   beatClose: boolean | null;
+  /** Pitcher's actual strikeout total once the game is final. */
+  actualStrikeouts?: number | null;
+  /** Settled result of the selection against the actual total. */
+  outcome?: PaperTradeOutcome;
   status: PaperTradeStatus;
   createdAt: Date;
 }

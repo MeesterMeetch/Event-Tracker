@@ -930,6 +930,15 @@ components:
           type: ["number", "null"]
         beatClose:
           type: ["boolean", "null"]
+        actualStrikeouts:
+          type: integer
+          nullable: true
+          description: Pitcher's actual strikeout total once the game is final.
+        outcome:
+          type: string
+          nullable: true
+          enum: [won, lost, push, void]
+          description: Settled result of the selection against the actual total.
         status:
           $ref: "#/components/schemas/PaperTradeStatus"
         createdAt:

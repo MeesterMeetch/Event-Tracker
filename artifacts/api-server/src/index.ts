@@ -5,6 +5,7 @@ import { startModelClvCapture } from "./lib/model-clv";
 import { startGrading } from "./lib/grading";
 import { startTombstonePurge } from "./lib/tombstones";
 import { startLedgerAudit } from "./lib/ledger-audit";
+import { startKOutcomeGrading } from "./lib/k-outcomes";
 
 const rawPort = process.env["PORT"];
 
@@ -32,4 +33,5 @@ app.listen(port, (err) => {
   startGrading();
   startTombstonePurge();
   startLedgerAudit();
+  startKOutcomeGrading();
 });

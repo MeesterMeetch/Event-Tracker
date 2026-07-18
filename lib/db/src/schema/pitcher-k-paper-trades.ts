@@ -44,6 +44,12 @@ export const pitcherKPaperTradesTable = pgTable("pitcher_k_paper_trades", {
   closingProb: doublePrecision("closing_prob"),
   clvPercent: doublePrecision("clv_percent"),
   beatClose: boolean("beat_close"),
+  // Filled by the outcome-grading job once the game is final. Deliberately
+  // independent of the CLV lifecycle (`status`): an "expired" trade still
+  // gets an outcome, and a "closed" trade still needs one. "void" mirrors
+  // sportsbook handling of a non-start (pitcher scratched).
+  actualStrikeouts: integer("actual_strikeouts"),
+  outcome: text("outcome"), // "won" | "lost" | "push" | "void" | null (unsettled)
   status: text("status").notNull().default("open"), // "open" | "closed" | "expired"
   // Soft-delete marker backing the client "Undo" affordance: deleting a pick
   // stamps this instead of dropping the row, so an immediate undo can restore
@@ -69,6 +75,8 @@ export const insertPitcherKPaperTradeSchema = createInsertSchema(pitcherKPaperTr
   closingProb: true,
   clvPercent: true,
   beatClose: true,
+  actualStrikeouts: true,
+  outcome: true,
   status: true,
   deletedAt: true,
 });

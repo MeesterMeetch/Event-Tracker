@@ -570,6 +570,8 @@ export const ListPaperTradesResponseItem = zod.object({
   "closingProb": zod.number().nullable(),
   "clvPercent": zod.number().nullable(),
   "beatClose": zod.boolean().nullable(),
+  "actualStrikeouts": zod.number().nullish().describe('Pitcher\'s actual strikeout total once the game is final.'),
+  "outcome": zod.enum(['won', 'lost', 'push', 'void']).nullish().describe('Settled result of the selection against the actual total.'),
   "status": zod.enum(['open', 'closed', 'expired']),
   "createdAt": zod.coerce.date()
 })
@@ -638,6 +640,8 @@ export const CreatePaperTradeResponse = zod.object({
   "closingProb": zod.number().nullable(),
   "clvPercent": zod.number().nullable(),
   "beatClose": zod.boolean().nullable(),
+  "actualStrikeouts": zod.number().nullish().describe('Pitcher\'s actual strikeout total once the game is final.'),
+  "outcome": zod.enum(['won', 'lost', 'push', 'void']).nullish().describe('Settled result of the selection against the actual total.'),
   "status": zod.enum(['open', 'closed', 'expired']),
   "createdAt": zod.coerce.date()
 })
@@ -704,6 +708,8 @@ export const UpdatePaperTradeResponse = zod.object({
   "closingProb": zod.number().nullable(),
   "clvPercent": zod.number().nullable(),
   "beatClose": zod.boolean().nullable(),
+  "actualStrikeouts": zod.number().nullish().describe('Pitcher\'s actual strikeout total once the game is final.'),
+  "outcome": zod.enum(['won', 'lost', 'push', 'void']).nullish().describe('Settled result of the selection against the actual total.'),
   "status": zod.enum(['open', 'closed', 'expired']),
   "createdAt": zod.coerce.date()
 })
@@ -755,6 +761,8 @@ export const RestorePaperTradeResponse = zod.object({
   "closingProb": zod.number().nullable(),
   "clvPercent": zod.number().nullable(),
   "beatClose": zod.boolean().nullable(),
+  "actualStrikeouts": zod.number().nullish().describe('Pitcher\'s actual strikeout total once the game is final.'),
+  "outcome": zod.enum(['won', 'lost', 'push', 'void']).nullish().describe('Settled result of the selection against the actual total.'),
   "status": zod.enum(['open', 'closed', 'expired']),
   "createdAt": zod.coerce.date()
 })

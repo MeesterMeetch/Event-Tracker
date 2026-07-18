@@ -625,6 +625,61 @@ describe("EditPaperTradeDialog server-rejection path", () => {
   });
 });
 
+/**
+ * Locks in the two-key invalidation contract on the web PaperTradesTable
+ * restore (UNDO) happy-path. After a successful restore, both
+ * ['paper-trades'] and ['paper-trade-summary'] must be passed to
+ * invalidateQueries so the trades list and the summary tile both refresh.
+ *
+ * Mirrors artifacts/ev-mobile/__tests__/scorecard-undo-delete.test.tsx
+ * ("tapping UNDO fires the restore mutation for that pick and re-invalidates
+ * the queries") — both must assert the same two-key invalidation contract so
+ * a refactor that drops one call fails in both screens, not just one.
+ */
+describe("PaperTradesTable restore happy-path invalidates both queries", () => {
+  afterEach(() => {
+    deleteMutate.mockReset();
+    restoreMutate.mockReset();
+  });
+
+  it("successful UNDO invalidates both paper-trades and paper-trade-summary", async () => {
+    deleteMutate.mockImplementation((_vars: unknown, opts?: { onSuccess?: () => void }) =>
+      opts?.onSuccess?.(),
+    );
+    restoreMutate.mockImplementation((_vars: unknown, opts?: { onSuccess?: () => void }) =>
+      opts?.onSuccess?.(),
+    );
+
+    tradesRef.current = [makeTrade({ id: 300, status: "open" })];
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <PaperTradesTable />
+      </QueryClientProvider>,
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /delete paper trade gerrit cole over 6\.5/i }),
+    );
+
+    // Delete succeeded → toast with Undo action.
+    const deleteToast = toastMock.mock.calls.find(([args]) => args?.title === "Paper trade deleted");
+    expect(deleteToast).toBeDefined();
+
+    // Clear spy to isolate the restore-phase invalidations from the delete-phase ones.
+    invalidateSpy.mockClear();
+
+    const action = deleteToast![0].action as ReactElement<{ onClick: () => void }>;
+    action.props.onClick();
+
+    // Restore succeeded → both queries must be re-invalidated.
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["paper-trades"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["paper-trade-summary"] });
+  });
+});
+
 describe("ProjectionCard impossible-odds disabled state", () => {
   function makeProjectionWithOdds(americanOdds: number): ModelPitcherProjection {
     return {

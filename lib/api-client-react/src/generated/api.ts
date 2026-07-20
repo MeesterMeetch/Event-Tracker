@@ -29,6 +29,7 @@ import type {
   GameAnalysisRequest,
   GameAnalysisResponse,
   GameEvent,
+  GameSummary,
   HealthStatus,
   LeaderCategory,
   LedgerAuditSummary,
@@ -36,6 +37,7 @@ import type {
   ListEdgesParams,
   ListEventsParams,
   ListLeadersParams,
+  ListMlbGamesParams,
   ListModelEdgesParams,
   ListPaperTradesParams,
   ListPropEdgesParams,
@@ -1943,4 +1945,89 @@ export const useRestorePaperTrade = <TError = ErrorType<ErrorResponse>,
       > => {
       return useMutation(getRestorePaperTradeMutationOptions(options));
     }
+
+export const getListMlbGamesUrl = (params: ListMlbGamesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/mlb/games?${stringifiedParams}` : `/api/mlb/games`
+}
+
+/**
+ * Returns all MLB games scheduled for the given Eastern-calendar date from the free MLB Stats API, hydrated with probable starters and linescore so scores are available for live and final games. Sorted by start time.
+ * @summary List MLB games for a date
+ */
+export const listMlbGames = async (params: ListMlbGamesParams, options?: RequestInit): Promise<GameSummary[]> => {
+
+  return customFetch<GameSummary[]>(getListMlbGamesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMlbGamesQueryKey = (params?: ListMlbGamesParams,) => {
+    return [
+    `/api/mlb/games`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListMlbGamesQueryOptions = <TData = Awaited<ReturnType<typeof listMlbGames>>, TError = ErrorType<ErrorResponse>>(params: ListMlbGamesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMlbGames>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMlbGamesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMlbGames>>> = ({ signal }) => listMlbGames(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMlbGames>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMlbGamesQueryResult = NonNullable<Awaited<ReturnType<typeof listMlbGames>>>
+export type ListMlbGamesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List MLB games for a date
+ */
+
+export function useListMlbGames<TData = Awaited<ReturnType<typeof listMlbGames>>, TError = ErrorType<ErrorResponse>>(
+ params: ListMlbGamesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMlbGames>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMlbGamesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 

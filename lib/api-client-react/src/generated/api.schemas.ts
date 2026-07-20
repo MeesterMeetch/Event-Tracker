@@ -454,6 +454,42 @@ export interface GameAnalysisResponse {
   awayPitcher: ProbablePitcher | null;
 }
 
+export type GameSummaryStatus = {
+  abstractGameState: string;
+  detailedState: string;
+};
+
+export type GameSummaryHomeProbablePitcher = {
+  id: number;
+  name: string;
+} | null;
+
+export type GameSummaryAwayProbablePitcher = {
+  id: number;
+  name: string;
+} | null;
+
+export interface GameSummary {
+  gamePk: number;
+  /** ISO 8601 game start time (UTC) */
+  gameDate: string;
+  status: GameSummaryStatus;
+  homeTeam: string;
+  awayTeam: string;
+  homeProbablePitcher: GameSummaryHomeProbablePitcher;
+  awayProbablePitcher: GameSummaryAwayProbablePitcher;
+  /**
+     * Current or final score; null when game has not started
+     * @nullable
+     */
+  homeScore: number | null;
+  /**
+     * Current or final score; null when game has not started
+     * @nullable
+     */
+  awayScore: number | null;
+}
+
 export type ListEdgesParams = {
 sport: string;
 minEdgePercent?: number;
@@ -490,5 +526,12 @@ kellyMultiplier?: number;
 
 export type ListPaperTradesParams = {
 status?: PaperTradeStatus;
+};
+
+export type ListMlbGamesParams = {
+/**
+ * Calendar date in YYYY-MM-DD format (Eastern time zone)
+ */
+date: string;
 };
 

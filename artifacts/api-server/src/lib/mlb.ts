@@ -633,6 +633,82 @@ export type PitcherGameResult =
   /** No matching game on the schedule for that date and matchup. */
   | { kind: "gameNotFound" };
 
+// ─── Games schedule ──────────────────────────────────────────────────────────
+
+interface MlbGamesScheduleTeam {
+  team?: { id?: number; name?: string };
+  probablePitcher?: { id?: number; fullName?: string };
+  score?: number;
+}
+
+interface MlbGamesScheduleGame {
+  gamePk: number;
+  gameDate?: string;
+  status?: { abstractGameState?: string; detailedState?: string };
+  teams?: { home?: MlbGamesScheduleTeam; away?: MlbGamesScheduleTeam };
+  linescore?: { teams?: { home?: { runs?: number }; away?: { runs?: number } } };
+}
+
+interface MlbGamesScheduleResponse {
+  dates?: Array<{ games?: MlbGamesScheduleGame[] }>;
+}
+
+export interface GameSummary {
+  gamePk: number;
+  gameDate: string;
+  status: { abstractGameState: string; detailedState: string };
+  homeTeam: string;
+  awayTeam: string;
+  homeProbablePitcher: { id: number; name: string } | null;
+  awayProbablePitcher: { id: number; name: string } | null;
+  homeScore: number | null;
+  awayScore: number | null;
+}
+
+/**
+ * Fetches all MLB games for the given YYYY-MM-DD date from the free MLB Stats
+ * API, hydrating probable pitchers and linescore so scores are available for
+ * live and final games. Sorted by scheduled start time ascending.
+ */
+export async function fetchMlbGames(date: string): Promise<GameSummary[]> {
+  const schedule = await mlbFetch<MlbGamesScheduleResponse>(
+    `/schedule?sportId=${MLB_SPORT_ID}&date=${date}&hydrate=probablePitcher,linescore,team`,
+  );
+  const games = schedule.dates?.flatMap((d) => d.games ?? []) ?? [];
+  return games
+    .map((g): GameSummary => {
+      const home = g.teams?.home;
+      const away = g.teams?.away;
+      // Prefer linescore.teams (more reliable after hydration), fall back to
+      // the score field that some hydration versions populate directly.
+      const homeScore = g.linescore?.teams?.home?.runs ?? home?.score ?? null;
+      const awayScore = g.linescore?.teams?.away?.runs ?? away?.score ?? null;
+      return {
+        gamePk: g.gamePk,
+        gameDate: g.gameDate ?? "",
+        status: {
+          abstractGameState: g.status?.abstractGameState ?? "Preview",
+          detailedState: g.status?.detailedState ?? "Scheduled",
+        },
+        homeTeam: home?.team?.name ?? "",
+        awayTeam: away?.team?.name ?? "",
+        homeProbablePitcher:
+          home?.probablePitcher?.id != null
+            ? { id: home.probablePitcher.id, name: home.probablePitcher.fullName ?? "" }
+            : null,
+        awayProbablePitcher:
+          away?.probablePitcher?.id != null
+            ? { id: away.probablePitcher.id, name: away.probablePitcher.fullName ?? "" }
+            : null,
+        homeScore: typeof homeScore === "number" ? homeScore : null,
+        awayScore: typeof awayScore === "number" ? awayScore : null,
+      };
+    })
+    .sort((a, b) => a.gameDate.localeCompare(b.gameDate));
+}
+
+// ─── K outcome resolution ─────────────────────────────────────────────────────
+
 /**
  * Resolves a pitcher's actual strikeout total for a given matchup. Matches the
  * game the same way getMatchupPitchers does: eastern-date schedule lookup,

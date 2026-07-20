@@ -1,7 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Activity, Brain, LayoutDashboard, ListTodo, Trophy, X } from "lucide-react";
+import { Activity, Brain, CalendarDays, LayoutDashboard, ListTodo, Trophy, X } from "lucide-react";
 
 export function Sidebar({
   open,
@@ -18,6 +18,7 @@ export function Sidebar({
     { href: "/model", label: "Strikeout Model", icon: Brain },
     { href: "/rankings", label: "Rankings", icon: Trophy },
     { href: "/bets", label: "Bet Log", icon: ListTodo },
+    { href: "/games", label: "MLB Games", icon: CalendarDays },
   ];
 
   // Close the mobile drawer automatically whenever the route changes.

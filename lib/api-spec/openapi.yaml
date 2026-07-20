@@ -28,6 +28,8 @@ tags:
     description: Fundamental pitcher-strikeout projection model
   - name: paper-trades
     description: Model paper trades and closing-line-value validation
+  - name: mlb
+    description: MLB schedule and game data
 paths:
   /healthz:
     get:
@@ -701,6 +703,43 @@ paths:
                 $ref: "#/components/schemas/PaperTrade"
         "404":
           description: No restorable paper trade with this id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /mlb/games:
+    get:
+      operationId: listMlbGames
+      tags: [mlb]
+      summary: List MLB games for a date
+      description: >
+        Returns all MLB games scheduled for the given Eastern-calendar date from
+        the free MLB Stats API, hydrated with probable starters and linescore so
+        scores are available for live and final games. Sorted by start time.
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Calendar date in YYYY-MM-DD format (Eastern time zone)
+      responses:
+        "200":
+          description: Games for the date, sorted by start time ascending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GameSummary"
+        "400":
+          description: Missing or malformed date parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: MLB Stats API error
           content:
             application/json:
               schema:
@@ -1575,3 +1614,61 @@ components:
           anyOf:
             - $ref: "#/components/schemas/ProbablePitcher"
             - type: "null"
+
+    GameSummary:
+      type: object
+      required:
+        - gamePk
+        - gameDate
+        - status
+        - homeTeam
+        - awayTeam
+        - homeProbablePitcher
+        - awayProbablePitcher
+        - homeScore
+        - awayScore
+      properties:
+        gamePk:
+          type: integer
+        gameDate:
+          type: string
+          format: date-time
+          description: ISO 8601 game start time (UTC)
+        status:
+          type: object
+          required: [abstractGameState, detailedState]
+          properties:
+            abstractGameState:
+              type: string
+            detailedState:
+              type: string
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        homeProbablePitcher:
+          anyOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+            - type: 'null'
+        awayProbablePitcher:
+          anyOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+            - type: 'null'
+        homeScore:
+          type: [integer, 'null']
+          description: Current or final score; null when game has not started
+        awayScore:
+          type: [integer, 'null']
+          description: Current or final score; null when game has not started

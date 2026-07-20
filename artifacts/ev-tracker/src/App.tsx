@@ -7,6 +7,7 @@ import LiveEdges from '@/pages/LiveEdges';
 import ModelEdges from '@/pages/ModelEdges';
 import Rankings from '@/pages/Rankings';
 import BetLog from '@/pages/BetLog';
+import Games from '@/pages/Games';
 
 // Odds-backed queries cost live API credits, so never refetch just because
 // the window regained focus, and treat results as fresh for a minute.
@@ -38,6 +39,7 @@ function Router() {
         <Route path="/model" component={ModelEdges} />
         <Route path="/rankings" component={Rankings} />
         <Route path="/bets" component={BetLog} />
+        <Route path="/games" component={Games} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

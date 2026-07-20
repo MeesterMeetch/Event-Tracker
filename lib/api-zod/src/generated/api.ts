@@ -773,3 +773,34 @@ export const RestorePaperTradeResponse = zod.object({
 })
 
 
+/**
+ * Returns all MLB games scheduled for the given Eastern-calendar date from the free MLB Stats API, hydrated with probable starters and linescore so scores are available for live and final games. Sorted by start time.
+ * @summary List MLB games for a date
+ */
+export const ListMlbGamesQueryParams = zod.object({
+  "date": zod.coerce.string().describe('Calendar date in YYYY-MM-DD format (Eastern time zone)')
+})
+
+export const ListMlbGamesResponseItem = zod.object({
+  "gamePk": zod.number(),
+  "gameDate": zod.coerce.date().describe('ISO 8601 game start time (UTC)'),
+  "status": zod.object({
+  "abstractGameState": zod.string(),
+  "detailedState": zod.string()
+}),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "homeProbablePitcher": zod.union([zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+}),zod.null()]),
+  "awayProbablePitcher": zod.union([zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+}),zod.null()]),
+  "homeScore": zod.number().nullable().describe('Current or final score; null when game has not started'),
+  "awayScore": zod.number().nullable().describe('Current or final score; null when game has not started')
+})
+export const ListMlbGamesResponse = zod.array(ListMlbGamesResponseItem)
+
+

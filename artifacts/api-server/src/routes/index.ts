@@ -11,6 +11,7 @@ import analysisRouter from "./analysis";
 import modelEdgesRouter from "./model-edges";
 import paperTradesRouter from "./paper-trades";
 import auditRouter from "./audit";
+import mlbRouter from "./mlb";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(analysisRouter);
 router.use(modelEdgesRouter);
 router.use(paperTradesRouter);
 router.use(auditRouter);
+router.use(mlbRouter);
 
 export default router;

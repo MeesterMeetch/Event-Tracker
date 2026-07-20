@@ -138,6 +138,12 @@ export function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, childr
             )}
             <span className="text-positive font-mono font-semibold">EV: {formatPercent(edge.evPercent)}</span>
           </div>
+          {(edge.sharpProb != null || edge.publicProb != null) && (
+            <div className="flex justify-between text-xs mt-1">
+              <span className="text-muted-foreground font-mono">Sharp: {edge.sharpProb != null ? `${edge.sharpProb}%` : "—"}</span>
+              <span className="text-muted-foreground font-mono">Public: {edge.publicProb != null ? `${edge.publicProb}%` : "—"}</span>
+            </div>
+          )}
         </div>
 
         <Form {...form}>
@@ -522,17 +528,19 @@ export default function LiveEdges() {
                   <TableHead>Market</TableHead>
                   <TableHead>Selection</TableHead>
                   <TableHead>Book</TableHead>
+                  <TableHead className="text-right">Public</TableHead>
                   <TableHead className="text-right text-muted-foreground">DK</TableHead>
                   <TableHead className="text-right">Fair</TableHead>
                   <TableHead className="text-right">Odds</TableHead>
                   <TableHead className="text-right">EV%</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Sharp / Public</TableHead>
                   <TableHead className="w-[130px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {edges.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
                       <div className="flex flex-col items-center justify-center space-y-2">
                         <Activity className="h-6 w-6 opacity-30" />
                         <p>No +EV edges found right now.</p>
@@ -577,6 +585,9 @@ export default function LiveEdges() {
                       </TableCell>
                       <TableCell className="text-right text-positive font-bold">
                         {formatPercent(edge.evPercent)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
+                        {edge.sharpProb != null ? `${edge.sharpProb}%` : "—"} / {edge.publicProb != null ? `${edge.publicProb}%` : "—"}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
@@ -701,13 +712,14 @@ export default function LiveEdges() {
                           <TableHead className="text-right">Fair</TableHead>
                           <TableHead className="text-right">Odds</TableHead>
                           <TableHead className="text-right">EV%</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Sharp / Public</TableHead>
                           <TableHead className="w-[130px]"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {propEdges.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                            <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
                               <div className="flex flex-col items-center justify-center space-y-2">
                                 <Activity className="h-6 w-6 opacity-30" />
                                 <p>No +EV player props found for this game.</p>
@@ -739,6 +751,9 @@ export default function LiveEdges() {
                               </TableCell>
                               <TableCell className="text-right text-positive font-bold">
                                 {formatPercent(edge.evPercent)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
+                                {edge.sharpProb != null ? `${edge.sharpProb}%` : "—"} / {edge.publicProb != null ? `${edge.publicProb}%` : "—"}
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">

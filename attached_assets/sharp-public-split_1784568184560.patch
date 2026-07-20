@@ -1,0 +1,403 @@
+From ad6efccc57e0cfa38e1f795b74c96e2ee0884e9b Mon Sep 17 00:00:00 2001
+From: Mitch Hunt <mitch.w.hunt@gmail.com>
+Date: Mon, 20 Jul 2026 11:20:40 -0600
+Subject: [PATCH] Show sharp vs public money split on every potential bet
+
+Adds a sharp-vs-public lean estimate to each edge opportunity, computed
+from data already fetched (no extra API credits):
+
+- odds-math: SHARP_BOOK_KEYS (pinnacle, lowvig, betonlineag) + isSharpBook
+- ev/props scanners: devigged consensus probability averaged separately
+  across sharp books (sharpProb) and public books (publicProb), null when
+  no book in that group quotes the outcome
+- openapi spec + regenerated orval/zod clients
+- web LiveEdges: Sharp / Public column in game-lines and props tables,
+  plus the log-bet dialog card
+- mobile: split shown on edge rows and the log sheet card
+- tests locking in the split math and the null case
+
+Note: The Odds API publishes no real bet/handle splits, so this is a
+price-based proxy for where sharp money leans, not actual money split.
+---
+ artifacts/api-server/src/lib/ev.test.ts       | 37 +++++++++++++++++++
+ artifacts/api-server/src/lib/ev.ts            | 25 ++++++++++++-
+ artifacts/api-server/src/lib/odds-math.ts     | 14 +++++++
+ artifacts/api-server/src/lib/props.ts         | 10 ++++-
+ artifacts/ev-mobile/app/(tabs)/index.tsx      | 24 ++++++++++++
+ artifacts/ev-tracker/src/pages/LiveEdges.tsx  | 18 ++++++++-
+ .../src/generated/api.schemas.ts              |  4 ++
+ lib/api-spec/openapi.yaml                     | 14 +++++++
+ lib/api-zod/src/generated/api.ts              |  6 +++
+ .../src/generated/types/edgeOpportunity.ts    |  4 ++
+ 10 files changed, 152 insertions(+), 4 deletions(-)
+
+diff --git a/artifacts/api-server/src/lib/ev.test.ts b/artifacts/api-server/src/lib/ev.test.ts
+index bab909c..23bddea 100644
+--- a/artifacts/api-server/src/lib/ev.test.ts
++++ b/artifacts/api-server/src/lib/ev.test.ts
+@@ -184,3 +184,40 @@ describe("computeEdges — edge cases", () => {
+     expect(computeEdges([], "baseball_mlb", 1)).toEqual([]);
+   });
+ });
++
++describe("computeEdges — sharp vs public split", () => {
++  // LowVig is a sharp book (SHARP_BOOK_KEYS); Book1/Book2 are public.
++  // LowVig: A +110 (0.47619), B -120 (0.545455); overround 1.021645
++  //   → fairA 0.466103, fairB 0.533897 → sharpProb A = 46.6%, B = 53.4%
++  // Book1 & Book2: A/B both +100 → fair 0.5 each → publicProb 50%.
++  const events = [
++    event([
++      book("Book1", "h2h", [outcome("Away", 100), outcome("Home", 100)]),
++      book("Book2", "h2h", [outcome("Away", 100), outcome("Home", 100)]),
++      { key: "lowvig", title: "LowVig.ag", markets: [{ key: "h2h", outcomes: [outcome("Away", 110), outcome("Home", -120)] }] },
++    ]),
++  ];
++
++  it("reports the devigged consensus of sharp books and public books separately", () => {
++    const edges = computeEdges(events, "baseball_mlb", 1);
++    const away = edges.find((e) => e.selection === "Away");
++    expect(away).toBeDefined();
++    expect(away!.sharpProb).toBeCloseTo(46.6, 1);
++    expect(away!.publicProb).toBeCloseTo(50, 1);
++  });
++
++  it("returns null for the sharp side when no sharp book quotes the market", () => {
++    const publicOnly = [
++      event([
++        book("Book1", "h2h", [outcome("Away", 120), outcome("Home", -105)]),
++        book("Book2", "h2h", [outcome("Away", 100), outcome("Home", 100)]),
++      ]),
++    ];
++    const edges = computeEdges(publicOnly, "baseball_mlb", 1);
++    expect(edges.length).toBeGreaterThan(0);
++    for (const e of edges) {
++      expect(e.sharpProb).toBeNull();
++      expect(e.publicProb).not.toBeNull();
++    }
++  });
++});
+diff --git a/artifacts/api-server/src/lib/ev.ts b/artifacts/api-server/src/lib/ev.ts
+index 7b551ef..b27f80c 100644
+--- a/artifacts/api-server/src/lib/ev.ts
++++ b/artifacts/api-server/src/lib/ev.ts
+@@ -1,5 +1,5 @@
+ import type { OddsEvent } from "./odds";
+-import { americanToDecimal, americanToImpliedProb, probToAmerican } from "./odds-math";
++import { americanToDecimal, americanToImpliedProb, isSharpBook, probToAmerican } from "./odds-math";
+ 
+ export interface EdgeOpportunity {
+   gameId: string;
+@@ -18,6 +18,22 @@ export interface EdgeOpportunity {
+   dkOdds: number | null;
+   fairOdds: number;
+   evPercent: number;
++  /**
++   * Devigged consensus probability (percent) that this selection hits,
++   * averaged across sharp books only (see SHARP_BOOK_KEYS); null when no
++   * sharp book quotes the outcome. A proxy for where sharp money leans —
++   * The Odds API does not publish real bet/handle splits.
++   */
++  sharpProb: number | null;
++  /** Same consensus probability (percent) averaged across public (recreational) books; null when none quote it. */
++  publicProb: number | null;
++}
++
++/** Averages devigged fair-probability samples into a percent rounded to 0.1; null when no book contributed. */
++export function avgProbPercent(samples: number[] | undefined): number | null {
++  if (!samples || samples.length === 0) return null;
++  const avg = samples.reduce((sum, p) => sum + p, 0) / samples.length;
++  return Math.round(avg * 1000) / 10;
+ }
+ 
+ const MARKETS = ["h2h", "spreads", "totals"] as const;
+@@ -40,6 +56,8 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
+   for (const event of events) {
+     for (const market of MARKETS) {
+       const fairProbSamples = new Map<string, number[]>();
++      const sharpSamples = new Map<string, number[]>();
++      const publicSamples = new Map<string, number[]>();
+       const best = new Map<string, { americanOdds: number; book: string }>();
+       const dk = new Map<string, number>();
+       const meta = new Map<string, { name: string; point: number | null }>();
+@@ -59,6 +77,9 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
+ 
+           if (!fairProbSamples.has(key)) fairProbSamples.set(key, []);
+           fairProbSamples.get(key)!.push(fairProb);
++          const splitSamples = isSharpBook(bookmaker.key) ? sharpSamples : publicSamples;
++          if (!splitSamples.has(key)) splitSamples.set(key, []);
++          splitSamples.get(key)!.push(fairProb);
+           meta.set(key, { name: outcome.name, point });
+ 
+           const currentBest = best.get(key);
+@@ -97,6 +118,8 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
+             americanOdds: bestForKey.americanOdds,
+             book: bestForKey.book,
+             dkOdds: dk.get(key) ?? null,
++            sharpProb: avgProbPercent(sharpSamples.get(key)),
++            publicProb: avgProbPercent(publicSamples.get(key)),
+             fairOdds: probToAmerican(avgFairProb),
+             evPercent: Math.round(evPercent * 100) / 100,
+           });
+diff --git a/artifacts/api-server/src/lib/odds-math.ts b/artifacts/api-server/src/lib/odds-math.ts
+index 213f0d7..831236e 100644
+--- a/artifacts/api-server/src/lib/odds-math.ts
++++ b/artifacts/api-server/src/lib/odds-math.ts
+@@ -67,3 +67,17 @@ export function baseSelection(market: string, selection: string): string {
+   }
+   return selection;
+ }
++
++/**
++ * Bookmakers treated as "sharp" (low-vig market makers whose lines move on
++ * professional money) when estimating the sharp-vs-public split for an edge.
++ * LowVig and BetOnline are the sharpest books The Odds API returns for the
++ * "us" region; Pinnacle is listed so it is picked up automatically if the
++ * odds fetch ever includes non-US regions. Every other book is "public".
++ */
++export const SHARP_BOOK_KEYS: ReadonlySet<string> = new Set(["pinnacle", "lowvig", "betonlineag"]);
++
++/** Whether an Odds API bookmaker key belongs to the sharp-book set. */
++export function isSharpBook(bookmakerKey: string): boolean {
++  return SHARP_BOOK_KEYS.has(bookmakerKey);
++}
+diff --git a/artifacts/api-server/src/lib/props.ts b/artifacts/api-server/src/lib/props.ts
+index 4dc6865..8b4be90 100644
+--- a/artifacts/api-server/src/lib/props.ts
++++ b/artifacts/api-server/src/lib/props.ts
+@@ -1,6 +1,7 @@
+ import type { OddsEvent, OddsOutcome } from "./odds";
+ import type { EdgeOpportunity } from "./ev";
+-import { americanToDecimal, americanToImpliedProb, probToAmerican } from "./odds-math";
++import { avgProbPercent } from "./ev";
++import { americanToDecimal, americanToImpliedProb, isSharpBook, probToAmerican } from "./odds-math";
+ 
+ /**
+  * Over/Under player-prop markets scanned per sport. Only two-sided O/U
+@@ -44,6 +45,8 @@ export function sportSupportsProps(sportKey: string): boolean {
+  */
+ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent: number): EdgeOpportunity[] {
+   const fairProbSamples = new Map<string, number[]>();
++  const sharpSamples = new Map<string, number[]>();
++  const publicSamples = new Map<string, number[]>();
+   const sampleBooks = new Map<string, Set<string>>();
+   const best = new Map<string, { americanOdds: number; book: string }>();
+   const dk = new Map<string, number>();
+@@ -78,6 +81,9 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
+ 
+           if (!fairProbSamples.has(key)) fairProbSamples.set(key, []);
+           fairProbSamples.get(key)!.push(fairProb);
++          const splitSamples = isSharpBook(bookmaker.key) ? sharpSamples : publicSamples;
++          if (!splitSamples.has(key)) splitSamples.set(key, []);
++          splitSamples.get(key)!.push(fairProb);
+           if (!sampleBooks.has(key)) sampleBooks.set(key, new Set());
+           sampleBooks.get(key)!.add(bookmaker.key); // stable ID, not display title
+           meta.set(key, { market: market.key, player, name: outcome.name, point });
+@@ -123,6 +129,8 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
+         americanOdds: bestForKey.americanOdds,
+         book: bestForKey.book,
+         dkOdds: dk.get(key) ?? null,
++        sharpProb: avgProbPercent(sharpSamples.get(key)),
++        publicProb: avgProbPercent(publicSamples.get(key)),
+         fairOdds: probToAmerican(avgFairProb),
+         evPercent: Math.round(evPercent * 100) / 100,
+       });
+diff --git a/artifacts/ev-mobile/app/(tabs)/index.tsx b/artifacts/ev-mobile/app/(tabs)/index.tsx
+index d2ae708..eb147a1 100644
+--- a/artifacts/ev-mobile/app/(tabs)/index.tsx
++++ b/artifacts/ev-mobile/app/(tabs)/index.tsx
+@@ -171,6 +171,20 @@ function PropRow({
+           {formatMarketLabel(edge.market)} · {edge.selection}{' '}
+           {formatPoint(edge.point, edge.market)} · {edge.book}
+         </Text>
++        {(edge.sharpProb != null || edge.publicProb != null) ? (
++          <Text
++            style={{
++              fontFamily: fonts.mono,
++              fontSize: 10,
++              color: colors.mutedForeground,
++              marginTop: 1,
++            }}
++            numberOfLines={1}
++          >
++            Sharp {edge.sharpProb != null ? `${edge.sharpProb}%` : '—'} · Public{' '}
++            {edge.publicProb != null ? `${edge.publicProb}%` : '—'}
++          </Text>
++        ) : null}
+       </View>
+       <View style={{ flex: 1, alignItems: 'flex-end' }}>
+         <Text style={{ fontFamily: fonts.mono, fontSize: 12.5, color: colors.mutedForeground }}>
+@@ -373,6 +387,16 @@ export function LogPropSheet({
+                   EV {formatPercent(edge.evPercent)}
+                 </Text>
+               </View>
++              {(edge.sharpProb != null || edge.publicProb != null) ? (
++                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 6 }}>
++                  <Text style={{ fontFamily: fonts.mono, fontSize: 11, color: colors.mutedForeground }}>
++                    Sharp {edge.sharpProb != null ? `${edge.sharpProb}%` : '—'}
++                  </Text>
++                  <Text style={{ fontFamily: fonts.mono, fontSize: 11, color: colors.mutedForeground }}>
++                    Public {edge.publicProb != null ? `${edge.publicProb}%` : '—'}
++                  </Text>
++                </View>
++              ) : null}
+             </View>
+ 
+             <View>
+diff --git a/artifacts/ev-tracker/src/pages/LiveEdges.tsx b/artifacts/ev-tracker/src/pages/LiveEdges.tsx
+index a2a0171..6e74981 100644
+--- a/artifacts/ev-tracker/src/pages/LiveEdges.tsx
++++ b/artifacts/ev-tracker/src/pages/LiveEdges.tsx
+@@ -138,6 +138,12 @@ export function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, childr
+             )}
+             <span className="text-positive font-mono font-semibold">EV: {formatPercent(edge.evPercent)}</span>
+           </div>
++          {(edge.sharpProb != null || edge.publicProb != null) && (
++            <div className="flex justify-between text-xs mt-1">
++              <span className="text-muted-foreground font-mono">Sharp: {edge.sharpProb != null ? `${edge.sharpProb}%` : "—"}</span>
++              <span className="text-muted-foreground font-mono">Public: {edge.publicProb != null ? `${edge.publicProb}%` : "—"}</span>
++            </div>
++          )}
+         </div>
+ 
+         <Form {...form}>
+@@ -526,13 +532,14 @@ export default function LiveEdges() {
+                   <TableHead className="text-right">Fair</TableHead>
+                   <TableHead className="text-right">Odds</TableHead>
+                   <TableHead className="text-right">EV%</TableHead>
++                  <TableHead className="text-right whitespace-nowrap">Sharp / Public</TableHead>
+                   <TableHead className="w-[130px]"></TableHead>
+                 </TableRow>
+               </TableHeader>
+               <TableBody>
+                 {edges.length === 0 ? (
+                   <TableRow>
+-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
++                    <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
+                       <div className="flex flex-col items-center justify-center space-y-2">
+                         <Activity className="h-6 w-6 opacity-30" />
+                         <p>No +EV edges found right now.</p>
+@@ -578,6 +585,9 @@ export default function LiveEdges() {
+                       <TableCell className="text-right text-positive font-bold">
+                         {formatPercent(edge.evPercent)}
+                       </TableCell>
++                      <TableCell className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
++                        {edge.sharpProb != null ? `${edge.sharpProb}%` : "—"} / {edge.publicProb != null ? `${edge.publicProb}%` : "—"}
++                      </TableCell>
+                       <TableCell>
+                         <div className="flex flex-col gap-1">
+                           <AnalyzeGameDialog edge={edge} gameEdges={edges.filter((e) => e.gameId === edge.gameId)}>
+@@ -701,13 +711,14 @@ export default function LiveEdges() {
+                           <TableHead className="text-right">Fair</TableHead>
+                           <TableHead className="text-right">Odds</TableHead>
+                           <TableHead className="text-right">EV%</TableHead>
++                          <TableHead className="text-right whitespace-nowrap">Sharp / Public</TableHead>
+                           <TableHead className="w-[130px]"></TableHead>
+                         </TableRow>
+                       </TableHeader>
+                       <TableBody>
+                         {propEdges.length === 0 ? (
+                           <TableRow>
+-                            <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
++                            <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
+                               <div className="flex flex-col items-center justify-center space-y-2">
+                                 <Activity className="h-6 w-6 opacity-30" />
+                                 <p>No +EV player props found for this game.</p>
+@@ -740,6 +751,9 @@ export default function LiveEdges() {
+                               <TableCell className="text-right text-positive font-bold">
+                                 {formatPercent(edge.evPercent)}
+                               </TableCell>
++                              <TableCell className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
++                                {edge.sharpProb != null ? `${edge.sharpProb}%` : "—"} / {edge.publicProb != null ? `${edge.publicProb}%` : "—"}
++                              </TableCell>
+                               <TableCell>
+                                 <div className="flex flex-col gap-1">
+                                   <AnalyzeGameDialog edge={edge} gameEdges={propEdges}>
+diff --git a/lib/api-client-react/src/generated/api.schemas.ts b/lib/api-client-react/src/generated/api.schemas.ts
+index d109399..76f5ae2 100644
+--- a/lib/api-client-react/src/generated/api.schemas.ts
++++ b/lib/api-client-react/src/generated/api.schemas.ts
+@@ -295,6 +295,10 @@ export interface EdgeOpportunity {
+   book: string;
+   /** DraftKings price for this outcome at scan time; null if DK does not quote it. */
+   dkOdds?: number | null;
++  /** Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet/handle splits. */
++  sharpProb?: number | null;
++  /** Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it. */
++  publicProb?: number | null;
+   fairOdds: number;
+   evPercent: number;
+ }
+diff --git a/lib/api-spec/openapi.yaml b/lib/api-spec/openapi.yaml
+index 806f133..a78b7a0 100644
+--- a/lib/api-spec/openapi.yaml
++++ b/lib/api-spec/openapi.yaml
+@@ -1274,6 +1274,20 @@ components:
+           type: number
+           nullable: true
+           description: DraftKings price for this outcome at scan time; null if DK does not quote it.
++        sharpProb:
++          type: number
++          nullable: true
++          description: >-
++            Devigged consensus probability (percent) for this selection across
++            sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no
++            sharp book quotes it. A proxy for where sharp money leans — the
++            odds feed does not publish real bet/handle splits.
++        publicProb:
++          type: number
++          nullable: true
++          description: >-
++            Devigged consensus probability (percent) for this selection across
++            public recreational books; null if none quote it.
+         fairOdds:
+           type: number
+         evPercent:
+diff --git a/lib/api-zod/src/generated/api.ts b/lib/api-zod/src/generated/api.ts
+index 4ac1968..b8ec9b3 100644
+--- a/lib/api-zod/src/generated/api.ts
++++ b/lib/api-zod/src/generated/api.ts
+@@ -51,6 +51,8 @@ export const ListEdgesResponseItem = zod.object({
+   "americanOdds": zod.number(),
+   "book": zod.string(),
+   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
++  "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
++  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.'),
+   "fairOdds": zod.number(),
+   "evPercent": zod.number()
+ })
+@@ -98,6 +100,8 @@ export const ListPropEdgesResponseItem = zod.object({
+   "americanOdds": zod.number(),
+   "book": zod.string(),
+   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
++  "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
++  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.'),
+   "fairOdds": zod.number(),
+   "evPercent": zod.number()
+ })
+@@ -436,6 +440,8 @@ export const GenerateGameAnalysisBody = zod.object({
+   "americanOdds": zod.number(),
+   "book": zod.string(),
+   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
++  "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
++  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.'),
+   "fairOdds": zod.number(),
+   "evPercent": zod.number()
+ }))
+diff --git a/lib/api-zod/src/generated/types/edgeOpportunity.ts b/lib/api-zod/src/generated/types/edgeOpportunity.ts
+index d7ec598..826e75f 100644
+--- a/lib/api-zod/src/generated/types/edgeOpportunity.ts
++++ b/lib/api-zod/src/generated/types/edgeOpportunity.ts
+@@ -25,6 +25,10 @@ export interface EdgeOpportunity {
+   book: string;
+   /** DraftKings price for this outcome at scan time; null if DK does not quote it. */
+   dkOdds?: number | null;
++  /** Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet/handle splits. */
++  sharpProb?: number | null;
++  /** Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it. */
++  publicProb?: number | null;
+   fairOdds: number;
+   evPercent: number;
+ }
+-- 
+2.34.1
+

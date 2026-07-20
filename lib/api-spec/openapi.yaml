@@ -1278,6 +1278,20 @@ components:
           type: number
         evPercent:
           type: number
+        sharpProb:
+          type: number
+          nullable: true
+          description: >-
+            Devigged consensus probability (percent) for this selection across
+            sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no
+            sharp book quotes it. A proxy for where sharp money leans — the
+            odds feed does not publish real bet/handle splits.
+        publicProb:
+          type: number
+          nullable: true
+          description: >-
+            Devigged consensus probability (percent) for this selection across
+            public recreational books; null if none quote it.
     Bet:
       type: object
       required:

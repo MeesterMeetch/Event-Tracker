@@ -52,7 +52,9 @@ export const ListEdgesResponseItem = zod.object({
   "book": zod.string(),
   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
-  "evPercent": zod.number()
+  "evPercent": zod.number(),
+  "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
+  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.')
 })
 export const ListEdgesResponse = zod.array(ListEdgesResponseItem)
 
@@ -99,7 +101,9 @@ export const ListPropEdgesResponseItem = zod.object({
   "book": zod.string(),
   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
-  "evPercent": zod.number()
+  "evPercent": zod.number(),
+  "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
+  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.')
 })
 export const ListPropEdgesResponse = zod.array(ListPropEdgesResponseItem)
 
@@ -437,7 +441,9 @@ export const GenerateGameAnalysisBody = zod.object({
   "book": zod.string(),
   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
-  "evPercent": zod.number()
+  "evPercent": zod.number(),
+  "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
+  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.')
 }))
 })
 

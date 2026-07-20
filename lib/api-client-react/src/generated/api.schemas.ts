@@ -297,6 +297,10 @@ export interface EdgeOpportunity {
   dkOdds?: number | null;
   fairOdds: number;
   evPercent: number;
+  /** Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet/handle splits. */
+  sharpProb?: number | null;
+  /** Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it. */
+  publicProb?: number | null;
 }
 
 export interface Bet {

@@ -1,6 +1,7 @@
 import type { OddsEvent, OddsOutcome } from "./odds";
 import type { EdgeOpportunity } from "./ev";
-import { americanToDecimal, americanToImpliedProb, probToAmerican } from "./odds-math";
+import { avgProbPercent } from "./ev";
+import { americanToDecimal, americanToImpliedProb, isSharpBook, probToAmerican } from "./odds-math";
 
 /**
  * Over/Under player-prop markets scanned per sport. Only two-sided O/U
@@ -44,6 +45,8 @@ export function sportSupportsProps(sportKey: string): boolean {
  */
 export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent: number): EdgeOpportunity[] {
   const fairProbSamples = new Map<string, number[]>();
+  const sharpSamples = new Map<string, number[]>();
+  const publicSamples = new Map<string, number[]>();
   const sampleBooks = new Map<string, Set<string>>();
   const best = new Map<string, { americanOdds: number; book: string }>();
   const dk = new Map<string, number>();
@@ -78,6 +81,9 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
 
           if (!fairProbSamples.has(key)) fairProbSamples.set(key, []);
           fairProbSamples.get(key)!.push(fairProb);
+          const splitSamples = isSharpBook(bookmaker.key) ? sharpSamples : publicSamples;
+          if (!splitSamples.has(key)) splitSamples.set(key, []);
+          splitSamples.get(key)!.push(fairProb);
           if (!sampleBooks.has(key)) sampleBooks.set(key, new Set());
           sampleBooks.get(key)!.add(bookmaker.key); // stable ID, not display title
           meta.set(key, { market: market.key, player, name: outcome.name, point });
@@ -123,6 +129,8 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
         americanOdds: bestForKey.americanOdds,
         book: bestForKey.book,
         dkOdds: dk.get(key) ?? null,
+        sharpProb: avgProbPercent(sharpSamples.get(key)),
+        publicProb: avgProbPercent(publicSamples.get(key)),
         fairOdds: probToAmerican(avgFairProb),
         evPercent: Math.round(evPercent * 100) / 100,
       });

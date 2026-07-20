@@ -184,3 +184,40 @@ describe("computeEdges — edge cases", () => {
     expect(computeEdges([], "baseball_mlb", 1)).toEqual([]);
   });
 });
+
+describe("computeEdges — sharp vs public split", () => {
+  // LowVig is a sharp book (SHARP_BOOK_KEYS); Book1/Book2 are public.
+  // LowVig: A +110 (0.47619), B -120 (0.545455); overround 1.021645
+  //   → fairA 0.466103, fairB 0.533897 → sharpProb A = 46.6%, B = 53.4%
+  // Book1 & Book2: A/B both +100 → fair 0.5 each → publicProb 50%.
+  const events = [
+    event([
+      book("Book1", "h2h", [outcome("Away", 100), outcome("Home", 100)]),
+      book("Book2", "h2h", [outcome("Away", 100), outcome("Home", 100)]),
+      { key: "lowvig", title: "LowVig.ag", markets: [{ key: "h2h", outcomes: [outcome("Away", 110), outcome("Home", -120)] }] },
+    ]),
+  ];
+
+  it("reports the devigged consensus of sharp books and public books separately", () => {
+    const edges = computeEdges(events, "baseball_mlb", 1);
+    const away = edges.find((e) => e.selection === "Away");
+    expect(away).toBeDefined();
+    expect(away!.sharpProb).toBeCloseTo(46.6, 1);
+    expect(away!.publicProb).toBeCloseTo(50, 1);
+  });
+
+  it("returns null for the sharp side when no sharp book quotes the market", () => {
+    const publicOnly = [
+      event([
+        book("Book1", "h2h", [outcome("Away", 120), outcome("Home", -105)]),
+        book("Book2", "h2h", [outcome("Away", 100), outcome("Home", 100)]),
+      ]),
+    ];
+    const edges = computeEdges(publicOnly, "baseball_mlb", 1);
+    expect(edges.length).toBeGreaterThan(0);
+    for (const e of edges) {
+      expect(e.sharpProb).toBeNull();
+      expect(e.publicProb).not.toBeNull();
+    }
+  });
+});

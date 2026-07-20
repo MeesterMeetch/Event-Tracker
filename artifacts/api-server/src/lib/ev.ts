@@ -1,5 +1,5 @@
 import type { OddsEvent } from "./odds";
-import { americanToDecimal, americanToImpliedProb, probToAmerican } from "./odds-math";
+import { americanToDecimal, americanToImpliedProb, isSharpBook, probToAmerican } from "./odds-math";
 
 export interface EdgeOpportunity {
   gameId: string;
@@ -18,6 +18,22 @@ export interface EdgeOpportunity {
   dkOdds: number | null;
   fairOdds: number;
   evPercent: number;
+  /**
+   * Devigged consensus probability (percent) that this selection hits,
+   * averaged across sharp books only (see SHARP_BOOK_KEYS); null when no
+   * sharp book quotes the outcome. A proxy for where sharp money leans —
+   * The Odds API does not publish real bet/handle splits.
+   */
+  sharpProb: number | null;
+  /** Same consensus probability (percent) averaged across public (recreational) books; null when none quote it. */
+  publicProb: number | null;
+}
+
+/** Averages devigged fair-probability samples into a percent rounded to 0.1; null when no book contributed. */
+export function avgProbPercent(samples: number[] | undefined): number | null {
+  if (!samples || samples.length === 0) return null;
+  const avg = samples.reduce((sum, p) => sum + p, 0) / samples.length;
+  return Math.round(avg * 1000) / 10;
 }
 
 const MARKETS = ["h2h", "spreads", "totals"] as const;
@@ -40,6 +56,8 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
   for (const event of events) {
     for (const market of MARKETS) {
       const fairProbSamples = new Map<string, number[]>();
+      const sharpSamples = new Map<string, number[]>();
+      const publicSamples = new Map<string, number[]>();
       const best = new Map<string, { americanOdds: number; book: string }>();
       const dk = new Map<string, number>();
       const meta = new Map<string, { name: string; point: number | null }>();
@@ -59,6 +77,9 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
 
           if (!fairProbSamples.has(key)) fairProbSamples.set(key, []);
           fairProbSamples.get(key)!.push(fairProb);
+          const splitSamples = isSharpBook(bookmaker.key) ? sharpSamples : publicSamples;
+          if (!splitSamples.has(key)) splitSamples.set(key, []);
+          splitSamples.get(key)!.push(fairProb);
           meta.set(key, { name: outcome.name, point });
 
           const currentBest = best.get(key);
@@ -97,6 +118,8 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
             americanOdds: bestForKey.americanOdds,
             book: bestForKey.book,
             dkOdds: dk.get(key) ?? null,
+            sharpProb: avgProbPercent(sharpSamples.get(key)),
+            publicProb: avgProbPercent(publicSamples.get(key)),
             fairOdds: probToAmerican(avgFairProb),
             evPercent: Math.round(evPercent * 100) / 100,
           });

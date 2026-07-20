@@ -171,16 +171,18 @@ function PropRow({
           {formatMarketLabel(edge.market)} · {edge.selection}{' '}
           {formatPoint(edge.point, edge.market)} · {edge.book}
         </Text>
-        {edge.publicTicketPct != null ? (
+        {(edge.sharpProb != null || edge.publicProb != null) ? (
           <Text
             style={{
               fontFamily: fonts.mono,
-              fontSize: 9.5,
+              fontSize: 10,
               color: colors.mutedForeground,
-              marginTop: 2,
+              marginTop: 1,
             }}
+            numberOfLines={1}
           >
-            {edge.publicTicketPct}% tkts · {edge.publicMoneyPct}% $
+            Sharp {edge.sharpProb != null ? `${edge.sharpProb}%` : '—'} · Public{' '}
+            {edge.publicProb != null ? `${edge.publicProb}%` : '—'}
           </Text>
         ) : null}
       </View>
@@ -385,6 +387,16 @@ export function LogPropSheet({
                   EV {formatPercent(edge.evPercent)}
                 </Text>
               </View>
+              {(edge.sharpProb != null || edge.publicProb != null) ? (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingTop: 6 }}>
+                  <Text style={{ fontFamily: fonts.mono, fontSize: 11, color: colors.mutedForeground }}>
+                    Sharp {edge.sharpProb != null ? `${edge.sharpProb}%` : '—'}
+                  </Text>
+                  <Text style={{ fontFamily: fonts.mono, fontSize: 11, color: colors.mutedForeground }}>
+                    Public {edge.publicProb != null ? `${edge.publicProb}%` : '—'}
+                  </Text>
+                </View>
+              ) : null}
             </View>
 
             <View>

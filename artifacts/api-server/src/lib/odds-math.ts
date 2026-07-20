@@ -67,3 +67,17 @@ export function baseSelection(market: string, selection: string): string {
   }
   return selection;
 }
+
+/**
+ * Bookmakers treated as "sharp" (low-vig market makers whose lines move on
+ * professional money) when estimating the sharp-vs-public split for an edge.
+ * LowVig and BetOnline are the sharpest books The Odds API returns for the
+ * "us" region; Pinnacle is listed so it is picked up automatically if the
+ * odds fetch ever includes non-US regions. Every other book is "public".
+ */
+export const SHARP_BOOK_KEYS: ReadonlySet<string> = new Set(["pinnacle", "lowvig", "betonlineag"]);
+
+/** Whether an Odds API bookmaker key belongs to the sharp-book set. */
+export function isSharpBook(bookmakerKey: string): boolean {
+  return SHARP_BOOK_KEYS.has(bookmakerKey);
+}

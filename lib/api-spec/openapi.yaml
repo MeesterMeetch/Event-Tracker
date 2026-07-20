@@ -1278,19 +1278,20 @@ components:
           type: number
         evPercent:
           type: number
-        publicTicketPct:
+        sharpProb:
           type: number
           nullable: true
-          description: >
-            Percentage of bets (tickets) placed on this outcome by the public.
-            Null when no betting-percentage data is available.
-        publicMoneyPct:
+          description: >-
+            Devigged consensus probability (percent) for this selection across
+            sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no
+            sharp book quotes it. A proxy for where sharp money leans — the
+            odds feed does not publish real bet/handle splits.
+        publicProb:
           type: number
           nullable: true
-          description: >
-            Percentage of total dollar volume wagered on this outcome.
-            Diverges from publicTicketPct when sharp (private) money backs the other side.
-            Null when no betting-percentage data is available.
+          description: >-
+            Devigged consensus probability (percent) for this selection across
+            public recreational books; null if none quote it.
     Bet:
       type: object
       required:

@@ -1,5 +1,5 @@
 import type { OddsEvent } from "./odds";
-import { americanToDecimal, americanToImpliedProb, probToAmerican } from "./odds-math";
+import { americanToDecimal, americanToImpliedProb, isSharpBook, probToAmerican } from "./odds-math";
 
 export interface EdgeOpportunity {
   gameId: string;
@@ -19,42 +19,24 @@ export interface EdgeOpportunity {
   fairOdds: number;
   evPercent: number;
   /**
-   * Percentage of bets (tickets) placed on this outcome by the public.
-   * Null when no betting-percentage data is available.
-   * Currently a deterministic placeholder — wire to a real data source (e.g. Action Network)
-   * by replacing mockBettingPct with a real API call in computeEdges.
+   * Devigged consensus probability (percent) that this selection hits,
+   * averaged across sharp books only (see SHARP_BOOK_KEYS); null when no
+   * sharp book quotes the outcome. A proxy for where sharp money leans —
+   * The Odds API does not publish real bet/handle splits.
    */
-  publicTicketPct: number | null;
-  /**
-   * Percentage of total dollar volume wagered on this outcome.
-   * Diverges from publicTicketPct when sharp (private) money backs the other side.
-   * Null when no betting-percentage data is available.
-   */
-  publicMoneyPct: number | null;
+  sharpProb: number | null;
+  /** Same consensus probability (percent) averaged across public (recreational) books; null when none quote it. */
+  publicProb: number | null;
+}
+
+/** Averages devigged fair-probability samples into a percent rounded to 0.1; null when no book contributed. */
+export function avgProbPercent(samples: number[] | undefined): number | null {
+  if (!samples || samples.length === 0) return null;
+  const avg = samples.reduce((sum, p) => sum + p, 0) / samples.length;
+  return Math.round(avg * 1000) / 10;
 }
 
 const MARKETS = ["h2h", "spreads", "totals"] as const;
-
-/**
- * Generates deterministic placeholder betting-percentage figures.
- * Seeded by a stable key so the same bet shows the same numbers across refreshes.
- *
- * TODO: replace with a real data source (e.g. Action Network API) that returns
- * actual ticket-count % and dollar-volume % per outcome.
- */
-export function mockBettingPct(seed: string): { publicTicketPct: number; publicMoneyPct: number } {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) {
-    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
-  }
-  const h2 = (Math.imul(31, h) + 7919) | 0;
-  // Ticket %: 35–75 (most public bets go 50-70% on the favourite)
-  const publicTicketPct = 35 + (Math.abs(h) % 41);
-  // Money % can diverge ±15 pp from ticket % (sharp money moves the number)
-  const rawMoney = publicTicketPct + ((Math.abs(h2) % 31) - 15);
-  const publicMoneyPct = Math.max(20, Math.min(80, rawMoney));
-  return { publicTicketPct, publicMoneyPct };
-}
 
 /**
  * Scans a sport's live odds for positive-EV opportunities. For each event and
@@ -74,6 +56,8 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
   for (const event of events) {
     for (const market of MARKETS) {
       const fairProbSamples = new Map<string, number[]>();
+      const sharpSamples = new Map<string, number[]>();
+      const publicSamples = new Map<string, number[]>();
       const best = new Map<string, { americanOdds: number; book: string }>();
       const dk = new Map<string, number>();
       const meta = new Map<string, { name: string; point: number | null }>();
@@ -93,6 +77,9 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
 
           if (!fairProbSamples.has(key)) fairProbSamples.set(key, []);
           fairProbSamples.get(key)!.push(fairProb);
+          const splitSamples = isSharpBook(bookmaker.key) ? sharpSamples : publicSamples;
+          if (!splitSamples.has(key)) splitSamples.set(key, []);
+          splitSamples.get(key)!.push(fairProb);
           meta.set(key, { name: outcome.name, point });
 
           const currentBest = best.get(key);
@@ -118,9 +105,6 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
         const evPercent = (decimalBest * avgFairProb - 1) * 100;
 
         if (evPercent >= minEdgePercent) {
-          const { publicTicketPct, publicMoneyPct } = mockBettingPct(
-            `${event.id}|${market}|${info.name}|${info.point ?? ""}`
-          );
           edges.push({
             gameId: event.id,
             sport,
@@ -134,10 +118,10 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
             americanOdds: bestForKey.americanOdds,
             book: bestForKey.book,
             dkOdds: dk.get(key) ?? null,
+            sharpProb: avgProbPercent(sharpSamples.get(key)),
+            publicProb: avgProbPercent(publicSamples.get(key)),
             fairOdds: probToAmerican(avgFairProb),
             evPercent: Math.round(evPercent * 100) / 100,
-            publicTicketPct,
-            publicMoneyPct,
           });
         }
       }

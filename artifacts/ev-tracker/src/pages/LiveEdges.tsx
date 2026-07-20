@@ -138,6 +138,12 @@ export function LogBetDialog({ edge, children }: { edge: EdgeOpportunity, childr
             )}
             <span className="text-positive font-mono font-semibold">EV: {formatPercent(edge.evPercent)}</span>
           </div>
+          {(edge.sharpProb != null || edge.publicProb != null) && (
+            <div className="flex justify-between text-xs mt-1">
+              <span className="text-muted-foreground font-mono">Sharp: {edge.sharpProb != null ? `${edge.sharpProb}%` : "—"}</span>
+              <span className="text-muted-foreground font-mono">Public: {edge.publicProb != null ? `${edge.publicProb}%` : "—"}</span>
+            </div>
+          )}
         </div>
 
         <Form {...form}>
@@ -527,6 +533,7 @@ export default function LiveEdges() {
                   <TableHead className="text-right">Fair</TableHead>
                   <TableHead className="text-right">Odds</TableHead>
                   <TableHead className="text-right">EV%</TableHead>
+                  <TableHead className="text-right whitespace-nowrap">Sharp / Public</TableHead>
                   <TableHead className="w-[130px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -567,22 +574,6 @@ export default function LiveEdges() {
                         {edge.selection} {formatPoint(edge.point, edge.market)}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{edge.book}</TableCell>
-                      <TableCell className="text-right">
-                        {edge.publicTicketPct != null ? (
-                          <div className="flex flex-col items-end gap-0.5">
-                            <span className="font-mono text-xs text-foreground">
-                              {edge.publicTicketPct}%
-                              <span className="ml-1 text-[10px] text-muted-foreground font-sans">tkts</span>
-                            </span>
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {edge.publicMoneyPct}%
-                              <span className="ml-1 text-[10px] font-sans">$</span>
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">
                         {edge.dkOdds != null ? formatOdds(edge.dkOdds) : "—"}
                       </TableCell>
@@ -594,6 +585,9 @@ export default function LiveEdges() {
                       </TableCell>
                       <TableCell className="text-right text-positive font-bold">
                         {formatPercent(edge.evPercent)}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
+                        {edge.sharpProb != null ? `${edge.sharpProb}%` : "—"} / {edge.publicProb != null ? `${edge.publicProb}%` : "—"}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
@@ -715,10 +709,10 @@ export default function LiveEdges() {
                           <TableHead>Market</TableHead>
                           <TableHead>Selection</TableHead>
                           <TableHead>Book</TableHead>
-                          <TableHead className="text-right">Public</TableHead>
                           <TableHead className="text-right">Fair</TableHead>
                           <TableHead className="text-right">Odds</TableHead>
                           <TableHead className="text-right">EV%</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Sharp / Public</TableHead>
                           <TableHead className="w-[130px]"></TableHead>
                         </TableRow>
                       </TableHeader>
@@ -746,22 +740,6 @@ export default function LiveEdges() {
                                 {edge.selection} {formatPoint(edge.point, edge.market)}
                               </TableCell>
                               <TableCell className="text-muted-foreground">{edge.book}</TableCell>
-                              <TableCell className="text-right">
-                                {edge.publicTicketPct != null ? (
-                                  <div className="flex flex-col items-end gap-0.5">
-                                    <span className="font-mono text-xs text-foreground">
-                                      {edge.publicTicketPct}%
-                                      <span className="ml-1 text-[10px] text-muted-foreground font-sans">tkts</span>
-                                    </span>
-                                    <span className="font-mono text-xs text-muted-foreground">
-                                      {edge.publicMoneyPct}%
-                                      <span className="ml-1 text-[10px] font-sans">$</span>
-                                    </span>
-                                  </div>
-                                ) : (
-                                  <span className="text-muted-foreground">—</span>
-                                )}
-                              </TableCell>
                               <TableCell className="text-right font-mono text-muted-foreground">
                                 {edge.dkOdds != null ? formatOdds(edge.dkOdds) : "—"}
                               </TableCell>
@@ -773,6 +751,9 @@ export default function LiveEdges() {
                               </TableCell>
                               <TableCell className="text-right text-positive font-bold">
                                 {formatPercent(edge.evPercent)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
+                                {edge.sharpProb != null ? `${edge.sharpProb}%` : "—"} / {edge.publicProb != null ? `${edge.publicProb}%` : "—"}
                               </TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">

@@ -27,6 +27,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} />
         <Label>Scorecard</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="games">
+        <Icon sf={{ default: 'calendar', selected: 'calendar.badge.plus' }} />
+        <Label>Games</Label>
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -102,6 +106,18 @@ function ClassicTabLayout() {
               <SymbolView name="chart.bar.fill" tintColor={color} size={24} />
             ) : (
               <Feather name="bar-chart-2" size={22} color={color} />
+            ),
+        }}
+      />
+      <Tabs.Screen
+        name="games"
+        options={{
+          title: 'Games',
+          tabBarIcon: ({ color }) =>
+            isIOS ? (
+              <SymbolView name="calendar" tintColor={color} size={24} />
+            ) : (
+              <Feather name="calendar" size={22} color={color} />
             ),
         }}
       />

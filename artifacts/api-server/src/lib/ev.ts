@@ -18,9 +18,43 @@ export interface EdgeOpportunity {
   dkOdds: number | null;
   fairOdds: number;
   evPercent: number;
+  /**
+   * Percentage of bets (tickets) placed on this outcome by the public.
+   * Null when no betting-percentage data is available.
+   * Currently a deterministic placeholder — wire to a real data source (e.g. Action Network)
+   * by replacing mockBettingPct with a real API call in computeEdges.
+   */
+  publicTicketPct: number | null;
+  /**
+   * Percentage of total dollar volume wagered on this outcome.
+   * Diverges from publicTicketPct when sharp (private) money backs the other side.
+   * Null when no betting-percentage data is available.
+   */
+  publicMoneyPct: number | null;
 }
 
 const MARKETS = ["h2h", "spreads", "totals"] as const;
+
+/**
+ * Generates deterministic placeholder betting-percentage figures.
+ * Seeded by a stable key so the same bet shows the same numbers across refreshes.
+ *
+ * TODO: replace with a real data source (e.g. Action Network API) that returns
+ * actual ticket-count % and dollar-volume % per outcome.
+ */
+export function mockBettingPct(seed: string): { publicTicketPct: number; publicMoneyPct: number } {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = (Math.imul(31, h) + seed.charCodeAt(i)) | 0;
+  }
+  const h2 = (Math.imul(31, h) + 7919) | 0;
+  // Ticket %: 35–75 (most public bets go 50-70% on the favourite)
+  const publicTicketPct = 35 + (Math.abs(h) % 41);
+  // Money % can diverge ±15 pp from ticket % (sharp money moves the number)
+  const rawMoney = publicTicketPct + ((Math.abs(h2) % 31) - 15);
+  const publicMoneyPct = Math.max(20, Math.min(80, rawMoney));
+  return { publicTicketPct, publicMoneyPct };
+}
 
 /**
  * Scans a sport's live odds for positive-EV opportunities. For each event and
@@ -84,6 +118,9 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
         const evPercent = (decimalBest * avgFairProb - 1) * 100;
 
         if (evPercent >= minEdgePercent) {
+          const { publicTicketPct, publicMoneyPct } = mockBettingPct(
+            `${event.id}|${market}|${info.name}|${info.point ?? ""}`
+          );
           edges.push({
             gameId: event.id,
             sport,
@@ -99,6 +136,8 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
             dkOdds: dk.get(key) ?? null,
             fairOdds: probToAmerican(avgFairProb),
             evPercent: Math.round(evPercent * 100) / 100,
+            publicTicketPct,
+            publicMoneyPct,
           });
         }
       }

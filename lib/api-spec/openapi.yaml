@@ -1278,6 +1278,19 @@ components:
           type: number
         evPercent:
           type: number
+        publicTicketPct:
+          type: number
+          nullable: true
+          description: >
+            Percentage of bets (tickets) placed on this outcome by the public.
+            Null when no betting-percentage data is available.
+        publicMoneyPct:
+          type: number
+          nullable: true
+          description: >
+            Percentage of total dollar volume wagered on this outcome.
+            Diverges from publicTicketPct when sharp (private) money backs the other side.
+            Null when no betting-percentage data is available.
     Bet:
       type: object
       required:

@@ -522,6 +522,7 @@ export default function LiveEdges() {
                   <TableHead>Market</TableHead>
                   <TableHead>Selection</TableHead>
                   <TableHead>Book</TableHead>
+                  <TableHead className="text-right">Public</TableHead>
                   <TableHead className="text-right text-muted-foreground">DK</TableHead>
                   <TableHead className="text-right">Fair</TableHead>
                   <TableHead className="text-right">Odds</TableHead>
@@ -532,7 +533,7 @@ export default function LiveEdges() {
               <TableBody>
                 {edges.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
                       <div className="flex flex-col items-center justify-center space-y-2">
                         <Activity className="h-6 w-6 opacity-30" />
                         <p>No +EV edges found right now.</p>
@@ -566,6 +567,22 @@ export default function LiveEdges() {
                         {edge.selection} {formatPoint(edge.point, edge.market)}
                       </TableCell>
                       <TableCell className="text-muted-foreground">{edge.book}</TableCell>
+                      <TableCell className="text-right">
+                        {edge.publicTicketPct != null ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            <span className="font-mono text-xs text-foreground">
+                              {edge.publicTicketPct}%
+                              <span className="ml-1 text-[10px] text-muted-foreground font-sans">tkts</span>
+                            </span>
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {edge.publicMoneyPct}%
+                              <span className="ml-1 text-[10px] font-sans">$</span>
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right font-mono text-muted-foreground">
                         {edge.dkOdds != null ? formatOdds(edge.dkOdds) : "—"}
                       </TableCell>
@@ -698,6 +715,7 @@ export default function LiveEdges() {
                           <TableHead>Market</TableHead>
                           <TableHead>Selection</TableHead>
                           <TableHead>Book</TableHead>
+                          <TableHead className="text-right">Public</TableHead>
                           <TableHead className="text-right">Fair</TableHead>
                           <TableHead className="text-right">Odds</TableHead>
                           <TableHead className="text-right">EV%</TableHead>
@@ -707,7 +725,7 @@ export default function LiveEdges() {
                       <TableBody>
                         {propEdges.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                            <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
                               <div className="flex flex-col items-center justify-center space-y-2">
                                 <Activity className="h-6 w-6 opacity-30" />
                                 <p>No +EV player props found for this game.</p>
@@ -728,6 +746,22 @@ export default function LiveEdges() {
                                 {edge.selection} {formatPoint(edge.point, edge.market)}
                               </TableCell>
                               <TableCell className="text-muted-foreground">{edge.book}</TableCell>
+                              <TableCell className="text-right">
+                                {edge.publicTicketPct != null ? (
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="font-mono text-xs text-foreground">
+                                      {edge.publicTicketPct}%
+                                      <span className="ml-1 text-[10px] text-muted-foreground font-sans">tkts</span>
+                                    </span>
+                                    <span className="font-mono text-xs text-muted-foreground">
+                                      {edge.publicMoneyPct}%
+                                      <span className="ml-1 text-[10px] font-sans">$</span>
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </TableCell>
                               <TableCell className="text-right font-mono text-muted-foreground">
                                 {edge.dkOdds != null ? formatOdds(edge.dkOdds) : "—"}
                               </TableCell>

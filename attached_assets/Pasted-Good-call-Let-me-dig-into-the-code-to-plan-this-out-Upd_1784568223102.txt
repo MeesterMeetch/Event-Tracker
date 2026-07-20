@@ -1,0 +1,47 @@
+Good call. Let me dig into the code to plan this out.
+
+Updated tasks, ran 6 commands, used ev_tracker integration
+Updated tasks, ran 6 commands, used ev_tracker integration
+
+Dependencies installed. Now let me look at the pieces I need to touch.
+
+Ran 4 commands
+Ran 4 commands
+
+I have the full picture now. Marking exploration done and implementing.
+
+Ran 3 commands, updated tasks
+Ran 3 commands, updated tasks
+
+Now let me check the imports in props.ts and the mobile edge card, then make all the edits.
+
+Ran 2 commands
+Ran 2 commands
+
+Now I'll make all the edits in one pass.
+
+Ran 4 commands, updated tasks
+Ran 4 commands, updated tasks
+
+Now let me add a test locking in the split computation, then run the full verification.
+
+Ran 7 commands, updated tasks
+Ran 7 commands, updated tasks
+
+All green: 390 API server tests, 165 web, 124 mobile, including the two new tests covering the split math. Now I'll push a branch and open a PR.
+
+Ran 2 commands, loaded tools
+Ran 2 commands, loaded tools
+
+Remote main hasn't moved, so it's safe to push. Let me create the branch and gather file contents.
+
+Ran 2 commands, updated tasks, read a file
+Ran 2 commands, updated tasks, read a file
+
+Done. Every potential bet now shows a Sharp / Public split, on the game lines table, the player props table, the log bet dialog, and the mobile edge rows and log sheet.
+
+How it works: since The Odds API doesn't publish real money splits, each edge now carries two devigged consensus probabilities computed from odds you already fetch (zero extra API credits). Sharp is the average across sharp books (LowVig and BetOnline today, Pinnacle automatically if you ever add non US regions) and Public is the average across the recreational books. So a row reading Sharp 46.6% / Public 50% means the sharp books like that side less than the public books do. Either shows a dash when no book in that group quotes the line.
+
+Verification: full typecheck passes on every package I touched, and all 679 tests pass including two new ones locking in the split math. The one pre-existing typecheck failure is in mockup-sandbox, untouched by this change.
+
+One snag: your GitHub connector only has read access, so I couldn't push a branch or open a PR. The patch above has everything as a single commit. To apply it:

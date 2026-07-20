@@ -52,7 +52,9 @@ export const ListEdgesResponseItem = zod.object({
   "book": zod.string(),
   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
-  "evPercent": zod.number()
+  "evPercent": zod.number(),
+  "publicTicketPct": zod.number().nullish().describe('Percentage of bets (tickets) placed on this outcome by the public. Null when no betting-percentage data is available.\n'),
+  "publicMoneyPct": zod.number().nullish().describe('Percentage of total dollar volume wagered on this outcome. Diverges from publicTicketPct when sharp (private) money backs the other side. Null when no betting-percentage data is available.\n')
 })
 export const ListEdgesResponse = zod.array(ListEdgesResponseItem)
 
@@ -99,7 +101,9 @@ export const ListPropEdgesResponseItem = zod.object({
   "book": zod.string(),
   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
-  "evPercent": zod.number()
+  "evPercent": zod.number(),
+  "publicTicketPct": zod.number().nullish().describe('Percentage of bets (tickets) placed on this outcome by the public. Null when no betting-percentage data is available.\n'),
+  "publicMoneyPct": zod.number().nullish().describe('Percentage of total dollar volume wagered on this outcome. Diverges from publicTicketPct when sharp (private) money backs the other side. Null when no betting-percentage data is available.\n')
 })
 export const ListPropEdgesResponse = zod.array(ListPropEdgesResponseItem)
 
@@ -437,7 +441,9 @@ export const GenerateGameAnalysisBody = zod.object({
   "book": zod.string(),
   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
-  "evPercent": zod.number()
+  "evPercent": zod.number(),
+  "publicTicketPct": zod.number().nullish().describe('Percentage of bets (tickets) placed on this outcome by the public. Null when no betting-percentage data is available.\n'),
+  "publicMoneyPct": zod.number().nullish().describe('Percentage of total dollar volume wagered on this outcome. Diverges from publicTicketPct when sharp (private) money backs the other side. Null when no betting-percentage data is available.\n')
 }))
 })
 

@@ -171,6 +171,18 @@ function PropRow({
           {formatMarketLabel(edge.market)} · {edge.selection}{' '}
           {formatPoint(edge.point, edge.market)} · {edge.book}
         </Text>
+        {edge.publicTicketPct != null ? (
+          <Text
+            style={{
+              fontFamily: fonts.mono,
+              fontSize: 9.5,
+              color: colors.mutedForeground,
+              marginTop: 2,
+            }}
+          >
+            {edge.publicTicketPct}% tkts · {edge.publicMoneyPct}% $
+          </Text>
+        ) : null}
       </View>
       <View style={{ flex: 1, alignItems: 'flex-end' }}>
         <Text style={{ fontFamily: fonts.mono, fontSize: 12.5, color: colors.mutedForeground }}>

@@ -1,5 +1,5 @@
 import type { OddsEvent, OddsOutcome } from "./odds";
-import type { EdgeOpportunity } from "./ev";
+import { type EdgeOpportunity, mockBettingPct } from "./ev";
 import { americanToDecimal, americanToImpliedProb, probToAmerican } from "./odds-math";
 
 /**
@@ -110,6 +110,9 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
     const evPercent = (decimalBest * avgFairProb - 1) * 100;
 
     if (evPercent >= minEdgePercent) {
+      const { publicTicketPct, publicMoneyPct } = mockBettingPct(
+        `${event.id}|${info.market}|${info.player ?? ""}|${info.name}|${info.point ?? ""}`
+      );
       edges.push({
         gameId: event.id,
         sport,
@@ -125,6 +128,8 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
         dkOdds: dk.get(key) ?? null,
         fairOdds: probToAmerican(avgFairProb),
         evPercent: Math.round(evPercent * 100) / 100,
+        publicTicketPct,
+        publicMoneyPct,
       });
     }
   }

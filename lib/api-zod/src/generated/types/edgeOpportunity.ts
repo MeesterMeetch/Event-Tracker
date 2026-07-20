@@ -27,4 +27,8 @@ export interface EdgeOpportunity {
   dkOdds?: number | null;
   fairOdds: number;
   evPercent: number;
+  /** Percentage of bets (tickets) placed on this outcome by the public. Null when no betting-percentage data is available. */
+  publicTicketPct?: number | null;
+  /** Percentage of total dollar volume wagered on this outcome. Diverges from publicTicketPct when sharp (private) money backs the other side. Null when no betting-percentage data is available. */
+  publicMoneyPct?: number | null;
 }

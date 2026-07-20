@@ -1,12 +1,9 @@
 import { useState } from "react";
-import { CalendarIcon, Clock, User } from "lucide-react";
+import { Clock, User } from "lucide-react";
 import { useListMlbGames } from "@workspace/api-client-react";
 import type { GameSummary } from "@workspace/api-client-react";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /** Returns today's date as YYYY-MM-DD in US Eastern time. */
@@ -17,23 +14,6 @@ function todayEastern(): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date());
-}
-
-/**
- * Parses a YYYY-MM-DD date string as a local (wall-clock) Date so the
- * Calendar widget doesn't shift the displayed day due to timezone offset.
- */
-function parseLocalDate(dateStr: string): Date {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function formatDateLabel(dateStr: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(parseLocalDate(dateStr));
 }
 
 function formatGameTime(gameDate: string): string {
@@ -125,7 +105,6 @@ function GameCard({ game }: { game: GameSummary }) {
 
 export default function Games() {
   const [selectedDate, setSelectedDate] = useState(todayEastern);
-  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const { data: games, isLoading, isError } = useListMlbGames({ date: selectedDate });
 
@@ -142,28 +121,12 @@ export default function Games() {
 
         {/* Date picker */}
         <div className="sm:ml-auto">
-          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="w-[210px] justify-start gap-2 font-normal">
-                <CalendarIcon className="h-4 w-4 shrink-0" />
-                {formatDateLabel(selectedDate)}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="single"
-                selected={parseLocalDate(selectedDate)}
-                onSelect={(date) => {
-                  if (!date) return;
-                  const y = date.getFullYear();
-                  const m = String(date.getMonth() + 1).padStart(2, "0");
-                  const d = String(date.getDate()).padStart(2, "0");
-                  setSelectedDate(`${y}-${m}-${d}`);
-                  setCalendarOpen(false);
-                }}
-              />
-            </PopoverContent>
-          </Popover>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+            className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-ring text-foreground"
+          />
         </div>
       </div>
 

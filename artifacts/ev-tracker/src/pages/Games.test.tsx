@@ -20,17 +20,6 @@ vi.mock("@workspace/api-client-react", () => ({
   useListMlbGames: () => ({ data: gamesData, isLoading, isError }),
 }));
 
-// Calendar and Popover are UI chrome irrelevant to these unit tests — stub them
-// so they don't pull in DOM APIs unavailable under jsdom.
-vi.mock("@/components/ui/popover", () => ({
-  Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  PopoverTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  PopoverContent: () => null,
-}));
-vi.mock("@/components/ui/calendar", () => ({
-  Calendar: () => null,
-}));
-
 import Games from "./Games";
 
 function makeGame(overrides: Partial<GameSummary> = {}): GameSummary {

@@ -1,0 +1,13 @@
+Unzip this at the repo root in Replit and it drops all ten files into place with folders intact.
+
+What's in it, two changes as we discussed.
+
+Football props expansion, in props.ts. NFL now scans pass yards, pass TDs, completions, attempts, interceptions, rush yards, rush attempts, receptions, reception yards, rush+reception combo, and kicking points. NCAAF picks up pass TDs and receptions on top of what it had. Anytime TD stays out on purpose since it's Yes-only and can't be devigged. The scanner math didn't need touching, it was already sport-agnostic.
+
+Sport-aware AI analysis. The prompt now branches: MLB keeps the full pitcher writeup, football gets steered toward QB form and volume, pace and total, and the unit matchup implied by the line, and everything else falls back to matchup-plus-market reasoning. The baseball-named pitchingAnalysis field is renamed to matchupAnalysis across the whole chain, the OpenAPI spec, both generated packages, the server lib and route, the web render (the "Pitching / Form" label is now "Matchup / Form"), and both test files. The "Probable Starters" card already self-hides when there's no pitcher data, so football games just won't show it.
+
+Two things to know before you run it. I hand-edited the three generated files to match what Orval would produce, so after unzipping, run pnpm codegen once and it should come back clean with no diff. That confirms the spec and generated code agree. Then pnpm typecheck to be safe. The homePitcher and awayPitcher fields kept their names since they carry real MLB pitcher structure and are just null for football; renaming those would drag in the whole ProbablePitcher schema for no real gain.
+
+The ESPN injury/context fetcher is still parked, as planned. Want to see how this pass feels first.
+
+On the write access: if you want to get off the zip workflow, the GitHub connector needs its token scoped for Contents write on this repo. Right now it's read-only, which is why the branch push 403'd. Worth fixing once so future changes go straight to a PR.

@@ -33,7 +33,7 @@ export interface AnalysisInput {
 
 export interface AnalysisContent {
   summary: string;
-  pitchingAnalysis: string;
+  matchupAnalysis: string;
   bettingAngle: string;
   keyFactors: string[];
 }
@@ -76,13 +76,30 @@ function buildPrompt(input: AnalysisInput): string {
           .join("\n")
       : "- No standout +EV edges detected for this game right now.";
 
-  const pitching =
-    input.sport === "baseball_mlb"
-      ? `${describePitcher("Home starter", input.homePitcher)}\n${describePitcher(
+  const isBaseball = input.sport === "baseball_mlb";
+  const isFootball = input.sport.startsWith("americanfootball_");
+
+  const formSection = isBaseball
+    ? [
+        "Probable starting pitchers:",
+        `${describePitcher("Home starter", input.homePitcher)}\n${describePitcher(
           "Away starter",
           input.awayPitcher,
-        )}`
-      : "Probable-starter data is only available for MLB. Focus on the matchup and market signals.";
+        )}`,
+      ]
+    : isFootball
+      ? [
+          "Personnel / matchup notes:",
+          "  Probable-starter feeds are MLB-only, so no roster data is provided here.",
+          "  Reason from the matchup and the detected market edges: quarterback form and",
+          "  volume, pace and total, matchup on the relevant side of the ball, and any",
+          "  situational context implied by the line. Do not invent injuries or stat lines.",
+        ]
+      : [
+          "Personnel / matchup notes:",
+          "  No structured player feed is available for this sport. Reason from the",
+          "  matchup and the detected market signals; never invent stats or injuries.",
+        ];
 
   return [
     `Game: ${input.awayTeam} @ ${input.homeTeam}`,
@@ -92,20 +109,19 @@ function buildPrompt(input: AnalysisInput): string {
     "Detected +EV betting edges (fair price derived by devigging the market consensus):",
     edgeLines,
     "",
-    "Probable starting pitchers:",
-    pitching,
+    ...formSection,
   ].join("\n");
 }
 
 const SYSTEM_PROMPT = `You are a sharp, disciplined sports betting analyst writing for a +EV bettor.
 Analyze the specific game using ONLY the data provided; never invent stats, injuries, or lines you were not given.
-Be concrete and concise. When probable pitchers are provided, weigh their recent-start form heavily and reference specific numbers.
+Be concrete and concise. When probable starters or roster data are provided, weigh recent form heavily and reference specific numbers; when they are not, reason from the matchup and market signals without manufacturing detail.
 If a bet's edge looks thin or the sample is weak, say so — do not manufacture confidence.
 
 Respond with a single JSON object with exactly these keys:
 {
   "summary": string,            // 1-2 sentences framing the matchup and the sharpest angle
-  "pitchingAnalysis": string,   // 2-4 sentences on the probable starters' recent form and matchup impact (for non-MLB, discuss form/matchup generally)
+  "matchupAnalysis": string,    // 2-4 sentences on form and matchup impact — starting pitchers for MLB, quarterback/unit matchup and pace for football, general form otherwise
   "bettingAngle": string,       // 2-4 sentences tying the analysis to the detected +EV edges and how you'd approach them
   "keyFactors": string[]        // 3-5 short bullet strings (each under ~15 words)
 }
@@ -146,7 +162,7 @@ function coerceContent(raw: unknown): AnalysisContent {
   };
 
   const summary = reqStr("summary");
-  const pitchingAnalysis = reqStr("pitchingAnalysis");
+  const matchupAnalysis = reqStr("matchupAnalysis");
   const bettingAngle = reqStr("bettingAngle");
 
   const factors =
@@ -161,7 +177,7 @@ function coerceContent(raw: unknown): AnalysisContent {
     );
   }
 
-  return { summary, pitchingAnalysis, bettingAngle, keyFactors };
+  return { summary, matchupAnalysis, bettingAngle, keyFactors };
 }
 
 /**

@@ -418,7 +418,7 @@ export const GetLedgerAuditResponse = zod.object({
 
 
 /**
- * Produces an AI-written scouting and betting analysis for a single game, including probable starting pitchers and their recent form for MLB. Results are cached briefly per game to limit AI usage.
+ * Produces an AI-written scouting and betting analysis for a single game. For MLB the analysis includes probable starting pitchers and their recent form; for other sports it reasons from the matchup and market signals. Results are cached briefly per game to limit AI usage.
  * @summary Generate an AI analysis for a game
  */
 export const GenerateGameAnalysisBody = zod.object({
@@ -452,7 +452,7 @@ export const GenerateGameAnalysisResponse = zod.object({
   "generatedAt": zod.coerce.date(),
   "model": zod.string(),
   "summary": zod.string(),
-  "pitchingAnalysis": zod.string(),
+  "matchupAnalysis": zod.string(),
   "bettingAngle": zod.string(),
   "keyFactors": zod.array(zod.string()),
   "homePitcher": zod.union([zod.object({

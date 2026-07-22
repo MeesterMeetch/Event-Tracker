@@ -99,7 +99,7 @@ router.post("/analysis", async (req, res): Promise<void> => {
       generatedAt: new Date(),
       model: ANALYSIS_MODEL,
       summary: content.summary,
-      pitchingAnalysis: content.pitchingAnalysis,
+      matchupAnalysis: content.matchupAnalysis,
       bettingAngle: content.bettingAngle,
       keyFactors: content.keyFactors,
       homePitcher: pitchers.home,

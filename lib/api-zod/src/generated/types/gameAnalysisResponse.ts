@@ -12,7 +12,7 @@ export interface GameAnalysisResponse {
   generatedAt: Date;
   model: string;
   summary: string;
-  pitchingAnalysis: string;
+  matchupAnalysis: string;
   bettingAngle: string;
   keyFactors: string[];
   homePitcher: ProbablePitcher | null;

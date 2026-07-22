@@ -451,7 +451,7 @@ export interface GameAnalysisResponse {
   generatedAt: string;
   model: string;
   summary: string;
-  pitchingAnalysis: string;
+  matchupAnalysis: string;
   bettingAngle: string;
   keyFactors: string[];
   homePitcher: ProbablePitcher | null;

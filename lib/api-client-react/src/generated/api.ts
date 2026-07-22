@@ -1349,7 +1349,7 @@ export const getGenerateGameAnalysisUrl = () => {
 }
 
 /**
- * Produces an AI-written scouting and betting analysis for a single game, including probable starting pitchers and their recent form for MLB. Results are cached briefly per game to limit AI usage.
+ * Produces an AI-written scouting and betting analysis for a single game. For MLB the analysis includes probable starting pitchers and their recent form; for other sports it reasons from the matchup and market signals. Results are cached briefly per game to limit AI usage.
  * @summary Generate an AI analysis for a game
  */
 export const generateGameAnalysis = async (gameAnalysisRequest: GameAnalysisRequest, options?: RequestInit): Promise<GameAnalysisResponse> => {

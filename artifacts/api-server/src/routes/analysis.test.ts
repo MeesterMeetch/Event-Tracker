@@ -32,7 +32,7 @@ let mockGetPitchers: Mock;
 /** A well-formed AI analysis payload the mocked client returns by default. */
 const CONTENT = {
   summary: "Yankees hold a modest edge behind their probable starter.",
-  pitchingAnalysis: "Both starters have been sharp over their last three outings.",
+  matchupAnalysis: "Both starters have been sharp over their last three outings.",
   bettingAngle: "The moneyline carries the cleanest +EV; approach at a small unit size.",
   keyFactors: ["Home-field edge", "Rested bullpen", "Favorable recent form"],
 };
@@ -146,7 +146,7 @@ describe("POST /analysis — well-formed output", () => {
     expect(a.gameId).toBe(GAME.gameId);
     expect(a.model).toBe(ANALYSIS_MODEL);
     expect(a.summary).toBe(CONTENT.summary);
-    expect(a.pitchingAnalysis).toBe(CONTENT.pitchingAnalysis);
+    expect(a.matchupAnalysis).toBe(CONTENT.matchupAnalysis);
     expect(a.bettingAngle).toBe(CONTENT.bettingAngle);
     expect(a.keyFactors).toEqual(CONTENT.keyFactors);
     expect(typeof a.generatedAt).toBe("string");

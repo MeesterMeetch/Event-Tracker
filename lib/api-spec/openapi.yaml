@@ -466,8 +466,9 @@ paths:
       tags: [analysis]
       summary: Generate an AI analysis for a game
       description: >
-        Produces an AI-written scouting and betting analysis for a single game,
-        including probable starting pitchers and their recent form for MLB.
+        Produces an AI-written scouting and betting analysis for a single game.
+        For MLB the analysis includes probable starting pitchers and their recent
+        form; for other sports it reasons from the matchup and market signals.
         Results are cached briefly per game to limit AI usage.
       requestBody:
         required: true
@@ -1597,7 +1598,7 @@ components:
         - generatedAt
         - model
         - summary
-        - pitchingAnalysis
+        - matchupAnalysis
         - bettingAngle
         - keyFactors
         - homePitcher
@@ -1612,7 +1613,7 @@ components:
           type: string
         summary:
           type: string
-        pitchingAnalysis:
+        matchupAnalysis:
           type: string
         bettingAngle:
           type: string

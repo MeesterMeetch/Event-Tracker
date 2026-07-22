@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
  * structured scouting/betting report. This is a silent-failure surface: a bad
  * model response must fail loudly (throw) so the route returns a 502, rather
  * than surfacing — or caching — a half-empty analysis with an empty
- * pitchingAnalysis/bettingAngle/keyFactors. These tests mock the AI client so
+ * matchupAnalysis/bettingAngle/keyFactors. These tests mock the AI client so
  * no real credits are spent and drive the parser with valid, non-JSON, and
  * incomplete-JSON completions.
  */
@@ -34,7 +34,7 @@ const INPUT = {
 /** A well-formed model payload with every required key present. */
 const VALID = {
   summary: "Yankees hold a modest edge behind their probable starter.",
-  pitchingAnalysis: "Both starters have been sharp over their last three outings.",
+  matchupAnalysis: "Both starters have been sharp over their last three outings.",
   bettingAngle: "The moneyline carries the cleanest +EV; approach at a small unit size.",
   keyFactors: ["Home-field edge", "Rested bullpen", "Favorable recent form"],
 };
@@ -144,7 +144,7 @@ describe("generateAnalysis — JSON missing required keys fails loudly", () => {
     returns(JSON.stringify({ summary: "only this one" }));
 
     await expect(generateAnalysis(INPUT)).rejects.toMatchObject({
-      message: expect.stringMatching(/pitchingAnalysis.*bettingAngle.*keyFactors/),
+      message: expect.stringMatching(/matchupAnalysis.*bettingAngle.*keyFactors/),
     });
   });
 });

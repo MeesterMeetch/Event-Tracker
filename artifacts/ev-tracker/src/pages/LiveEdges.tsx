@@ -360,10 +360,10 @@ function AnalyzeGameDialog({ edge, gameEdges, children }: { edge: EdgeOpportunit
               </div>
             )}
 
-            {data.pitchingAnalysis && (
+            {data.matchupAnalysis && (
               <div>
-                <div className="text-xs font-semibold uppercase text-muted-foreground mb-1">Pitching / Form</div>
-                <p className="text-sm leading-relaxed text-foreground/90">{data.pitchingAnalysis}</p>
+                <div className="text-xs font-semibold uppercase text-muted-foreground mb-1">Matchup / Form</div>
+                <p className="text-sm leading-relaxed text-foreground/90">{data.matchupAnalysis}</p>
               </div>
             )}
 

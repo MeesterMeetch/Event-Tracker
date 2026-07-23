@@ -1,0 +1,84 @@
+# Render Blueprint — Event Tracker
+#
+# Defines three resources:
+#   1. Managed Postgres database
+#   2. Node web service for the API (Express + background jobs)
+#   3. Static site for the Vite frontend (proxies /api to the API service)
+#
+# Reference: https://render.com/docs/blueprint-spec
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. API — Express web service
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: ev-tracker-api
+    runtime: node
+    region: oregon
+    plan: free           # background jobs (grading, CLV) sleep on free; use "starter" to keep them running
+    branch: main
+
+    buildCommand: corepack enable && corepack prepare pnpm@latest --activate && pnpm install && pnpm --filter @workspace/api-server run build
+    # Creates/updates the database tables before the server starts.
+    preDeployCommand: pnpm --filter @workspace/db run push
+    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
+    healthCheckPath: /api/healthz
+
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ev-tracker-db
+          property: connectionString
+      # The Odds API key — powers odds data, grading, and CLV capture.
+      # Paste your value in the Render dashboard when prompted.
+      - key: ODDS_API_KEY
+        sync: false
+      # Uncomment these two only if you use the AI features:
+      # - key: AI_INTEGRATIONS_OPENAI_API_KEY
+      #   sync: false
+      # - key: AI_INTEGRATIONS_OPENAI_BASE_URL
+      #   value: https://api.openai.com/v1
+
+  # ---------------------------------------------------------------------------
+  # 2. Frontend — Vite static site (no "region" — Render doesn't allow it here)
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: ev-tracker-web
+    runtime: static
+    branch: main
+
+    buildCommand: corepack enable && corepack prepare pnpm@latest --activate && pnpm install && pnpm --filter @workspace/ev-tracker run build
+    staticPublishPath: artifacts/ev-tracker/dist/public
+
+    routes:
+      # Forward API calls to the API service so the browser stays same-origin.
+      # After first deploy, confirm the API's real URL and update this host if it differs.
+      - type: rewrite
+        source: /api/*
+        destination: https://ev-tracker-api.onrender.com/api/*
+      # SPA fallback — everything else serves index.html.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: NODE_ENV
+        value: production
+      - key: BASE_PATH
+        value: /
+
+  # ---------------------------------------------------------------------------
+  # 3. Database — managed Postgres
+  # ---------------------------------------------------------------------------
+databases:
+  - name: ev-tracker-db
+    region: oregon
+    plan: free                  # free expires after 30 days; use "basic-256mb" to keep it
+    databaseName: ev_tracker
+    user: ev_tracker

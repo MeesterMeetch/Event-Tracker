@@ -1,0 +1,84 @@
+==> Downloading cache...
+==> Cloning from https://github.com/MeesterMeetch/Event-Tracker
+==> Checking out commit 8b80928d158a0652167a7690840cfe884f715534 in branch main
+==> Downloaded 366MB in 4s. Extraction took 10s.
+==> Using Node.js version 24.14.1 (default)
+==> Docs on specifying a Node.js version: https://render.com/docs/node-version
+==> Running build command 'pnpm install --frozen-lockfile && pnpm run typecheck:libs && pnpm -r --filter "!./artifacts/**" --if-present run build'...
+> workspace@0.0.0 typecheck:libs /opt/render/project/src
+> tsc --build
+==> Uploading build...
+==> Uploaded in 6.6s. Compression took 5.2s
+==> Build successful 🎉
+==> Deploying...
+==> Setting WEB_CONCURRENCY=1 by default, based on available CPUs in the instance
+  throw err;
+  ^
+Error: Cannot find module '/opt/render/project/src/artifacts/api-server/dist/index.mjs'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1456:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1066:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1071:22)
+    at Module._load (node:internal/modules/cjs/loader:1242:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+Node.js v24.14.1
+/opt/render/project/src/artifacts/api-server:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/api-server@0.0.0 start: `node --enable-source-maps ./dist/index.mjs`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.
+==> Exited with status 1
+==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
+==> Running 'pnpm start'
+> workspace@0.0.0 start /opt/render/project/src
+> pnpm --filter @workspace/api-server run start
+> @workspace/api-server@0.0.0 start /opt/render/project/src/artifacts/api-server
+> node --enable-source-maps ./dist/index.mjs
+node:internal/modules/cjs/loader:1459
+  throw err;
+  ^
+Error: Cannot find module '/opt/render/project/src/artifacts/api-server/dist/index.mjs'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1456:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1066:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1071:22)
+    at Module._load (node:internal/modules/cjs/loader:1242:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+Node.js v24.14.1
+/opt/render/project/src/artifacts/api-server:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/api-server@0.0.0 start: `node --enable-source-maps ./dist/index.mjs`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.
+==> Running 'pnpm start'
+> workspace@0.0.0 start /opt/render/project/src
+> pnpm --filter @workspace/api-server run start
+> @workspace/api-server@0.0.0 start /opt/render/project/src/artifacts/api-server
+> node --enable-source-maps ./dist/index.mjs
+node:internal/modules/cjs/loader:1459
+  throw err;
+  ^
+Error: Cannot find module '/opt/render/project/src/artifacts/api-server/dist/index.mjs'
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1456:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1066:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1071:22)
+    at Module._load (node:internal/modules/cjs/loader:1242:25)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:154:5)
+    at node:internal/main/run_main_module:33:47 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+Node.js v24.14.1
+/opt/render/project/src/artifacts/api-server:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/api-server@0.0.0 start: `node --enable-source-maps ./dist/index.mjs`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.
+==> Instance srv-d9h2skkvikkc73akkkl0-jrbdk restarted
+==> Instance srv-d9h2skkvikkc73akkkl0-jrbdk restarted

@@ -20,7 +20,9 @@ services:
 
     buildCommand: corepack enable && corepack prepare pnpm@9 --activate && pnpm install --no-frozen-lockfile --prod=false && pnpm --filter @workspace/api-server run build
     # Creates/updates the database tables before the server starts.
-    preDeployCommand: pnpm --filter @workspace/db run push
+    # Runs drizzle-kit directly (not via "pnpm run") to avoid pnpm's pre-run
+    # dependency check, which kept re-triggering a failing frozen install.
+    preDeployCommand: cd lib/db && npx drizzle-kit push --config ./drizzle.config.ts
     startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
     healthCheckPath: /api/healthz
 

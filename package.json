@@ -7,7 +7,8 @@
     "build": "pnpm run typecheck && pnpm run test && pnpm -r --if-present run build",
     "test": "pnpm -r --if-present run test",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "start": "pnpm --filter @workspace/api-server run start"
   },
   "private": true,
   "dependencies": {

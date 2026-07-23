@@ -2,7 +2,7 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
 import type { ProbablePitcher } from "./mlb";
 
-export const ANALYSIS_MODEL = "gpt-5.4-mini";
+export const ANALYSIS_MODEL = "claude-sonnet-5";
 
 function fmtOdds(american: number): string {
   const rounded = Math.round(american);

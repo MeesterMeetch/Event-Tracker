@@ -9,10 +9,13 @@ import {
   useRestorePaperTrade,
   useListPaperTrades,
   useGetPaperTradeSummary,
+  useCreateBet,
   getListEventsQueryKey,
   getListModelEdgesQueryKey,
   getListPaperTradesQueryKey,
   getGetPaperTradeSummaryQueryKey,
+  getListBetsQueryKey,
+  getGetDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
 import type { ModelPitcherProjection, ModelKLine, PaperTrade } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,7 +39,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { parseOddsInput, isValidAmericanOdds } from "@workspace/format";
-import { AlertTriangle, Brain, Loader2, Pencil, Plus, Target, Trash2, TrendingUp } from "lucide-react";
+import { AlertTriangle, Brain, CircleDollarSign, Loader2, Pencil, Plus, Target, Trash2, TrendingUp } from "lucide-react";
 import ModelPerformance from "@/components/ModelPerformance";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -379,6 +382,11 @@ export function PaperTradesTable() {
   const { data: trades, isLoading } = useListPaperTrades();
   const deleteTrade = useDeletePaperTrade();
   const restoreTrade = useRestorePaperTrade();
+  // Promote a model paper trade into the real bet ledger. Paper trades validate
+  // the model (CLV / beat-close); a real bet is money staked, tracked for P&L.
+  // This copies the pick over so a promising model flag becomes a logged bet in
+  // one click, without merging the two ledgers.
+  const createBet = useCreateBet();
   // Deleting a graded (closed) pick rewrites the model's validation stats, so
   // it gets a blocking confirm dialog; open/expired picks delete immediately
   // with the lightweight undo toast.
@@ -390,6 +398,59 @@ export function PaperTradesTable() {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListPaperTradesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetPaperTradeSummaryQueryKey() });
+  };
+
+  // Copy a paper trade into the real bet log. Stake defaults to the model's
+  // Kelly-recommended units (clamped to the 0.01u minimum the bet form enforces);
+  // the edge is carried over and a note records the model origin.
+  const promoteToBet = (trade: PaperTrade) => {
+    if (!isValidAmericanOdds(trade.americanOdds)) {
+      toast({
+        title: "Invalid odds",
+        description: `${trade.americanOdds} is not a valid American odds price — must be -100 or below, or +100 and up.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    const units = trade.recommendedUnits >= 0.01 ? trade.recommendedUnits : 1;
+    createBet.mutate(
+      {
+        data: {
+          sport: trade.sport,
+          gameId: trade.gameId,
+          commenceTime: trade.commenceTime,
+          homeTeam: trade.homeTeam,
+          awayTeam: trade.awayTeam,
+          market: "pitcher_strikeouts",
+          selection: `${trade.pitcher} ${trade.selection}`,
+          point: trade.point,
+          americanOdds: trade.americanOdds,
+          units,
+          evPercent: trade.edgePercent ?? undefined,
+          book: trade.book,
+          notes: `Promoted from Strikeout Model paper trade #${trade.id}`,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Logged as real bet",
+            description: `${trade.pitcher} ${trade.selection} ${trade.point} K @ ${formatOdds(trade.americanOdds)} · ${units}u added to your Bet Log.`,
+          });
+          queryClient.invalidateQueries({ queryKey: getListBetsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+        },
+        onError: (err) => {
+          // A 409 means this pick is already in the bet log — inform, don't alarm.
+          const isDuplicate = err.status === 409;
+          toast({
+            title: isDuplicate ? "Already in your Bet Log" : "Failed to log bet",
+            description: err.data?.error || "An unknown error occurred.",
+            variant: isDuplicate ? "default" : "destructive",
+          });
+        },
+      },
+    );
   };
 
   // Undo a delete: the server soft-deletes for a grace period, so restore
@@ -466,7 +527,7 @@ export function PaperTradesTable() {
             <TableHead className="text-right">Close</TableHead>
             <TableHead className="text-right">CLV</TableHead>
             <TableHead>Status</TableHead>
-            <TableHead className="w-[80px]"></TableHead>
+            <TableHead className="w-[120px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -500,6 +561,16 @@ export function PaperTradesTable() {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-muted-foreground hover:text-positive"
+                      aria-label={`Log ${t.pitcher} ${t.selection} ${t.point} as a real bet`}
+                      onClick={() => promoteToBet(t)}
+                      disabled={createBet.isPending || !isValidAmericanOdds(t.americanOdds)}
+                    >
+                      <CircleDollarSign className="h-3 w-3" />
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"

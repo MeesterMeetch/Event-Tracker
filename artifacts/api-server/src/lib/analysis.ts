@@ -194,7 +194,6 @@ async function attemptAnalysis(input: AnalysisInput, retry: boolean): Promise<An
   const completion = await openai.chat.completions.create({
     model: ANALYSIS_MODEL,
     max_completion_tokens: 8192,
-    response_format: { type: "json_object" },
     messages: [
       { role: "system", content: systemContent },
       { role: "user", content: buildPrompt(input) },

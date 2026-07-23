@@ -61,7 +61,7 @@ services:
       # After first deploy, confirm the API's real URL and update this host if it differs.
       - type: rewrite
         source: /api/*
-        destination: https://ev-tracker-api.onrender.com/api/*
+        destination: https://ev-tracker-api-sdly.onrender.com/api/*
       # SPA fallback — everything else serves index.html.
       - type: rewrite
         source: /*

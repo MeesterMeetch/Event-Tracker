@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListEvents,
@@ -10,6 +10,7 @@ import {
   useListPaperTrades,
   useGetPaperTradeSummary,
   useCreateBet,
+  useGenerateGameAnalysis,
   getListEventsQueryKey,
   getListModelEdgesQueryKey,
   getListPaperTradesQueryKey,
@@ -33,13 +34,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { parseOddsInput, isValidAmericanOdds } from "@workspace/format";
-import { AlertTriangle, Brain, CircleDollarSign, Loader2, Pencil, Plus, Target, Trash2, TrendingUp } from "lucide-react";
+import { AlertTriangle, Brain, CircleDollarSign, Loader2, Pencil, Plus, Sparkles, Target, Trash2, TrendingUp } from "lucide-react";
 import ModelPerformance from "@/components/ModelPerformance";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -58,6 +59,133 @@ function statusBadge(status: string) {
   if (status === "closed") return "text-positive border-positive/40";
   if (status === "expired") return "text-muted-foreground border-border";
   return "text-primary border-primary/40";
+}
+
+// The AI analysis endpoint wants a fair American price per line. The model
+// speaks in win probabilities, so convert the model's probability into the
+// equivalent no-vig American odds before handing it to the analyzer.
+function americanFromProb(prob: number): number {
+  const p = Math.min(Math.max(prob, 0.01), 0.99);
+  return p >= 0.5
+    ? -Math.round((p / (1 - p)) * 100)
+    : Math.round(((1 - p) / p) * 100);
+}
+
+// Runs the same AI game-analysis used on Live Edges, but seeded with a
+// pitcher's model strikeout lines. For MLB the server also pulls both probable
+// starters' recent form, so the write-up is genuinely pitcher-aware.
+function AnalyzeProjectionDialog({ projection, children }: {
+  projection: ModelPitcherProjection;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const analyze = useGenerateGameAnalysis();
+  const started = useRef(false);
+
+  const run = () => {
+    const edges = projection.lines.map((line) => ({
+      gameId: projection.gameId,
+      sport: projection.sport,
+      commenceTime: projection.commenceTime,
+      homeTeam: projection.homeTeam,
+      awayTeam: projection.awayTeam,
+      market: "pitcher_strikeouts",
+      selection: line.selection,
+      point: line.point,
+      player: projection.pitcher,
+      americanOdds: line.americanOdds,
+      book: line.book,
+      fairOdds: americanFromProb(line.modelProb),
+      evPercent: line.edgePercent ?? 0,
+      dkOdds: line.dkOdds ?? null,
+    }));
+    analyze.mutate({
+      data: {
+        sport: projection.sport,
+        gameId: projection.gameId,
+        homeTeam: projection.homeTeam,
+        awayTeam: projection.awayTeam,
+        commenceTime: projection.commenceTime,
+        edges,
+      },
+    });
+  };
+
+  // Kick off the analysis the first time the dialog opens; reopening reuses
+  // the cached result rather than spending another AI call.
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next && !started.current) {
+      started.current = true;
+      run();
+    }
+  };
+
+  const data = analyze.data;
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <DialogTitle>AI Analysis — {projection.pitcher}</DialogTitle>
+          </div>
+          <DialogDescription>{projection.awayTeam} @ {projection.homeTeam} · {formatGameTime(projection.commenceTime)}</DialogDescription>
+        </DialogHeader>
+
+        {analyze.isPending && (
+          <div className="flex flex-col items-center justify-center py-12 space-y-3 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <p className="text-sm">Scouting pitcher form, matchup, and market signals…</p>
+            <p className="text-xs opacity-70">This can take a few seconds.</p>
+          </div>
+        )}
+
+        {analyze.isError && (
+          <div className="rounded-md border border-destructive/20 bg-destructive/5 p-4 text-center">
+            <p className="text-destructive font-mono text-sm">ANALYSIS_FAILED</p>
+            <p className="text-xs text-muted-foreground mt-1">{analyze.error?.data?.error || "Could not generate analysis."}</p>
+            <Button size="sm" variant="secondary" className="mt-3" onClick={run}>Retry</Button>
+          </div>
+        )}
+
+        {data && (
+          <div className="space-y-5">
+            <p className="text-sm leading-relaxed">{data.summary}</p>
+
+            {data.keyFactors.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {data.keyFactors.map((f, i) => (
+                  <Badge key={i} variant="secondary" className="font-normal">{f}</Badge>
+                ))}
+              </div>
+            )}
+
+            {data.matchupAnalysis && (
+              <div>
+                <div className="text-xs font-semibold uppercase text-muted-foreground mb-1">Matchup / Form</div>
+                <p className="text-sm leading-relaxed text-foreground/90">{data.matchupAnalysis}</p>
+              </div>
+            )}
+
+            {data.bettingAngle && (
+              <div>
+                <div className="text-xs font-semibold uppercase text-muted-foreground mb-1">Betting Angle</div>
+                <p className="text-sm leading-relaxed text-foreground/90">{data.bettingAngle}</p>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-border text-[10px] text-muted-foreground">
+              <span>Model: {data.model}</span>
+              <span>AI-generated — verify before betting</span>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 // Exported so the component test can lock in the duplicate-log framing:
@@ -162,6 +290,16 @@ export function ProjectionCard({ projection }: { projection: ModelPitcherProject
               {projection.throws && (
                 <Badge variant="outline" className="font-mono text-[10px]">{projection.throws}HP</Badge>
               )}
+              <AnalyzeProjectionDialog projection={projection}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 px-2 ml-1"
+                  aria-label={`AI analysis for ${projection.pitcher}`}
+                >
+                  <Sparkles className="mr-1 h-3 w-3" /> AI
+                </Button>
+              </AnalyzeProjectionDialog>
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">
               {projection.team} · vs {projection.opponent}

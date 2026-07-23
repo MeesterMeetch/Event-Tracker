@@ -18,7 +18,7 @@ services:
     plan: starter        # always-on, so the background jobs (grading, CLV) keep running
     branch: main
 
-    buildCommand: corepack enable && corepack prepare pnpm@latest --activate && pnpm install && pnpm --filter @workspace/api-server run build
+    buildCommand: corepack enable && corepack prepare pnpm@9 --activate && pnpm install && pnpm --filter @workspace/api-server run build
     # Creates/updates the database tables before the server starts.
     preDeployCommand: pnpm --filter @workspace/db run push
     startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
@@ -51,7 +51,7 @@ services:
     runtime: static
     branch: main
 
-    buildCommand: corepack enable && corepack prepare pnpm@latest --activate && pnpm install && pnpm --filter @workspace/ev-tracker run build
+    buildCommand: corepack enable && corepack prepare pnpm@9 --activate && pnpm install && pnpm --filter @workspace/ev-tracker run build
     staticPublishPath: artifacts/ev-tracker/dist/public
 
     routes:

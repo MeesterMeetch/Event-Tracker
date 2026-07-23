@@ -1,0 +1,96 @@
+# Render Blueprint — Event Tracker
+#
+# Defines three resources:
+#   1. A managed Postgres database
+#   2. A Node.js Web Service for the API (Express)
+#   3. A Static Site for the Vite frontend
+#
+# Deploy steps:
+#   1. Push this repo to GitHub.
+#   2. In the Render dashboard choose "New > Blueprint" and point it at your repo.
+#   3. Render will create all three resources automatically.
+#   4. After the database is created, Render injects DATABASE_URL into the API service automatically.
+#   5. Add the remaining secret env vars in the Render dashboard (see "envVars" sections below
+#      for the ones marked sync: false — those require a manual value).
+#   6. After the API web service is live, copy its public URL (e.g. https://ev-tracker-api.onrender.com)
+#      into the static site's VITE_API_BASE_URL env var and redeploy the static site.
+#
+# Render Blueprint spec: https://render.com/docs/blueprint-spec
+
+services:
+  # ---------------------------------------------------------------------------
+  # 1. API — Express web service
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: ev-tracker-api
+    runtime: node
+    region: oregon
+    plan: free           # change to "starter" or higher for production
+
+    # pnpm must be enabled via PNPM_VERSION or corepack; Render supports corepack.
+    buildCommand: corepack enable && corepack prepare pnpm@latest --activate && pnpm install --frozen-lockfile && pnpm --filter @workspace/api-server run build
+    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
+
+    healthCheckPath: /api/healthz
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "10000"          # Render always exposes 10000 internally; the blueprint wires it up automatically
+
+      # Injected automatically by Render when the database below is linked:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ev-tracker-db
+          property: connectionString
+
+      # --- Add your own values in the Render dashboard for these ---
+      - key: ODDS_API_KEY
+        sync: false             # secret — paste value in Render dashboard
+
+      # Uncomment if you use the OpenAI integration:
+      # - key: AI_INTEGRATIONS_OPENAI_API_KEY
+      #   sync: false
+      # - key: AI_INTEGRATIONS_OPENAI_BASE_URL
+      #   sync: false
+
+  # ---------------------------------------------------------------------------
+  # 2. Frontend — Vite static site
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: ev-tracker-web
+    runtime: static
+    region: oregon
+
+    buildCommand: corepack enable && corepack prepare pnpm@latest --activate && pnpm install --frozen-lockfile && pnpm --filter @workspace/ev-tracker run build
+    staticPublishPath: artifacts/ev-tracker/dist/public
+
+    # Rewrite all paths to index.html for the SPA router
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: BASE_PATH
+        value: /
+      # PORT is not used during a static build but vite.config.ts no longer
+      # requires it — safe to omit entirely here.
+
+      # Point the frontend at the API web service.
+      # Fill in the actual Render URL of ev-tracker-api after first deploy:
+      - key: VITE_API_BASE_URL
+        sync: false             # e.g. https://ev-tracker-api.onrender.com
+
+  # ---------------------------------------------------------------------------
+  # 3. Database — managed Postgres
+  # ---------------------------------------------------------------------------
+databases:
+  - name: ev-tracker-db
+    region: oregon
+    plan: free                  # change to "starter" or higher for production
+    databaseName: ev_tracker
+    user: ev_tracker

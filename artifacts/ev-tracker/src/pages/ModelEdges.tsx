@@ -373,6 +373,78 @@ export function EditPaperTradeDialog({ trade, open, onOpenChange, onSaved }: {
   );
 }
 
+// Confirm-stake step before promoting a paper trade into the real bet log.
+// Opens prefilled with the model's Kelly-recommended units so a one-tap accept
+// is fine, but lets the stake be edited before the bet is written.
+export function PromoteToBetDialog({ trade, open, onOpenChange, onConfirm, isPending }: {
+  trade: PaperTrade;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (units: number) => void;
+  isPending: boolean;
+}) {
+  const suggestedUnits = trade.recommendedUnits >= 0.01 ? trade.recommendedUnits : 1;
+  const [unitsText, setUnitsText] = useState(String(suggestedUnits));
+
+  // Re-seed the stake each time the dialog opens for a (possibly different) pick.
+  useEffect(() => {
+    if (open) {
+      setUnitsText(String(trade.recommendedUnits >= 0.01 ? trade.recommendedUnits : 1));
+    }
+  }, [open, trade.id, trade.recommendedUnits]);
+
+  const parsedUnits = Number(unitsText);
+  // Mirror the bet form's rule: a real stake must be a number of at least 0.01u.
+  const unitsValid = Number.isFinite(parsedUnits) && parsedUnits >= 0.01;
+
+  const confirm = () => {
+    if (!unitsValid) return;
+    onConfirm(parsedUnits);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Log as real bet</DialogTitle>
+          <DialogDescription>
+            {trade.pitcher} {trade.selection} {trade.point} K @ {formatOdds(trade.americanOdds)} ({trade.book}).
+            Set your stake, then log it to your Bet Log. The model suggested {suggestedUnits}u.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <Label htmlFor="promote-units">Units</Label>
+          <Input
+            id="promote-units"
+            inputMode="decimal"
+            value={unitsText}
+            onChange={(e) => setUnitsText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") confirm();
+            }}
+            aria-invalid={!unitsValid}
+            placeholder="1"
+          />
+          {!unitsValid && (
+            <p className="text-xs text-destructive" role="alert">
+              Units must be a number of at least 0.01 (e.g. 1 or 0.5).
+            </p>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button onClick={confirm} disabled={isPending || !unitsValid}>
+            {isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+            Log bet
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Exported so the component test can lock in the graded-delete guard:
 // closed (graded) picks must confirm before deleting; open/expired delete
 // immediately with an undo toast.
@@ -394,16 +466,19 @@ export function PaperTradesTable() {
   // A mistyped price is corrected in place (dialog) rather than delete-and-relog,
   // which would lose the edge snapshot and any captured closing line.
   const [editTrade, setEditTrade] = useState<PaperTrade | null>(null);
+  // Promoting to a real bet opens a stake-confirm dialog first, prefilled with
+  // the model's recommended units, so the wager can be adjusted before logging.
+  const [promoteTrade, setPromoteTrade] = useState<PaperTrade | null>(null);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListPaperTradesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetPaperTradeSummaryQueryKey() });
   };
 
-  // Copy a paper trade into the real bet log. Stake defaults to the model's
-  // Kelly-recommended units (clamped to the 0.01u minimum the bet form enforces);
-  // the edge is carried over and a note records the model origin.
-  const promoteToBet = (trade: PaperTrade) => {
+  // Copy a paper trade into the real bet log at the confirmed stake. The edge is
+  // carried over and a note records the model origin. On success the dialog
+  // closes; on error it stays open so the stake can be adjusted and retried.
+  const promoteToBet = (trade: PaperTrade, units: number) => {
     if (!isValidAmericanOdds(trade.americanOdds)) {
       toast({
         title: "Invalid odds",
@@ -412,7 +487,6 @@ export function PaperTradesTable() {
       });
       return;
     }
-    const units = trade.recommendedUnits >= 0.01 ? trade.recommendedUnits : 1;
     createBet.mutate(
       {
         data: {
@@ -439,15 +513,18 @@ export function PaperTradesTable() {
           });
           queryClient.invalidateQueries({ queryKey: getListBetsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+          setPromoteTrade(null);
         },
         onError: (err) => {
-          // A 409 means this pick is already in the bet log — inform, don't alarm.
+          // A 409 means this pick is already in the bet log — inform, don't alarm,
+          // and close the dialog since re-logging won't help.
           const isDuplicate = err.status === 409;
           toast({
             title: isDuplicate ? "Already in your Bet Log" : "Failed to log bet",
             description: err.data?.error || "An unknown error occurred.",
             variant: isDuplicate ? "default" : "destructive",
           });
+          if (isDuplicate) setPromoteTrade(null);
         },
       },
     );
@@ -566,8 +643,8 @@ export function PaperTradesTable() {
                       variant="ghost"
                       className="h-7 px-2 text-muted-foreground hover:text-positive"
                       aria-label={`Log ${t.pitcher} ${t.selection} ${t.point} as a real bet`}
-                      onClick={() => promoteToBet(t)}
-                      disabled={createBet.isPending || !isValidAmericanOdds(t.americanOdds)}
+                      onClick={() => setPromoteTrade(t)}
+                      disabled={!isValidAmericanOdds(t.americanOdds)}
                     >
                       <CircleDollarSign className="h-3 w-3" />
                     </Button>
@@ -603,6 +680,15 @@ export function PaperTradesTable() {
           open={editTrade != null}
           onOpenChange={(open) => { if (!open) setEditTrade(null); }}
           onSaved={invalidate}
+        />
+      )}
+      {promoteTrade && (
+        <PromoteToBetDialog
+          trade={promoteTrade}
+          open={promoteTrade != null}
+          onOpenChange={(open) => { if (!open) setPromoteTrade(null); }}
+          onConfirm={(units) => promoteToBet(promoteTrade, units)}
+          isPending={createBet.isPending}
         />
       )}
       <AlertDialog open={confirmTrade != null} onOpenChange={(open) => { if (!open) setConfirmTrade(null); }}>

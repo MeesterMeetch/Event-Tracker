@@ -15,12 +15,12 @@ services:
     name: ev-tracker-api
     runtime: node
     region: oregon
-    plan: free           # background jobs (grading, CLV) sleep on free; use "starter" to keep them running
+    plan: starter        # always-on, so the background jobs (grading, CLV) keep running
     branch: main
 
     buildCommand: corepack enable && corepack prepare pnpm@latest --activate && pnpm install && pnpm --filter @workspace/api-server run build
     # Creates/updates the database tables before the server starts.
-    preDeployCommand: pnpm --filter @workspace/db run push && node --enable-source-maps artifacts/api-server/dist/index.mjs 
+    preDeployCommand: pnpm --filter @workspace/db run push
     startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
     healthCheckPath: /api/healthz
 
@@ -79,6 +79,6 @@ services:
 databases:
   - name: ev-tracker-db
     region: oregon
-    plan: free                  # free expires after 30 days; use "basic-256mb" to keep it
+    plan: basic-256mb           # paid, always-on, does not expire
     databaseName: ev_tracker
     user: ev_tracker

@@ -44,7 +44,7 @@ import { AlertTriangle, Brain, CircleDollarSign, Loader2, Pencil, Plus, Sparkles
 import ModelPerformance from "@/components/ModelPerformance";
 import { useToast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
-import { formatOdds, formatPercent, formatGameTime, formatTimeOnly, easternDayKey, formatDayLabel, cn } from "@/lib/utils";
+import { formatOdds, formatPercent, formatGameTime, formatTimeOnly, easternDayKey, formatDayLabel, formatStake, unitsToDollars, dollarsToUnits, cn } from "@/lib/utils";
 
 const MODEL_SPORT = "baseball_mlb";
 const KELLY_MULTIPLIER = 0.25;
@@ -337,7 +337,7 @@ export function ProjectionCard({ projection }: { projection: ModelPitcherProject
               <TableHead className="text-right">Odds</TableHead>
               <TableHead className="text-right text-muted-foreground">DK</TableHead>
               <TableHead>Book</TableHead>
-              <TableHead className="text-right">Kelly</TableHead>
+              <TableHead className="text-right">Stake</TableHead>
               <TableHead className="w-[70px]"></TableHead>
             </TableRow>
           </TableHeader>
@@ -358,7 +358,7 @@ export function ProjectionCard({ projection }: { projection: ModelPitcherProject
                   {line.dkOdds != null ? formatOdds(line.dkOdds) : "—"}
                 </TableCell>
                 <TableCell className="text-muted-foreground text-xs">{line.book}</TableCell>
-                <TableCell className="text-right font-mono">{line.recommendedUnits > 0 ? `${line.recommendedUnits}u` : "—"}</TableCell>
+                <TableCell className="text-right font-mono">{line.recommendedUnits > 0 ? formatStake(line.recommendedUnits) : "—"}</TableCell>
                 <TableCell>
                   <Button
                     size="sm"
@@ -522,21 +522,23 @@ export function PromoteToBetDialog({ trade, open, onOpenChange, onConfirm, isPen
   isPending: boolean;
 }) {
   const suggestedUnits = trade.recommendedUnits >= 0.01 ? trade.recommendedUnits : 1;
-  const [unitsText, setUnitsText] = useState(String(suggestedUnits));
+  // The bettor types dollars; units stay the stored/canonical form.
+  const [amountText, setAmountText] = useState(String(unitsToDollars(suggestedUnits)));
 
   // Re-seed the stake each time the dialog opens for a (possibly different) pick.
   useEffect(() => {
     if (open) {
-      setUnitsText(String(trade.recommendedUnits >= 0.01 ? trade.recommendedUnits : 1));
+      setAmountText(String(unitsToDollars(trade.recommendedUnits >= 0.01 ? trade.recommendedUnits : 1)));
     }
   }, [open, trade.id, trade.recommendedUnits]);
 
-  const parsedUnits = Number(unitsText);
-  // Mirror the bet form's rule: a real stake must be a number of at least 0.01u.
-  const unitsValid = Number.isFinite(parsedUnits) && parsedUnits >= 0.01;
+  const parsedDollars = Number(amountText);
+  const parsedUnits = dollarsToUnits(parsedDollars);
+  // Mirror the bet form's rule: a real stake must be at least 0.01 units.
+  const amountValid = Number.isFinite(parsedDollars) && parsedUnits >= 0.01;
 
   const confirm = () => {
-    if (!unitsValid) return;
+    if (!amountValid) return;
     onConfirm(parsedUnits);
   };
 
@@ -547,25 +549,25 @@ export function PromoteToBetDialog({ trade, open, onOpenChange, onConfirm, isPen
           <DialogTitle>Log as real bet</DialogTitle>
           <DialogDescription>
             {trade.pitcher} {trade.selection} {trade.point} K @ {formatOdds(trade.americanOdds)} ({trade.book}).
-            Set your stake, then log it to your Bet Log. The model suggested {suggestedUnits}u.
+            Set your stake, then log it to your Bet Log. The model suggested {formatStake(suggestedUnits)}.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <Label htmlFor="promote-units">Units</Label>
+          <Label htmlFor="promote-amount">Stake ($)</Label>
           <Input
-            id="promote-units"
+            id="promote-amount"
             inputMode="decimal"
-            value={unitsText}
-            onChange={(e) => setUnitsText(e.target.value)}
+            value={amountText}
+            onChange={(e) => setAmountText(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") confirm();
             }}
-            aria-invalid={!unitsValid}
-            placeholder="1"
+            aria-invalid={!amountValid}
+            placeholder="1.00"
           />
-          {!unitsValid && (
+          {!amountValid && (
             <p className="text-xs text-destructive" role="alert">
-              Units must be a number of at least 0.01 (e.g. 1 or 0.5).
+              Enter a dollar amount of at least $0.01 (e.g. 1 or 0.50).
             </p>
           )}
         </div>
@@ -573,7 +575,7 @@ export function PromoteToBetDialog({ trade, open, onOpenChange, onConfirm, isPen
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button onClick={confirm} disabled={isPending || !unitsValid}>
+          <Button onClick={confirm} disabled={isPending || !amountValid}>
             {isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
             Log bet
           </Button>
@@ -647,7 +649,7 @@ export function PaperTradesTable() {
         onSuccess: () => {
           toast({
             title: "Logged as real bet",
-            description: `${trade.pitcher} ${trade.selection} ${trade.point} K @ ${formatOdds(trade.americanOdds)} · ${units}u added to your Bet Log.`,
+            description: `${trade.pitcher} ${trade.selection} ${trade.point} K @ ${formatOdds(trade.americanOdds)} · ${formatStake(units)} added to your Bet Log.`,
           });
           queryClient.invalidateQueries({ queryKey: getListBetsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });

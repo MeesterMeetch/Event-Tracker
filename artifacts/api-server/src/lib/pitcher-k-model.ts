@@ -10,9 +10,25 @@
  *   2. Adjust that rate for the opposing lineup's strikeout tendency versus the
  *      pitcher's throwing hand.
  *   3. Project how many batters the pitcher will face (volume).
- *   4. Feed (rate x volume) into a binomial(n = batters faced, p = K/BF) to get
- *      P(strikeouts = k), and from there P(over)/P(under) for any posted line.
+ *   4. Feed the rate and a *distribution* over volume into a compound
+ *      beta-binomial to get P(strikeouts = k), and from there P(over)/P(under)
+ *      for any posted line. See k-distribution.ts for why the volume term is a
+ *      distribution rather than a fixed count.
  */
+
+import {
+  bfDistributionFromSamples,
+  compoundKPmf,
+  lineProbabilitiesFromPmf,
+  binomialPmf,
+  pmfVariance,
+  DEFAULT_CONCENTRATION,
+  type BfDistribution,
+  type LineProbabilities,
+} from "./k-distribution";
+
+export { binomialPmf };
+export type { LineProbabilities };
 
 export interface PitcherKInputs {
   throws: "L" | "R" | null;
@@ -24,6 +40,12 @@ export interface PitcherKInputs {
   rollingStarts: number;
   /** Average batters faced per start over the rolling window. */
   rollingBfPerStart: number | null;
+  /**
+   * Batters faced in each individual start of the rolling window. Supplies the
+   * *shape* of the volume distribution (how often he gets chased early), which
+   * a single average cannot. Optional: falls back to a discretized normal.
+   */
+  rollingBfPerStartSamples?: number[];
   /** Decimal innings pitched across the rolling window. Null when not available from the feed. */
   rollingInningsPitched: number | null;
   seasonStrikeouts: number | null;
@@ -38,6 +60,10 @@ export interface OpponentKInputs {
   kPctVsLhp: number | null;
   /** Opponent lineup strikeouts / plate appearances vs RHP. */
   kPctVsRhp: number | null;
+  /** Plate appearances behind kPctVsLhp, used to shrink small samples. */
+  paVsLhp?: number | null;
+  /** Plate appearances behind kPctVsRhp, used to shrink small samples. */
+  paVsRhp?: number | null;
 }
 
 export interface KProjection {
@@ -60,19 +86,17 @@ export interface KProjection {
   trials: number;
   /** Binomial success probability used for the distribution (= expectedK/trials). */
   perTrialProb: number;
-}
-
-export interface LineProbabilities {
-  /** P(strikeouts > line). */
-  pOver: number;
-  /** P(strikeouts < line). */
-  pUnder: number;
-  /** P(strikeouts == line); non-zero only for integer lines. */
-  pPush: number;
-  /** Push-adjusted (conditional on the bet resolving) over probability. */
-  condOver: number;
-  /** Push-adjusted (conditional on the bet resolving) under probability. */
-  condUnder: number;
+  /** Distribution over batters faced that the strikeout pmf is marginalized across. */
+  bfDistribution: BfDistribution;
+  /** Beta-binomial concentration applied for per-batter rate heterogeneity. */
+  concentration: number;
+  /** Variance of the resulting strikeout distribution. */
+  variance: number;
+  /**
+   * Variance a fixed-n binomial would have reported. The ratio against
+   * `variance` is how much dispersion the old model was missing.
+   */
+  binomialVariance: number;
 }
 
 // ---- Tunable constants ----
@@ -88,6 +112,14 @@ const FORM_PRIOR_BF = 150;
 /** Clamp the opponent handedness adjustment to a sane band. */
 const OPP_FACTOR_MIN = 0.85;
 const OPP_FACTOR_MAX = 1.2;
+/**
+ * Pseudo-count (in plate appearances) pulling a team's handedness K rate toward
+ * the league mean. In April a team may have only a couple hundred PA against
+ * left-handed pitching, and taking that at face value produces a wild opponent
+ * factor. Shrinking by sample size does the regularization properly instead of
+ * leaving it to the clamp.
+ */
+const OPP_PRIOR_PA = 600;
 /** Clamp projected batters faced to a realistic starter workload. */
 const MIN_PROJ_BF = 12;
 const MAX_PROJ_BF = 30;
@@ -103,6 +135,20 @@ const MAX_RECOMMENDED_UNITS = 3;
 
 function clamp(x: number, lo: number, hi: number): number {
   return Math.min(Math.max(x, lo), hi);
+}
+
+/**
+ * Bill James log5: combines a pitcher rate and an opponent rate against a
+ * league baseline on the odds scale. Bounded in (0, 1) by construction.
+ */
+export function log5(pitcherRate: number, opponentRate: number, leagueRate: number): number {
+  if (leagueRate <= 0 || leagueRate >= 1) return pitcherRate;
+  const odds = (r: number) => {
+    const q = clamp(r, 1e-6, 1 - 1e-6);
+    return q / (1 - q);
+  };
+  const combined = (odds(pitcherRate) * odds(opponentRate)) / odds(leagueRate);
+  return combined / (1 + combined);
 }
 
 /** Projects a pitcher's strikeout distribution parameters from their inputs. */
@@ -129,13 +175,37 @@ export function projectPitcherK(pitcher: PitcherKInputs, opponent: OpponentKInpu
   }
 
   // Opponent adjustment: how strikeout-prone is the lineup vs this hand?
-  const oppK = opponent ? (pitcher.throws === "L" ? opponent.kPctVsLhp : opponent.kPctVsRhp) : null;
-  let opponentFactor = 1;
-  if (oppK != null && oppK > 0) {
-    opponentFactor = clamp(oppK / LEAGUE_TEAM_K_PCT, OPP_FACTOR_MIN, OPP_FACTOR_MAX);
+  const facingLefty = pitcher.throws === "L";
+  const rawOppK = opponent ? (facingLefty ? opponent.kPctVsLhp : opponent.kPctVsRhp) : null;
+  const oppPa = opponent ? (facingLefty ? opponent.paVsLhp : opponent.paVsRhp) : null;
+
+  // Shrink the opponent rate toward league mean by its own sample size, the
+  // same treatment the pitcher's rate gets.
+  let oppK: number | null = null;
+  if (rawOppK != null && rawOppK > 0) {
+    if (oppPa != null && oppPa > 0) {
+      oppK = (rawOppK * oppPa + LEAGUE_TEAM_K_PCT * OPP_PRIOR_PA) / (oppPa + OPP_PRIOR_PA);
+    } else {
+      oppK = rawOppK;
+    }
   }
 
-  const ratePerBF = clamp(projRate * opponentFactor, MIN_RATE, MAX_RATE);
+  // Log5 (odds-ratio) combination rather than a raw rate multiplier. Scaling a
+  // rate directly can push past 1 for a high-K pitcher against a high-K lineup;
+  // combining on the odds scale cannot, and it is the standard treatment for
+  // merging two rates against a league baseline.
+  let opponentFactor = 1;
+  let combinedRate = projRate;
+  if (oppK != null && oppK > 0) {
+    combinedRate = log5(projRate, oppK, LEAGUE_TEAM_K_PCT);
+    // Report the realized adjustment as a factor so the UI and stored
+    // projections keep their existing meaning.
+    opponentFactor = projRate > 0 ? combinedRate / projRate : 1;
+    opponentFactor = clamp(opponentFactor, OPP_FACTOR_MIN, OPP_FACTOR_MAX);
+    combinedRate = projRate * opponentFactor;
+  }
+
+  const ratePerBF = clamp(combinedRate, MIN_RATE, MAX_RATE);
 
   // Volume: blend recent workload with the season average, favouring recent.
   const seasonBfPerStart =
@@ -153,9 +223,25 @@ export function projectPitcherK(pitcher: PitcherKInputs, opponent: OpponentKInpu
 
   const expectedStrikeouts = ratePerBF * projBF;
 
+  // Volume is a distribution, not a number. Built from the pitcher's own logged
+  // starts where available so the shape reflects how often he actually gets
+  // chased, recentered onto the projected workload.
+  const bfDistribution = bfDistributionFromSamples(
+    pitcher.rollingBfPerStartSamples ?? [],
+    projBF,
+    MIN_PROJ_BF,
+    MAX_PROJ_BF,
+  );
+
   // Binomial parameters: keep the mean exact by deriving p from expectedK / n.
   const trials = Math.max(1, Math.round(projBF));
   const perTrialProb = clamp(expectedStrikeouts / trials, 1e-6, 1 - 1e-6);
+
+  const concentration = DEFAULT_CONCENTRATION;
+  const variance = pmfVariance(
+    compoundKPmf({ bf: bfDistribution, perTrialProb: ratePerBF, concentration }),
+  );
+  const binomialVariance = trials * perTrialProb * (1 - perTrialProb);
 
   const kPer9 =
     pitcher.rollingInningsPitched != null && pitcher.rollingInningsPitched > 0
@@ -173,63 +259,35 @@ export function projectPitcherK(pitcher: PitcherKInputs, opponent: OpponentKInpu
     kPer9,
     trials,
     perTrialProb,
+    bfDistribution,
+    concentration,
+    variance,
+    binomialVariance,
   };
-}
-
-/** Binomial probability mass function values for k = 0..n, computed iteratively. */
-export function binomialPmf(n: number, p: number): number[] {
-  const pmf = new Array<number>(n + 1).fill(0);
-  if (p <= 0) {
-    pmf[0] = 1;
-    return pmf;
-  }
-  if (p >= 1) {
-    pmf[n] = 1;
-    return pmf;
-  }
-  pmf[0] = Math.pow(1 - p, n);
-  const ratio = p / (1 - p);
-  for (let k = 1; k <= n; k++) {
-    pmf[k] = pmf[k - 1] * ((n - k + 1) / k) * ratio;
-  }
-  return pmf;
 }
 
 /**
- * Over/under probabilities for a strikeout line given binomial parameters.
- * Integer lines (e.g. 6) can push; half-point lines (e.g. 5.5) cannot. The
+ * Over/under probabilities for a posted line, using the projection's compound
+ * distribution. Integer lines can push; half-point lines cannot. The
  * conditional (push-adjusted) probabilities are what get compared against the
  * de-vigged market, which itself normalizes over the two resolving sides.
  */
+export function projectionLineProbabilities(projection: KProjection, point: number): LineProbabilities {
+  const pmf = compoundKPmf({
+    bf: projection.bfDistribution,
+    perTrialProb: projection.ratePerBF,
+    concentration: projection.concentration,
+  });
+  return lineProbabilitiesFromPmf(pmf, point);
+}
+
+/**
+ * Legacy fixed-n entry point, kept so callers and tests that only have
+ * (trials, p) still work. Prefer projectionLineProbabilities: this one carries
+ * the variance understatement described in k-distribution.ts.
+ */
 export function lineProbabilities(trials: number, perTrialProb: number, point: number): LineProbabilities {
-  const pmf = binomialPmf(trials, perTrialProb);
-  const cumulative = (k: number): number => {
-    let sum = 0;
-    const upper = Math.min(k, trials);
-    for (let i = 0; i <= upper; i++) sum += pmf[i];
-    return sum;
-  };
-
-  let pOver: number;
-  let pUnder: number;
-  let pPush: number;
-
-  if (Number.isInteger(point)) {
-    pPush = point >= 0 && point <= trials ? pmf[point] : 0;
-    pUnder = point <= 0 ? 0 : cumulative(point - 1);
-    pOver = Math.max(0, 1 - pUnder - pPush);
-  } else {
-    const floor = Math.floor(point);
-    pUnder = cumulative(floor);
-    pOver = Math.max(0, 1 - pUnder);
-    pPush = 0;
-  }
-
-  const denom = pOver + pUnder;
-  const condOver = denom > 0 ? pOver / denom : 0;
-  const condUnder = denom > 0 ? pUnder / denom : 0;
-
-  return { pOver, pUnder, pPush, condOver, condUnder };
+  return lineProbabilitiesFromPmf(binomialPmf(trials, perTrialProb), point);
 }
 
 /**

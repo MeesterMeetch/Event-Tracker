@@ -251,6 +251,12 @@ export interface PitcherKStats {
   rollingBattersFaced: number;
   rollingStarts: number;
   rollingBfPerStart: number | null;
+  /**
+   * Batters faced in each individual start of the rolling window, oldest first.
+   * The model uses the shape of this sample (how often he gets chased early)
+   * to build a volume distribution rather than assuming a fixed workload.
+   */
+  rollingBfPerStartSamples: number[];
   /** Decimal innings pitched across the rolling window (e.g. 38.667 for 38⅔ IP). */
   rollingInningsPitched: number | null;
   seasonStrikeouts: number | null;
@@ -266,6 +272,10 @@ export interface OpponentKProfile {
   kPctVsLhp: number | null;
   /** Opponent lineup strikeouts / plate appearances vs RHP. */
   kPctVsRhp: number | null;
+  /** Plate appearances behind kPctVsLhp; lets the model shrink small samples. */
+  paVsLhp: number | null;
+  /** Plate appearances behind kPctVsRhp; lets the model shrink small samples. */
+  paVsRhp: number | null;
 }
 
 export interface PitcherKMatchupSide {
@@ -334,6 +344,7 @@ async function fetchPitcherKStats(personId: number, name: string, team: string, 
     rollingBattersFaced: 0,
     rollingStarts: 0,
     rollingBfPerStart: null,
+    rollingBfPerStartSamples: [],
     rollingInningsPitched: null,
     seasonStrikeouts: null,
     seasonBattersFaced: null,
@@ -374,6 +385,7 @@ async function fetchPitcherKStats(personId: number, name: string, team: string, 
         let n = 0;
         let totalOuts = 0;
         let hasIp = false;
+        const bfSamples: number[] = [];
         for (const sp of starts) {
           const st = sp.stat ?? {};
           const b = battersFacedFrom(st);
@@ -381,6 +393,7 @@ async function fetchPitcherKStats(personId: number, name: string, team: string, 
           so += int(st.strikeOuts) ?? 0;
           bf += b;
           n += 1;
+          bfSamples.push(b);
           const outs = ipToOuts(str(st.inningsPitched));
           if (outs != null) { totalOuts += outs; hasIp = true; }
         }
@@ -388,6 +401,7 @@ async function fetchPitcherKStats(personId: number, name: string, team: string, 
         stats.rollingBattersFaced = bf;
         stats.rollingStarts = n;
         stats.rollingBfPerStart = n > 0 ? bf / n : null;
+        stats.rollingBfPerStartSamples = bfSamples;
         stats.rollingInningsPitched = hasIp ? totalOuts / 3 : null;
       }
     }
@@ -399,7 +413,13 @@ async function fetchPitcherKStats(personId: number, name: string, team: string, 
 }
 
 async function fetchTeamKProfile(teamId: number, teamName: string, season: number): Promise<OpponentKProfile> {
-  const profile: OpponentKProfile = { team: teamName, kPctVsLhp: null, kPctVsRhp: null };
+  const profile: OpponentKProfile = {
+    team: teamName,
+    kPctVsLhp: null,
+    kPctVsRhp: null,
+    paVsLhp: null,
+    paVsRhp: null,
+  };
 
   try {
     const data = await mlbFetch<TeamSplitsResponse>(
@@ -411,8 +431,8 @@ async function fetchTeamKProfile(teamId: number, teamName: string, season: numbe
         const so = int(sp.stat?.strikeOuts);
         const pa = int(sp.stat?.plateAppearances);
         if (so == null || pa == null || pa <= 0) continue;
-        if (code === "vl") profile.kPctVsLhp = so / pa;
-        if (code === "vr") profile.kPctVsRhp = so / pa;
+        if (code === "vl") { profile.kPctVsLhp = so / pa; profile.paVsLhp = pa; }
+        if (code === "vr") { profile.kPctVsRhp = so / pa; profile.paVsRhp = pa; }
       }
     }
   } catch (err) {

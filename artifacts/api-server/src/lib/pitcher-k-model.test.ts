@@ -130,11 +130,21 @@ describe("projectPitcherK — opponent factor", () => {
     expect(proj.ratePerBF).toBeCloseTo(0.25 * 0.85, 10);
   });
 
-  it("leaves the factor inside the band untouched", () => {
+  it("leaves a factor inside the band unclamped, combining on the odds scale", () => {
     const opp: OpponentKInputs = { kPctVsLhp: null, kPctVsRhp: 0.242 };
-    // 0.242 / 0.22 = 1.1 -> within [0.85, 1.2]
+    // The raw rate ratio here is 0.242 / 0.22 = 1.1, comfortably inside the
+    // [0.85, 1.2] band, so nothing is clamped. The realized factor is slightly
+    // below 1.1 because the opponent adjustment is a log5 (odds-ratio)
+    // combination rather than a straight rate multiplier: on the odds scale a
+    // 10 percent lift in the opponent's K rate is worth marginally less than 10
+    // percent once it is folded against the league baseline. That gap widens at
+    // the extremes, which is exactly the behaviour we want, since a rate
+    // multiplier can push a high-K pitcher past a probability of 1.
     const proj = projectPitcherK({ ...base, throws: "R" }, opp);
-    expect(proj.opponentFactor).toBeCloseTo(1.1, 10);
+    expect(proj.opponentFactor).toBeGreaterThan(1);
+    expect(proj.opponentFactor).toBeLessThan(1.1);
+    expect(proj.opponentFactor).toBeCloseTo(1.0958, 3);
+    expect(proj.ratePerBF).toBeCloseTo(0.25 * proj.opponentFactor, 10);
   });
 
   it("keeps factor at 1 when the relevant column is null or non-positive", () => {

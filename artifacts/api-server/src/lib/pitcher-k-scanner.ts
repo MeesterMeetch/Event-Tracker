@@ -1,7 +1,10 @@
 import type { OddsEvent } from "./odds";
 import type { MatchupKInputs, PitcherKMatchupSide, PitcherKStats } from "./mlb";
 import { americanToDecimal, americanToImpliedProb, trimmedMeanClosingAmerican } from "./odds-math";
-import { projectPitcherK, lineProbabilities, kellyFraction, recommendedKellyUnits, DEFAULT_KELLY_MULTIPLIER } from "./pitcher-k-model";
+import { projectPitcherK, projectionLineProbabilities, kellyFraction, recommendedKellyUnits, DEFAULT_KELLY_MULTIPLIER } from "./pitcher-k-model";
+import { applyPlatt } from "./calibration";
+import { blendProbabilities } from "./model-blend";
+import { MODEL_CALIBRATION } from "./model-config";
 
 export const PITCHER_K_MARKET = "pitcher_strikeouts";
 /** The projection model is MLB-only. */
@@ -188,6 +191,7 @@ function projectSide(
       rollingBattersFaced: pitcher.rollingBattersFaced,
       rollingStarts: pitcher.rollingStarts,
       rollingBfPerStart: pitcher.rollingBfPerStart,
+      rollingBfPerStartSamples: pitcher.rollingBfPerStartSamples,
       rollingInningsPitched: pitcher.rollingInningsPitched,
       seasonStrikeouts: pitcher.seasonStrikeouts,
       seasonBattersFaced: pitcher.seasonBattersFaced,
@@ -208,16 +212,25 @@ function projectSide(
 
   const lines: ModelKLine[] = [];
   for (const point of points) {
-    const probs = lineProbabilities(projection.trials, projection.perTrialProb, point);
+    const probs = projectionLineProbabilities(projection, point);
     for (const selection of ["Over", "Under"] as const) {
       const side2 = agg.get(`${nameKey}|${point}|${selection}`);
       if (!side2 || side2.bestAmerican == null) continue;
 
-      const modelProb = selection === "Over" ? probs.condOver : probs.condUnder;
+      const rawModelProb = selection === "Over" ? probs.condOver : probs.condUnder;
       const hasConsensus = side2.books.size >= 2;
       const marketProb = hasConsensus
         ? side2.fairSamples.reduce((s, p) => s + p, 0) / side2.fairSamples.length
         : null;
+
+      // Two corrections sit between the raw model output and the price we bet.
+      // Both are identity transforms until fitted against graded history by the
+      // model-report script, so behaviour is unchanged until you opt in.
+      const calibrated = MODEL_CALIBRATION.platt
+        ? applyPlatt(rawModelProb, MODEL_CALIBRATION.platt)
+        : rawModelProb;
+      const modelProb = blendProbabilities(calibrated, marketProb, MODEL_CALIBRATION.blendWeight);
+
       const decimalBest = americanToDecimal(side2.bestAmerican);
       const edgePercent = Math.round((decimalBest * modelProb - 1) * 100 * 100) / 100;
       const isFlagged = hasConsensus && edgePercent >= minEdgePercent;

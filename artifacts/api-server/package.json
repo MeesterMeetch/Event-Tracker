@@ -9,7 +9,8 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -b tsconfig.json --force",
     "test": "vitest run",
-    "model:report": "tsx scripts/model-report.ts"
+    "model:report": "tsx scripts/model-report.ts",
+    "edge:decay": "tsx scripts/edge-decay.ts"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

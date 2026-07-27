@@ -2,6 +2,7 @@ import type { OddsEvent, OddsOutcome } from "./odds";
 import type { EdgeOpportunity } from "./ev";
 import { avgProbPercent } from "./ev";
 import { americanToDecimal, americanToImpliedProb, isSharpBook, probToAmerican } from "./odds-math";
+import { devig, configuredDevigMethod } from "./devig";
 
 /**
  * Over/Under player-prop markets scanned per sport. Only two-sided O/U
@@ -55,13 +56,14 @@ export function sportSupportsProps(sportKey: string): boolean {
  * line per book, but a prop market response bundles every player at that
  * book, so outcomes are first grouped per (player, line) within each book —
  * that Over/Under pair is the market the vig lives inside. Each pair is
- * devigged multiplicatively into fair probabilities, samples are averaged
+ * devigged into fair probabilities (see devig.ts), samples are averaged
  * across books quoting the exact same player and line, and any side whose
  * best available price beats that consensus by at least `minEdgePercent` is
  * returned. As with game lines, at least 2 books must quote a line before it
  * counts as consensus, so one book's stale number can't fabricate an edge.
  */
 export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent: number): EdgeOpportunity[] {
+  const devigMethod = configuredDevigMethod();
   const fairProbSamples = new Map<string, number[]>();
   const sharpSamples = new Map<string, number[]>();
   const publicSamples = new Map<string, number[]>();
@@ -91,11 +93,14 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
         const overround = impliedProbs.reduce((sum, o) => sum + o.prob, 0);
         if (overround <= 0) continue;
 
-        for (const { outcome, prob } of impliedProbs) {
+        const fairProbs = devig(impliedProbs.map((o) => o.prob), devigMethod);
+
+        for (let idx = 0; idx < impliedProbs.length; idx++) {
+          const { outcome } = impliedProbs[idx];
           const player = outcome.description!;
           const point = outcome.point ?? null;
           const key = `${market.key}|${player}|${outcome.name}|${point ?? ""}`;
-          const fairProb = prob / overround;
+          const fairProb = fairProbs[idx];
 
           if (!fairProbSamples.has(key)) fairProbSamples.set(key, []);
           fairProbSamples.get(key)!.push(fairProb);

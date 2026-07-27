@@ -66,17 +66,17 @@ describe("computePropEdges — multi-book averaging", () => {
     expect(over.market).toBe("batter_total_bases");
     expect(over.selection).toBe("Over");
     expect(over.point).toBe(1.5);
-    expect(over.evPercent).toBeCloseTo(14.58, 2);
+    expect(over.evPercent).toBeCloseTo(13.89, 2);
     // Best price is Book3's +150, not the -110 books.
     expect(over.americanOdds).toBe(150);
     expect(over.book).toBe("Book3");
-    expect(over.fairOdds).toBe(118);
+    expect(over.fairOdds).toBe(120);
     expect(over.gameId).toBe("evt1");
     expect(over.sport).toBe("baseball_mlb");
   });
 
   it("drops the Under side when its edge is below the minimum threshold", () => {
-    // Under's edge is only +3.41%, so a 5% floor keeps just the Over.
+    // Under's edge is only +3.93%, so a 5% floor keeps just the Over.
     const edges = computePropEdges(evt, "baseball_mlb", 5);
     expect(edges.map((e) => e.selection)).toEqual(["Over"]);
   });
@@ -87,16 +87,17 @@ describe("computePropEdges — (player, point) pairing and keying", () => {
   // Player A line must never mix into Player B's consensus.
   // Player A (points 25.5):
   //   Book1 Over/Under -110/-110 → fairOver 0.5
-  //   Book2 Over +130 (0.434783), Under -160 (0.615385); overround 1.050167
-  //         → fairOver 0.414010
-  //   Over: avg fair = (0.5 + 0.414010)/2 = 0.457005; best +130 (2.3)
-  //         EV = 2.3*0.457005 - 1 = +5.11%; fair odds +119
-  // Player B (points 5.5):
-  //   Book1 Over -160 (0.615385), Under +130 (0.434783); overround 1.050167
-  //         → fairUnder 0.414010
+  //   Book2 Over +130, Under -160; overround 1.050167 → Shin fairOver 0.409699
+  //   Over: avg fair = (0.5 + 0.409699)/2 = 0.454849; best +130 (2.3)
+  //         EV = 2.3*0.454849 - 1 = +4.62%; fair odds +120
+  //         (Under: avg 0.545151, best -110 → +4.07%.)
+  // Player B (points 5.5): the mirror image.
+  //   Book1 Over -160, Under +130 → Shin fairUnder 0.409699
   //   Book2 Over/Under -110/-110 → fairUnder 0.5
-  //   Under: avg fair = (0.414010 + 0.5)/2 = 0.457005; best +130 (2.3)
-  //          EV = 2.3*0.457005 - 1 = +5.11%; fair odds +119
+  //   Under: avg fair = 0.454849; best +130 (2.3) → EV +4.62%; fair odds +120
+  //         (Over: avg 0.545151, best -110 → +4.07%.)
+  // Floor is 4.5% so each player still contributes exactly one side, which is
+  // what this test is actually about. Under proportional both read +5.11%.
   const evt = event([
     book("Book1", "player_points", [
       propOutcome("Over", "Player A", -110, 25.5),
@@ -113,31 +114,32 @@ describe("computePropEdges — (player, point) pairing and keying", () => {
   ]);
 
   it("keeps each player's line separate and attributes the right side/point", () => {
-    const edges = computePropEdges(evt, "basketball_nba", 5);
+    const edges = computePropEdges(evt, "basketball_nba", 4.5);
     expect(edges).toHaveLength(2);
 
     const a = edges.find((e) => e.player === "Player A")!;
     expect(a.selection).toBe("Over");
     expect(a.point).toBe(25.5);
     expect(a.americanOdds).toBe(130);
-    expect(a.evPercent).toBeCloseTo(5.11, 2);
-    expect(a.fairOdds).toBe(119);
+    expect(a.evPercent).toBeCloseTo(4.62, 2);
+    expect(a.fairOdds).toBe(120);
 
     const b = edges.find((e) => e.player === "Player B")!;
     expect(b.selection).toBe("Under");
     expect(b.point).toBe(5.5);
     expect(b.americanOdds).toBe(130);
-    expect(b.evPercent).toBeCloseTo(5.11, 2);
-    expect(b.fairOdds).toBe(119);
+    expect(b.evPercent).toBeCloseTo(4.62, 2);
+    expect(b.fairOdds).toBe(120);
   });
 });
 
 describe("computePropEdges — one-sided outcomes can't poison the devig", () => {
   it("ignores a lone Over (no Under) instead of letting it fabricate an edge", () => {
-    // Book1/Book2 quote a real Over/Under 1.5 pair (fairOver 0.5 and 0.414010,
+    // Book1/Book2 quote a real Over/Under 1.5 pair (fairOver 0.5 and 0.409699,
     // best +130). Book3 quotes ONLY a wild +5000 Over — no Under to devig
     // against — so it must be skipped entirely. If it leaked through, it would
     // become the best price (decimal 51) and manufacture a huge fake edge.
+    // Floor 4.5%: the real Over prices at +4.62% under Shin (Under is +4.07%).
     const evt = event([
       book("Book1", "batter_hits", [
         propOutcome("Over", "Star Hitter", -110, 1.5),
@@ -150,14 +152,14 @@ describe("computePropEdges — one-sided outcomes can't poison the devig", () =>
       book("Book3", "batter_hits", [propOutcome("Over", "Star Hitter", 5000, 1.5)]),
     ]);
 
-    const edges = computePropEdges(evt, "baseball_mlb", 5);
+    const edges = computePropEdges(evt, "baseball_mlb", 4.5);
     expect(edges).toHaveLength(1);
     const [over] = edges;
     // Best price stays Book2's +130 and only the two real books average in.
     expect(over.americanOdds).toBe(130);
     expect(over.book).toBe("Book2");
-    expect(over.evPercent).toBeCloseTo(5.11, 2);
-    expect(over.fairOdds).toBe(119);
+    expect(over.evPercent).toBeCloseTo(4.62, 2);
+    expect(over.fairOdds).toBe(120);
   });
 
   it("skips outcomes with no player description and duplicate same-name rows", () => {
@@ -233,11 +235,11 @@ describe("computePropEdges — edge cases", () => {
   it("sorts multiple edges by EV percent descending", () => {
     // Two players, one edge each, must come back best-first.
     // Big (points 1.5), 3 books: -110/-110, -110/-110, +150/-200
-    //   → Over avg (0.5+0.5+0.375)/3 = 0.458333; best +150 (2.5); EV +14.58%.
-    //     (Under avg 0.541667, best -110 → +3.41%, below the 5% floor.)
+    //   → Over avg (0.5+0.5+0.366667)/3 = 0.455556; best +150 (2.5); EV +13.89%.
+    //     (Under avg 0.544444, best -110 → +3.93%, below the 4.5% floor.)
     // Small (points 2.5), 2 books: -110/-110, +130/-160
-    //   → Over avg (0.5+0.414010)/2 = 0.457005; best +130 (2.3); EV +5.11%.
-    //     (Under avg 0.542995, best -110 → +3.67%, below the 5% floor.)
+    //   → Over avg (0.5+0.409699)/2 = 0.454849; best +130 (2.3); EV +4.62%.
+    //     (Under avg 0.545151, best -110 → +4.07%, below the 4.5% floor.)
     const evt = event([
       book("Book1", "batter_hits", [
         propOutcome("Over", "Big", -110, 1.5),
@@ -256,10 +258,10 @@ describe("computePropEdges — edge cases", () => {
         propOutcome("Under", "Big", -200, 1.5),
       ]),
     ]);
-    const edges = computePropEdges(evt, "baseball_mlb", 5);
+    const edges = computePropEdges(evt, "baseball_mlb", 4.5);
     expect(edges.map((e) => e.player)).toEqual(["Big", "Small"]);
     expect(edges[0].evPercent).toBeGreaterThan(edges[1].evPercent);
-    expect(edges[0].evPercent).toBeCloseTo(14.58, 2);
-    expect(edges[1].evPercent).toBeCloseTo(5.11, 2);
+    expect(edges[0].evPercent).toBeCloseTo(13.89, 2);
+    expect(edges[1].evPercent).toBeCloseTo(4.62, 2);
   });
 });

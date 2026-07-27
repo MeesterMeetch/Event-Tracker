@@ -1,6 +1,7 @@
 import type { OddsEvent } from "./odds";
 import type { MatchupKInputs, PitcherKMatchupSide, PitcherKStats } from "./mlb";
 import { americanToDecimal, americanToImpliedProb, trimmedMeanClosingAmerican } from "./odds-math";
+import { devig, configuredDevigMethod } from "./devig";
 import { projectPitcherK, projectionLineProbabilities, kellyFraction, recommendedKellyUnits, DEFAULT_KELLY_MULTIPLIER } from "./pitcher-k-model";
 import { applyPlatt } from "./calibration";
 import { blendProbabilities } from "./model-blend";
@@ -94,6 +95,7 @@ interface SideAgg {
  * distinct-book count per side.
  */
 function buildMarketConsensus(event: OddsEvent): Map<string, SideAgg> {
+  const devigMethod = configuredDevigMethod();
   const agg = new Map<string, SideAgg>();
   const ensure = (key: string): SideAgg => {
     let a = agg.get(key);
@@ -124,11 +126,14 @@ function buildMarketConsensus(event: OddsEvent): Map<string, SideAgg> {
         const overround = implied.reduce((sum, x) => sum + x.prob, 0);
         if (overround <= 0) continue;
 
-        for (const { o, prob } of implied) {
+        const fairProbs = devig(implied.map((x) => x.prob), devigMethod);
+
+        for (let i = 0; i < implied.length; i++) {
+          const { o } = implied[i];
           const player = normName(o.description!);
           const key = `${player}|${o.point}|${o.name}`;
           const side = ensure(key);
-          side.fairSamples.push(prob / overround);
+          side.fairSamples.push(fairProbs[i]);
           side.books.add(bookmaker.key);
           const decimal = americanToDecimal(o.price);
           if (side.bestAmerican == null || decimal > americanToDecimal(side.bestAmerican)) {

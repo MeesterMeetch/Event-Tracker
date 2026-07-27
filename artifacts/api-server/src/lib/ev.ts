@@ -1,5 +1,6 @@
 import type { OddsEvent } from "./odds";
 import { americanToDecimal, americanToImpliedProb, isSharpBook, probToAmerican } from "./odds-math";
+import { devig, configuredDevigMethod } from "./devig";
 
 export interface EdgeOpportunity {
   gameId: string;
@@ -41,8 +42,10 @@ const MARKETS = ["h2h", "spreads", "totals"] as const;
 /**
  * Scans a sport's live odds for positive-EV opportunities. For each event and
  * market, every bookmaker's own line (2-way, or 3-way like soccer h2h) is used
- * to remove the vig (multiplicative devig) and produce a fair probability per
- * outcome; fair
+ * to remove the vig and produce a fair probability per outcome. The de-vig
+ * method is NOT proportional: see devig.ts for why proportional removal
+ * systematically overstates the longshot side and manufactures phantom edges on
+ * lopsided markets. Fair
  * probabilities for the same outcome are then averaged across bookmakers to
  * get a consensus "true" price. Any outcome where the best available price
  * beats that consensus by at least `minEdgePercent` is returned.
@@ -52,6 +55,7 @@ const MARKETS = ["h2h", "spreads", "totals"] as const;
  */
 export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent: number): EdgeOpportunity[] {
   const edges: EdgeOpportunity[] = [];
+  const devigMethod = configuredDevigMethod();
 
   for (const event of events) {
     for (const market of MARKETS) {
@@ -70,10 +74,13 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
         const overround = impliedProbs.reduce((sum, o) => sum + o.prob, 0);
         if (overround <= 0) continue;
 
-        for (const { outcome, prob } of impliedProbs) {
+        const fairProbs = devig(impliedProbs.map((o) => o.prob), devigMethod);
+
+        for (let i = 0; i < impliedProbs.length; i++) {
+          const { outcome } = impliedProbs[i];
           const point = outcome.point ?? null;
           const key = `${outcome.name}|${point ?? ""}`;
-          const fairProb = prob / overround;
+          const fairProb = fairProbs[i];
 
           if (!fairProbSamples.has(key)) fairProbSamples.set(key, []);
           fairProbSamples.get(key)!.push(fairProb);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { computeModelEdges, MODEL_SPORT_KEY, PITCHER_K_MARKET } from "./pitcher-k-scanner";
-import { projectPitcherK, lineProbabilities } from "./pitcher-k-model";
+import { projectPitcherK, projectionLineProbabilities } from "./pitcher-k-model";
+import { devig } from "./devig";
 import { americanToDecimal, americanToImpliedProb } from "./odds-math";
 import type { OddsEvent } from "./odds";
 import type { MatchupKInputs, PitcherKStats, PitcherKMatchupSide } from "./mlb";
@@ -242,17 +243,24 @@ describe("computeModelEdges — de-vig consensus and edge flagging", () => {
       },
       null,
     );
-    return lineProbabilities(projection.trials, projection.perTrialProb, point);
+    // Must use the same distribution the scanner uses. The model marginalizes
+    // over a batters-faced distribution rather than assuming a fixed count, so
+    // deriving the expectation from the legacy fixed-n helper would compare the
+    // scanner against a model it no longer runs.
+    return projectionLineProbabilities(projection, point);
   }
 
-  /** Multiplicative (per-book) de-vig of one side of an over/under pair. */
+  /**
+   * Per-book de-vig of one side of an over/under pair, using the same shared
+   * routine the scanner does. Deliberately not a local re-implementation: the
+   * method is configurable (see devig.ts) and a hand-rolled proportional copy
+   * here would silently stop matching the scanner the moment it changed.
+   */
   function devigFair(sidePrice: number, otherPrice: number): number {
-    const side = americanToImpliedProb(sidePrice);
-    const other = americanToImpliedProb(otherPrice);
-    return side / (side + other);
+    return devig([americanToImpliedProb(sidePrice), americanToImpliedProb(otherPrice)])[0];
   }
 
-  it("averages the multiplicatively de-vigged fair probability across books", () => {
+  it("averages the de-vigged fair probability across books", () => {
     // Book A: -110/-110 (fair Over = 0.5). Book B: +120/-140 (fair Over < 0.5).
     const event = consensusEvent("Ace Pitcher", 5.5, [
       { key: "book_a", title: "Book A", over: -110, under: -110 },

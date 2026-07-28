@@ -74,6 +74,9 @@ services:
         value: production
       - key: BASE_PATH
         value: /
+      # Disable automatic dependency installation so our buildCommand handles it
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
 
   # ---------------------------------------------------------------------------
   # 3. Database — managed Postgres

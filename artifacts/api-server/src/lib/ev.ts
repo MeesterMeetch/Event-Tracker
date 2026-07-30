@@ -1,6 +1,7 @@
 import type { OddsEvent } from "./odds";
 import { americanToDecimal, americanToImpliedProb, isSharpBook, probToAmerican } from "./odds-math";
 import { devig, configuredDevigMethod } from "./devig";
+import { isBettableBook } from "./bettable-books";
 
 export interface EdgeOpportunity {
   gameId: string;
@@ -89,10 +90,16 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
           splitSamples.get(key)!.push(fairProb);
           meta.set(key, { name: outcome.name, point });
 
-          const currentBest = best.get(key);
-          const currentBestDecimal = currentBest ? americanToDecimal(currentBest.americanOdds) : -Infinity;
-          if (americanToDecimal(outcome.price) > currentBestDecimal) {
-            best.set(key, { americanOdds: outcome.price, book: bookmaker.title });
+          // Every book feeds the consensus above, but only books you can
+          // actually bet at are eligible to set the price EV is measured
+          // against. Otherwise the EU books that come with Pinnacle would
+          // fill the top of the list with unactionable edges.
+          if (isBettableBook(bookmaker.key)) {
+            const currentBest = best.get(key);
+            const currentBestDecimal = currentBest ? americanToDecimal(currentBest.americanOdds) : -Infinity;
+            if (americanToDecimal(outcome.price) > currentBestDecimal) {
+              best.set(key, { americanOdds: outcome.price, book: bookmaker.title });
+            }
           }
 
           if (bookmaker.key === "draftkings") {

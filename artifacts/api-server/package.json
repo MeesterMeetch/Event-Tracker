@@ -10,7 +10,8 @@
     "typecheck": "tsc -b tsconfig.json --force",
     "test": "vitest run",
     "model:report": "tsx scripts/model-report.ts",
-    "edge:decay": "tsx scripts/edge-decay.ts"
+    "edge:decay": "tsx scripts/edge-decay.ts",
+    "odds:history": "tsx scripts/odds-history-report.ts"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

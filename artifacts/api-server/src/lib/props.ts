@@ -3,6 +3,7 @@ import type { EdgeOpportunity } from "./ev";
 import { avgProbPercent } from "./ev";
 import { americanToDecimal, americanToImpliedProb, isSharpBook, probToAmerican } from "./odds-math";
 import { devig, configuredDevigMethod } from "./devig";
+import { isBettableBook } from "./bettable-books";
 
 /**
  * Over/Under player-prop markets scanned per sport. Only two-sided O/U
@@ -111,10 +112,14 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
           sampleBooks.get(key)!.add(bookmaker.key); // stable ID, not display title
           meta.set(key, { market: market.key, player, name: outcome.name, point });
 
-          const currentBest = best.get(key);
-          const currentBestDecimal = currentBest ? americanToDecimal(currentBest.americanOdds) : -Infinity;
-          if (americanToDecimal(outcome.price) > currentBestDecimal) {
-            best.set(key, { americanOdds: outcome.price, book: bookmaker.title });
+          // Consensus uses every book; best price is restricted to books you
+          // can actually bet at. See bettable-books.ts.
+          if (isBettableBook(bookmaker.key)) {
+            const currentBest = best.get(key);
+            const currentBestDecimal = currentBest ? americanToDecimal(currentBest.americanOdds) : -Infinity;
+            if (americanToDecimal(outcome.price) > currentBestDecimal) {
+              best.set(key, { americanOdds: outcome.price, book: bookmaker.title });
+            }
           }
 
           if (bookmaker.key === "draftkings") {

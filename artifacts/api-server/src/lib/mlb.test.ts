@@ -236,10 +236,15 @@ describe("getMatchupKInputs", () => {
     expect(snell?.careerBattersFaced).toBe(5400);
 
     // The lineup Snell faces is the Giants, keyed by their handedness splits.
+    // The plate-appearance counts are carried alongside the rates so the model
+    // can shrink a small split toward the league mean instead of trusting, say,
+    // 50 PA as much as 5000.
     expect(home.opponent).toEqual({
       team: "San Francisco Giants",
       kPctVsLhp: 300 / 1200,
       kPctVsRhp: 360 / 1800,
+      paVsLhp: 1200,
+      paVsRhp: 1800,
     });
 
     // Away side = Giants' starter (Webb), who faces the Dodgers lineup.
@@ -264,6 +269,8 @@ describe("getMatchupKInputs", () => {
       team: "Los Angeles Dodgers",
       kPctVsLhp: 240 / 1000,
       kPctVsRhp: 330 / 1500,
+      paVsLhp: 1000,
+      paVsRhp: 1500,
     });
   });
 

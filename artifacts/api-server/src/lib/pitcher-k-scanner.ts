@@ -2,6 +2,7 @@ import type { OddsEvent } from "./odds";
 import type { MatchupKInputs, PitcherKMatchupSide, PitcherKStats } from "./mlb";
 import { americanToDecimal, americanToImpliedProb, trimmedMeanClosingAmerican } from "./odds-math";
 import { devig, configuredDevigMethod } from "./devig";
+import { isBettableBook } from "./bettable-books";
 import { projectPitcherK, projectionLineProbabilities, kellyFraction, recommendedKellyUnits, DEFAULT_KELLY_MULTIPLIER } from "./pitcher-k-model";
 import { applyPlatt } from "./calibration";
 import { blendProbabilities } from "./model-blend";
@@ -89,10 +90,14 @@ interface SideAgg {
 }
 
 /**
- * De-vigs each book's pitcher-strikeout over/under pairs (multiplicatively, as
- * the rest of the app does), keyed by normalized player, point, and side. Yields
- * the consensus fair probability, the best available American price, and the
- * distinct-book count per side.
+ * De-vigs each book's pitcher-strikeout over/under pairs, keyed by normalized
+ * player, point, and side. Yields the consensus fair probability, the best
+ * available American price, and the distinct-book count per side.
+ *
+ * Note the asymmetry: the consensus counts every book, including Pinnacle and
+ * the other EU books, because a wider sample is a better fair price. The best
+ * price is restricted to books on the bettable allowlist, because an edge at a
+ * book you cannot open an account with is not an edge.
  */
 function buildMarketConsensus(event: OddsEvent): Map<string, SideAgg> {
   const devigMethod = configuredDevigMethod();
@@ -135,10 +140,14 @@ function buildMarketConsensus(event: OddsEvent): Map<string, SideAgg> {
           const side = ensure(key);
           side.fairSamples.push(fairProbs[i]);
           side.books.add(bookmaker.key);
-          const decimal = americanToDecimal(o.price);
-          if (side.bestAmerican == null || decimal > americanToDecimal(side.bestAmerican)) {
-            side.bestAmerican = o.price;
-            side.bestBook = bookmaker.title;
+          // Consensus counts every book; only a bettable book can set the
+          // price the model's edge is measured against.
+          if (isBettableBook(bookmaker.key)) {
+            const decimal = americanToDecimal(o.price);
+            if (side.bestAmerican == null || decimal > americanToDecimal(side.bestAmerican)) {
+              side.bestAmerican = o.price;
+              side.bestBook = bookmaker.title;
+            }
           }
           if (bookmaker.key === "draftkings") {
             side.dkAmerican = o.price;
@@ -315,6 +324,11 @@ export function computeModelEdges(
  * Closing-line helper for the CLV job: for one player/point/side, returns the
  * trimmed-mean closing American price across books and the de-vigged consensus
  * probability. Returns null when the exact line isn't quoted by 2+ books at close.
+ *
+ * Deliberately unfiltered by the bettable allowlist. CLV asks whether your price
+ * beat where the whole market settled, and the sharpest closing prices are
+ * exactly the ones you cannot bet, so excluding them would make the benchmark
+ * softer and the CLV number flattering.
  */
 export function closingConsensusForLine(
   event: OddsEvent,

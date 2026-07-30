@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { computeEdges } from "./ev";
 import type { OddsBookmaker, OddsEvent, OddsMarket, OddsOutcome } from "./odds";
 
@@ -238,5 +238,86 @@ describe("computeEdges — sharp vs public split", () => {
       expect(e.sharpProb).toBeNull();
       expect(e.publicProb).not.toBeNull();
     }
+  });
+});
+
+/**
+ * The reason bettable-books.ts exists. Widening the odds fetch to the EU region
+ * is the only way to reach Pinnacle, but it also drags in ~20 European books a
+ * US bettor can never use. Without filtering, the best of those prices tops the
+ * EV list with an edge that cannot be taken.
+ */
+describe("computeEdges — unbettable books cannot set the best price", () => {
+  function marketWith(books: { key: string; title: string; away: number; home: number }[]): OddsEvent {
+    return {
+      id: "evt-books",
+      sport_key: "baseball_mlb",
+      commence_time: "2026-07-12T18:00:00Z",
+      home_team: "Home Team",
+      away_team: "Away Team",
+      bookmakers: books.map((b) => ({
+        key: b.key,
+        title: b.title,
+        markets: [
+          { key: "h2h", outcomes: [{ name: "Away Team", price: b.away }, { name: "Home Team", price: b.home }] },
+        ],
+      })),
+    };
+  }
+
+  // Winamax offers a far better Away price than DraftKings. Both feed the
+  // consensus; only DraftKings may be quoted as the price to bet.
+  const event = marketWith([
+    { key: "draftkings", title: "DraftKings", away: 150, home: -180 },
+    { key: "fanduel", title: "FanDuel", away: 145, home: -175 },
+    { key: "winamax_de", title: "Winamax (DE)", away: 260, home: -320 },
+  ]);
+
+  const originalBettable = process.env.BETTABLE_BOOKS;
+  afterEach(() => {
+    // vitest.setup.ts sets "all" globally; restore that after each case here.
+    process.env.BETTABLE_BOOKS = "all";
+  });
+
+  it("ignores an unbettable book's price when choosing the best available", () => {
+    process.env.BETTABLE_BOOKS = "draftkings,fanduel";
+    const edges = computeEdges([event], "baseball_mlb", -1000);
+    const away = edges.find((e) => e.selection === "Away Team")!;
+    expect(away.book).toBe("DraftKings");
+    expect(away.americanOdds).toBe(150);
+  });
+
+  it("still counts the unbettable book in the fair-price consensus", () => {
+    process.env.BETTABLE_BOOKS = "draftkings,fanduel";
+    const withWinamax = computeEdges([event], "baseball_mlb", -1000).find((e) => e.selection === "Away Team")!;
+    const withoutWinamax = computeEdges(
+      [marketWith([
+        { key: "draftkings", title: "DraftKings", away: 150, home: -180 },
+        { key: "fanduel", title: "FanDuel", away: 145, home: -175 },
+      ])],
+      "baseball_mlb",
+      -1000,
+    ).find((e) => e.selection === "Away Team")!;
+
+    // Winamax's very different line moves the consensus, proving it was not
+    // simply discarded along with its price.
+    expect(withWinamax.fairOdds).not.toBe(withoutWinamax.fairOdds);
+  });
+
+  it("would otherwise report the unactionable price, which is the bug this prevents", () => {
+    process.env.BETTABLE_BOOKS = "all";
+    const away = computeEdges([event], "baseball_mlb", -1000).find((e) => e.selection === "Away Team")!;
+    expect(away.book).toBe("Winamax (DE)");
+    expect(away.americanOdds).toBe(260);
+  });
+
+  it("drops an outcome entirely when no bettable book quotes it", () => {
+    process.env.BETTABLE_BOOKS = "caesars";
+    expect(computeEdges([event], "baseball_mlb", -1000)).toEqual([]);
+  });
+
+  afterAll(() => {
+    if (originalBettable === undefined) delete process.env.BETTABLE_BOOKS;
+    else process.env.BETTABLE_BOOKS = originalBettable;
   });
 });

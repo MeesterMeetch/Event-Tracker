@@ -1,4 +1,5 @@
 import { logger } from "./logger";
+import { lineRegions, propRegions } from "./odds-regions";
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 
@@ -53,10 +54,20 @@ export interface OddsEvent {
   bookmakers: OddsBookmaker[];
 }
 
-/** Fetches current odds for every upcoming event in a sport, across US books. */
-export async function fetchOdds(sportKey: string, markets = "h2h,spreads,totals"): Promise<{ data: OddsEvent[]; requestsRemaining: number | null }> {
+/**
+ * Fetches current odds for every upcoming event in a sport.
+ *
+ * Regions come from ODDS_REGIONS_LINES (see odds-regions.ts) rather than being
+ * hardcoded, because adding EU is what brings Pinnacle into the consensus and
+ * it also doubles the credit cost of the call.
+ */
+export async function fetchOdds(
+  sportKey: string,
+  markets = "h2h,spreads,totals",
+  regions = lineRegions(),
+): Promise<{ data: OddsEvent[]; requestsRemaining: number | null }> {
   return oddsApiFetch<OddsEvent[]>(`/sports/${sportKey}/odds`, {
-    regions: "us",
+    regions,
     markets,
     oddsFormat: "american",
   });
@@ -99,9 +110,14 @@ export async function fetchEvents(sportKey: string): Promise<EventStub[]> {
  * markets. Unlike the bulk odds endpoint, this is charged per market (x
  * regions) on every call, so callers keep the market list tight.
  */
-export async function fetchEventOdds(sportKey: string, eventId: string, markets: string[]): Promise<{ data: OddsEvent; requestsRemaining: number | null }> {
+export async function fetchEventOdds(
+  sportKey: string,
+  eventId: string,
+  markets: string[],
+  regions = propRegions(),
+): Promise<{ data: OddsEvent; requestsRemaining: number | null }> {
   return oddsApiFetch<OddsEvent>(`/sports/${sportKey}/events/${encodeURIComponent(eventId)}/odds`, {
-    regions: "us",
+    regions,
     markets: markets.join(","),
     oddsFormat: "american",
   });

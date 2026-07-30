@@ -12,7 +12,8 @@
     "model:report": "tsx scripts/model-report.ts",
     "edge:decay": "tsx scripts/edge-decay.ts",
     "odds:history": "tsx scripts/odds-history-report.ts",
-    "market:survey": "tsx scripts/market-survey.ts"
+    "market:survey": "tsx scripts/market-survey.ts",
+    "pinnacle:probe": "tsx scripts/pinnacle-probe.ts"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",

@@ -24,6 +24,10 @@ function pitcher(overrides: Partial<PitcherKStats>): PitcherKStats {
     rollingBattersFaced: 0,
     rollingStarts: 0,
     rollingBfPerStart: null,
+    // No logged starts, so no per-start volume sample for the model to shape
+    // its batters-faced distribution from. It falls back to a discretized
+    // normal, which is exactly the degraded path this file exercises.
+    rollingBfPerStartSamples: [],
     rollingInningsPitched: null,
     seasonStrikeouts: null,
     seasonBattersFaced: null,
@@ -170,10 +174,10 @@ describe("computeModelEdges — abstention on empty K inputs", () => {
 
 /**
  * Guards the market-consensus half of the scanner: de-vigging each book's
- * over/under pair multiplicatively, averaging the fair probabilities across
- * books, picking the best available price, and only flagging an edge when a
- * real 2+ book consensus backs it. A regression here would quietly compute EV
- * against a vig-inflated or single-book "consensus" and flag phantom edges.
+ * over/under pair, averaging the fair probabilities across books, picking the
+ * best available price, and only flagging an edge when a real 2+ book consensus
+ * backs it. A regression here would quietly compute EV against a vig-inflated
+ * or single-book "consensus" and flag phantom edges.
  */
 describe("computeModelEdges — de-vig consensus and edge flagging", () => {
   /** A pitcher with real rolling+season+career data so the model projects. */

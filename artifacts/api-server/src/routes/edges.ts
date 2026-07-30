@@ -3,6 +3,7 @@ import { ListEdgesQueryParams, ListEdgesResponse } from "@workspace/api-zod";
 import { fetchOdds } from "../lib/odds";
 import { computeEdges } from "../lib/ev";
 import { isSupportedSport } from "../lib/sports";
+import { recordOddsSnapshotInBackground } from "../lib/odds-recorder";
 
 const router: IRouter = Router();
 
@@ -23,6 +24,10 @@ router.get("/edges", async (req, res): Promise<void> => {
 
   try {
     const { data } = await fetchOdds(sport);
+    // Persist the full payload, not just the edges. Every price we discard here
+    // is a row a future backtest cannot have. Fire-and-forget so history
+    // collection can never slow down or fail this request.
+    recordOddsSnapshotInBackground(data, sport);
     const edges = computeEdges(data, sport, minEdgePercent ?? DEFAULT_MIN_EDGE_PERCENT);
     res.json(ListEdgesResponse.parse(edges));
   } catch (err) {

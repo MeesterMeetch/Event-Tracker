@@ -3,6 +3,7 @@ import { ListPropEdgesQueryParams, ListPropEdgesResponse } from "@workspace/api-
 import { fetchEventOdds, logRequestsRemaining } from "../lib/odds";
 import { computePropEdges, getPropMarkets } from "../lib/props";
 import { isSupportedSport } from "../lib/sports";
+import { recordOddsSnapshotInBackground } from "../lib/odds-recorder";
 
 const router: IRouter = Router();
 
@@ -30,6 +31,9 @@ router.get("/prop-edges", async (req, res): Promise<void> => {
   try {
     const { data, requestsRemaining } = await fetchEventOdds(sport, eventId, markets);
     logRequestsRemaining("prop-edges", requestsRemaining);
+    // Prop prices are the most expensive data this app buys and the least
+    // reconstructable after the fact, so they are the most worth keeping.
+    recordOddsSnapshotInBackground([data], sport);
     const edges = computePropEdges(data, sport, minEdgePercent ?? DEFAULT_MIN_EDGE_PERCENT);
     res.json(ListPropEdgesResponse.parse(edges));
   } catch (err) {

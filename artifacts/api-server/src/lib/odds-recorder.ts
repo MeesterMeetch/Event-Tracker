@@ -1,8 +1,19 @@
-import { db, oddsSnapshotsTable } from "@workspace/db";
 import { lt, sql } from "drizzle-orm";
 import type { OddsEvent } from "./odds";
 import { snapshotRowsFromEvents } from "./odds-history";
 import { logger } from "./logger";
+
+/**
+ * The db package throws at import time when DATABASE_URL is unset, so this
+ * module must not import it eagerly. The edges and prop-edges routes carry no
+ * other database dependency, and importing one here would force every test that
+ * merely loads those routes to provision a database. Loading it lazily keeps
+ * that cost where it belongs: only on the paths that actually write.
+ */
+async function loadDb() {
+  const mod = await import("@workspace/db");
+  return { db: mod.db, oddsSnapshotsTable: mod.oddsSnapshotsTable };
+}
 
 /**
  * Persists odds snapshots. Deliberately fire-and-forget.
@@ -35,6 +46,7 @@ export async function recordOddsSnapshot(events: OddsEvent[], sport: string): Pr
     const rows = snapshotRowsFromEvents(events, sport);
     if (rows.length === 0) return 0;
 
+    const { db, oddsSnapshotsTable } = await loadDb();
     for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
       await db.insert(oddsSnapshotsTable).values(rows.slice(i, i + CHUNK_SIZE));
     }
@@ -66,6 +78,7 @@ export function recordOddsSnapshotInBackground(events: OddsEvent[], sport: strin
 export async function pruneOddsSnapshots(retentionDays = 90): Promise<number> {
   const cutoff = new Date(Date.now() - retentionDays * 24 * 3_600_000);
   try {
+    const { db, oddsSnapshotsTable } = await loadDb();
     const result = await db
       .delete(oddsSnapshotsTable)
       .where(lt(oddsSnapshotsTable.capturedAt, cutoff))
@@ -92,6 +105,7 @@ export async function sharpCoverageStats(sinceDays = 7): Promise<{
   byBook: { book: string; rows: number; isSharp: boolean }[];
 }> {
   const since = new Date(Date.now() - sinceDays * 24 * 3_600_000);
+  const { db, oddsSnapshotsTable } = await loadDb();
   const rows = await db
     .select({
       book: oddsSnapshotsTable.book,

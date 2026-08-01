@@ -1,0 +1,1720 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: bets
+    description: Bet logging, editing, and settlement
+  - name: edges
+    description: Live positive-EV opportunities
+  - name: events
+    description: Upcoming games for a sport
+  - name: rankings
+    description: League standings and stat leaders
+  - name: dashboard
+    description: Aggregate performance stats
+  - name: sports
+    description: Supported sports list
+  - name: analysis
+    description: AI game analysis and probable starters
+  - name: model
+    description: Fundamental pitcher-strikeout projection model
+  - name: paper-trades
+    description: Model paper trades and closing-line-value validation
+  - name: mlb
+    description: MLB schedule and game data
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /sports:
+    get:
+      operationId: listSports
+      tags: [sports]
+      summary: List supported sports
+      responses:
+        "200":
+          description: Supported sports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Sport"
+  /edges:
+    get:
+      operationId: listEdges
+      tags: [edges]
+      summary: Scan a sport for live positive-EV opportunities
+      description: >
+        Fetches current odds for the given sport across books, devigs each
+        market to estimate a fair price, and returns outcomes where the best
+        available price beats the fair price. Costs live API credits, so a
+        sport must be specified explicitly.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: minEdgePercent
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Positive-EV opportunities found for the sport
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EdgeOpportunity"
+        "400":
+          description: Invalid or unsupported sport
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream odds provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /events:
+    get:
+      operationId: listEvents
+      tags: [events]
+      summary: List upcoming games for a sport
+      description: >
+        Lists upcoming games so a single game can be drilled into for player
+        props. Backed by the free Odds API events endpoint — costs no credits.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Upcoming games, soonest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GameEvent"
+        "400":
+          description: Invalid or unsupported sport
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream odds provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /prop-edges:
+    get:
+      operationId: listPropEdges
+      tags: [edges]
+      summary: Scan one game's player props for positive-EV opportunities
+      description: >
+        Fetches player prop odds for a single event across US books, devigs
+        each book's over/under pair per player and line, and returns props
+        where the best available price beats the consensus fair price. Player
+        props are only available per event and each market scanned costs API
+        credits, which is why props are scanned one game at a time.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: eventId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: minEdgePercent
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Positive-EV player props found for the game
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EdgeOpportunity"
+        "400":
+          description: Invalid sport, or player props not supported for it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream odds provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rankings-sports:
+    get:
+      operationId: listRankingsSports
+      tags: [rankings]
+      summary: List sports with standings available
+      description: >
+        Sports that have a standings source configured. Independent of the
+        odds in-season list, so leagues keep their standings during the
+        off-season.
+      responses:
+        "200":
+          description: Rankings-capable sports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RankingsSport"
+  /standings:
+    get:
+      operationId: listStandings
+      tags: [rankings]
+      summary: League standings for a sport
+      description: >
+        Current standings grouped by league/conference/division, sourced from
+        free public feeds and cached server-side for a few hours.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Standings groups in feed order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StandingsGroup"
+        "400":
+          description: Sport has no standings source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream standings feed error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /leaders:
+    get:
+      operationId: listLeaders
+      tags: [rankings]
+      summary: Stat leaders for a sport
+      description: >
+        Top players per stat category. Returns an empty array for sports that
+        have standings but no leaders feed. Cached server-side.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Leader categories, empty when no leaders feed exists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LeaderCategory"
+        "400":
+          description: Sport has no standings source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream leaders feed error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bets:
+    get:
+      operationId: listBets
+      tags: [bets]
+      summary: List logged bets
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/BetStatus"
+      responses:
+        "200":
+          description: Bets, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bet"
+    post:
+      operationId: createBet
+      tags: [bets]
+      summary: Log a new bet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BetInput"
+      responses:
+        "201":
+          description: Bet logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bet"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: >-
+            Duplicate open bet — a pending bet on the same game, market,
+            selection, point, and book is already in the log. Logging it
+            again would double-count the stake in profit and ROI. Once the
+            earlier bet settles, the same market can be logged again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bets/{id}:
+    get:
+      operationId: getBet
+      tags: [bets]
+      summary: Get a single bet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bet found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bet"
+        "404":
+          description: Bet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateBet
+      tags: [bets]
+      summary: Manually edit or settle a bet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BetUpdate"
+      responses:
+        "200":
+          description: Bet updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bet"
+        "404":
+          description: Bet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteBet
+      tags: [bets]
+      summary: Delete a logged bet
+      description: >-
+        Soft-deletes the bet: it disappears from the log and dashboard stats
+        immediately, but the row (including any captured closing-line/CLV data
+        and settled P&L) is kept for a short grace period so the delete can be
+        undone via the restore endpoint. Soft-deleted rows are purged after
+        the grace period.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted (restorable for a short grace period)
+        "404":
+          description: Bet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /bets/{id}/restore:
+    post:
+      operationId: restoreBet
+      tags: [bets]
+      summary: Undo a recent bet delete
+      description: >-
+        Restores a soft-deleted bet exactly as it was — logged odds, units,
+        status, P&L, and any captured closing-line/CLV data. Returns 404 once
+        the bet is no longer restorable (grace period elapsed or the id never
+        existed).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The restored bet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bet"
+        "404":
+          description: No restorable bet with this id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Overall and per-sport performance stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /ledger-audit:
+    get:
+      operationId: getLedgerAudit
+      tags: [dashboard]
+      summary: Counts of corrupt ledger rows that would skew profit/ROI
+      description: >
+        Runs the same integrity checks as the audit script (impossible American
+        odds, zero/negative units, settled bets with NULL pnl, pnl signs that
+        contradict won/lost status) and returns per-category counts. All zeros
+        means the ledger is clean.
+      responses:
+        "200":
+          description: Ledger audit counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LedgerAuditSummary"
+  /analysis:
+    post:
+      operationId: generateGameAnalysis
+      tags: [analysis]
+      summary: Generate an AI analysis for a game
+      description: >
+        Produces an AI-written scouting and betting analysis for a single game.
+        For MLB the analysis includes probable starting pitchers and their recent
+        form; for other sports it reasons from the matchup and market signals.
+        Results are cached briefly per game to limit AI usage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GameAnalysisRequest"
+      responses:
+        "200":
+          description: Generated analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GameAnalysisResponse"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: AI provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /model-edges:
+    get:
+      operationId: listModelEdges
+      tags: [model]
+      summary: Project pitcher strikeouts for one game and compare to the market
+      description: >
+        Runs the fundamental strikeout-projection model on both probable
+        starters in an MLB game (free MLB Stats API) and compares the model's
+        over/under probabilities against the de-vigged pitcher-strikeout market
+        for that event. Fetching the market costs per-event API credits, so a
+        single event is scanned at a time. MLB only.
+      parameters:
+        - name: sport
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: eventId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: minEdgePercent
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: kellyMultiplier
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Per-pitcher projections with model-vs-market lines
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ModelPitcherProjection"
+        "400":
+          description: Invalid or unsupported sport
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Upstream odds provider error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /paper-trades:
+    get:
+      operationId: listPaperTrades
+      tags: [paper-trades]
+      summary: List model paper trades
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/PaperTradeStatus"
+      responses:
+        "200":
+          description: Paper trades, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaperTrade"
+    post:
+      operationId: createPaperTrade
+      tags: [paper-trades]
+      summary: Log a model flag as a paper trade
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaperTradeInput"
+      responses:
+        "201":
+          description: Paper trade logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperTrade"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: >-
+            Duplicate pick — a paper trade for the same game, pitcher,
+            selection, point, and book is already logged. Each pick counts
+            once in the scorecard; duplicates would inflate its stats.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /paper-trades/summary:
+    get:
+      operationId: getPaperTradeSummary
+      tags: [paper-trades]
+      summary: Model validation summary (CLV and beat-the-close rate)
+      responses:
+        "200":
+          description: Aggregate validation stats over paper trades
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperTradeSummary"
+  /paper-trades/{id}:
+    patch:
+      operationId: updatePaperTrade
+      tags: [paper-trades]
+      summary: Correct a paper trade's logged price
+      description: >-
+        Fixes a mistyped American odds price on an existing paper trade without
+        deleting and re-logging it, preserving the original edge snapshot and
+        any captured closing-line data. If a closing line has already been
+        captured, CLV% and beat-close are recomputed from the corrected open
+        price; the captured closingOdds/closingProb are never modified.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaperTradeUpdate"
+      responses:
+        "200":
+          description: The corrected paper trade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperTrade"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Paper trade not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deletePaperTrade
+      tags: [paper-trades]
+      summary: Delete a paper trade
+      description: >-
+        Soft-deletes the trade: it disappears from lists and summary stats
+        immediately, but the row (including any captured closing-line data)
+        is kept for a short grace period so the delete can be undone via the
+        restore endpoint. Soft-deleted rows are purged after the grace period,
+        or immediately if the same pick is logged again.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted (restorable for a short grace period)
+        "404":
+          description: Paper trade not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /paper-trades/{id}/restore:
+    post:
+      operationId: restorePaperTrade
+      tags: [paper-trades]
+      summary: Undo a recent paper-trade delete
+      description: >-
+        Restores a soft-deleted paper trade exactly as it was — logged odds,
+        edge snapshot, status, and any captured closing-line data. Returns 404
+        once the trade is no longer restorable (grace period elapsed, the pick
+        was re-logged, or the id never existed).
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: The restored paper trade
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaperTrade"
+        "404":
+          description: No restorable paper trade with this id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /mlb/games:
+    get:
+      operationId: listMlbGames
+      tags: [mlb]
+      summary: List MLB games for a date
+      description: >
+        Returns all MLB games scheduled for the given Eastern-calendar date from
+        the free MLB Stats API, hydrated with probable starters and linescore so
+        scores are available for live and final games. Sorted by start time.
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Calendar date in YYYY-MM-DD format (Eastern time zone)
+      responses:
+        "200":
+          description: Games for the date, sorted by start time ascending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GameSummary"
+        "400":
+          description: Missing or malformed date parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: MLB Stats API error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    LedgerAuditSummary:
+      type: object
+      required:
+        - impossibleOddsBets
+        - zeroOrNegativeUnitBets
+        - settledNullPnlBets
+        - contradictoryPnlBets
+        - pushNonzeroPnlBets
+        - impossibleOddsPaperTrades
+        - total
+      properties:
+        impossibleOddsBets:
+          description: Bets with American odds strictly inside (-100, 100).
+          type: integer
+        zeroOrNegativeUnitBets:
+          description: Bets staked with zero or negative units.
+          type: integer
+        settledNullPnlBets:
+          description: Settled (won/lost/push) bets whose pnl is NULL.
+          type: integer
+        contradictoryPnlBets:
+          description: Bets whose pnl sign contradicts their won/lost status.
+          type: integer
+        pushNonzeroPnlBets:
+          description: Push bets carrying a nonzero pnl (a push must have pnl = 0).
+          type: integer
+        impossibleOddsPaperTrades:
+          description: Pitcher-K paper trades with American odds strictly inside (-100, 100).
+          type: integer
+        total:
+          description: Sum of all categories; 0 means the ledger is clean.
+          type: integer
+    ModelKLine:
+      type: object
+      required:
+        - point
+        - selection
+        - americanOdds
+        - book
+        - marketProb
+        - modelProb
+        - edgePercent
+        - fullKellyFraction
+        - recommendedUnits
+        - isFlagged
+      properties:
+        point:
+          type: number
+        selection:
+          type: string
+        americanOdds:
+          type: number
+        book:
+          type: string
+        marketProb:
+          description: De-vigged market consensus for this side; null when fewer than 2 books quote it.
+          type: ["number", "null"]
+        modelProb:
+          type: number
+        edgePercent:
+          type: ["number", "null"]
+        fullKellyFraction:
+          type: number
+        recommendedUnits:
+          type: number
+        isFlagged:
+          type: boolean
+        dkOdds:
+          type: number
+          nullable: true
+          description: DraftKings price for this line at scan time; null if DK does not quote it.
+    ModelPitcherProjection:
+      type: object
+      required:
+        - gameId
+        - sport
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - pitcher
+        - team
+        - opponent
+        - throws
+        - projectedBattersFaced
+        - expectedStrikeouts
+        - ratePerBF
+        - opponentFactor
+        - sampleStarts
+        - sampleBattersFaced
+        - opponentDataAvailable
+        - insufficientData
+        - lines
+      properties:
+        gameId:
+          type: string
+        sport:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        pitcher:
+          type: string
+        team:
+          type: string
+        opponent:
+          type: string
+        throws:
+          type: ["string", "null"]
+        projectedBattersFaced:
+          type: number
+        expectedStrikeouts:
+          type: number
+        ratePerBF:
+          type: number
+        opponentFactor:
+          type: number
+        sampleStarts:
+          type: integer
+        sampleBattersFaced:
+          type: integer
+        kPer9:
+          type: number
+          nullable: true
+          description: Raw rolling K/9 (strikeouts per 9 innings) from the sample window. Null when innings-pitched data is unavailable.
+        opponentDataAvailable:
+          type: boolean
+        insufficientData:
+          description: >
+            True when the pitcher's strikeout-rate inputs were missing or
+            degraded (no rolling starts and no season/career sample). The model
+            abstains from projecting rather than emit a confident number off
+            zeroed inputs; numeric fields are placeholders and lines is empty.
+          type: boolean
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModelKLine"
+    PaperTradeStatus:
+      type: string
+      enum: [open, closed, expired]
+    PaperTrade:
+      type: object
+      required:
+        - id
+        - sport
+        - gameId
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - pitcher
+        - pitcherId
+        - team
+        - opponent
+        - selection
+        - point
+        - book
+        - americanOdds
+        - modelProb
+        - marketProb
+        - edgePercent
+        - expectedStrikeouts
+        - projectedBattersFaced
+        - recommendedUnits
+        - kellyMultiplier
+        - closingOdds
+        - closingProb
+        - clvPercent
+        - beatClose
+        - status
+        - createdAt
+      properties:
+        id:
+          type: integer
+        sport:
+          type: string
+        gameId:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        pitcher:
+          type: string
+        pitcherId:
+          type: ["integer", "null"]
+        team:
+          type: string
+        opponent:
+          type: string
+        selection:
+          type: string
+        point:
+          type: number
+        book:
+          type: string
+        americanOdds:
+          type: number
+        modelProb:
+          type: number
+        marketProb:
+          type: ["number", "null"]
+        edgePercent:
+          type: ["number", "null"]
+        isFlagged:
+          description: >-
+            The model's actual flag decision recorded at log time. Null for
+            legacy rows logged before the flag was persisted.
+          type: ["boolean", "null"]
+        expectedStrikeouts:
+          type: number
+        projectedBattersFaced:
+          type: number
+        recommendedUnits:
+          type: number
+        kellyMultiplier:
+          type: number
+        closingOdds:
+          type: ["number", "null"]
+        closingProb:
+          type: ["number", "null"]
+        clvPercent:
+          type: ["number", "null"]
+        beatClose:
+          type: ["boolean", "null"]
+        actualStrikeouts:
+          type: integer
+          nullable: true
+          description: Pitcher's actual strikeout total once the game is final.
+        outcome:
+          type: string
+          nullable: true
+          enum: [won, lost, push, void]
+          description: Settled result of the selection against the actual total.
+        status:
+          $ref: "#/components/schemas/PaperTradeStatus"
+        createdAt:
+          type: string
+          format: date-time
+    PaperTradeInput:
+      type: object
+      required:
+        - sport
+        - gameId
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - pitcher
+        - team
+        - opponent
+        - selection
+        - point
+        - book
+        - americanOdds
+        - modelProb
+        - expectedStrikeouts
+        - projectedBattersFaced
+        - recommendedUnits
+        - kellyMultiplier
+      properties:
+        sport:
+          type: string
+        gameId:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        pitcher:
+          type: string
+        pitcherId:
+          type: ["integer", "null"]
+        team:
+          type: string
+        opponent:
+          type: string
+        selection:
+          type: string
+        point:
+          type: number
+        book:
+          type: string
+        americanOdds:
+          description: >-
+            Logged American odds price. Valid prices are at most -100 or at
+            least +100; the open interval (-100, 100) does not exist on the
+            American odds scale.
+          oneOf:
+            - type: number
+              maximum: -100
+            - type: number
+              minimum: 100
+        modelProb:
+          type: number
+        marketProb:
+          type: ["number", "null"]
+        edgePercent:
+          type: ["number", "null"]
+        isFlagged:
+          description: The model's actual flag decision for this line at scan time.
+          type: ["boolean", "null"]
+        expectedStrikeouts:
+          type: number
+        projectedBattersFaced:
+          type: number
+        recommendedUnits:
+          description: >-
+            Kelly-derived stake suggestion in units. The model clamps to
+            [0, max], so a negative value can only be corrupt input.
+          type: number
+          minimum: 0
+        kellyMultiplier:
+          type: number
+    PaperTradeUpdate:
+      type: object
+      required: [americanOdds]
+      properties:
+        americanOdds:
+          description: >-
+            Corrected American odds price. Valid prices are at most -100 or at
+            least +100; the open interval (-100, 100) does not exist on the
+            American odds scale.
+          oneOf:
+            - type: number
+              maximum: -100
+            - type: number
+              minimum: 100
+    PaperTradeSummary:
+      type: object
+      required:
+        - total
+        - open
+        - closed
+        - expired
+        - gradedCount
+        - beatCloseCount
+        - beatCloseRate
+        - avgClvPercent
+        - avgEdgePercent
+      properties:
+        total:
+          type: integer
+        open:
+          type: integer
+        closed:
+          type: integer
+        expired:
+          type: integer
+        gradedCount:
+          description: Closed trades that have a captured closing line (CLV computed).
+          type: integer
+        beatCloseCount:
+          type: integer
+        beatCloseRate:
+          type: ["number", "null"]
+        avgClvPercent:
+          type: ["number", "null"]
+        avgEdgePercent:
+          type: ["number", "null"]
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    Sport:
+      type: object
+      required: [key, title, group, supportsProps]
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        group:
+          type: string
+        supportsProps:
+          description: Whether per-game player-prop scanning is available for this sport.
+          type: boolean
+    GameEvent:
+      type: object
+      required: [id, sport, commenceTime, homeTeam, awayTeam]
+      properties:
+        id:
+          type: string
+        sport:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+    RankingsSport:
+      type: object
+      required: [key, title, group]
+      properties:
+        key:
+          type: string
+        title:
+          type: string
+        group:
+          type: string
+    TeamStanding:
+      type: object
+      required: [rank, team, record, wins, losses, ties, winPct, gamesBack, points, streak]
+      properties:
+        rank:
+          type: integer
+        team:
+          type: string
+        record:
+          description: Compact W-L(-T/OTL) record, e.g. "45-38" or "10-5-1".
+          type: string
+        wins:
+          type: number
+        losses:
+          type: number
+        ties:
+          description: Ties, draws, or OT losses depending on the league; null when the league has none.
+          type: ["number", "null"]
+        winPct:
+          type: ["string", "null"]
+        gamesBack:
+          type: ["string", "null"]
+        points:
+          description: Table points where the league uses them (soccer, NHL).
+          type: ["number", "null"]
+        streak:
+          type: ["string", "null"]
+    StandingsGroup:
+      type: object
+      required: [name, teams]
+      properties:
+        name:
+          type: string
+        teams:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamStanding"
+    LeaderEntry:
+      type: object
+      required: [rank, player, team, value]
+      properties:
+        rank:
+          type: integer
+        player:
+          type: string
+        team:
+          type: ["string", "null"]
+        value:
+          type: string
+    LeaderCategory:
+      type: object
+      required: [key, label, leaders]
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        leaders:
+          type: array
+          items:
+            $ref: "#/components/schemas/LeaderEntry"
+    BetStatus:
+      type: string
+      enum: [pending, won, lost, push]
+    EdgeOpportunity:
+      type: object
+      required:
+        - gameId
+        - sport
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - market
+        - selection
+        - point
+        - player
+        - americanOdds
+        - book
+        - fairOdds
+        - evPercent
+        - bookCount
+        - confidenceTier
+        - confidenceScore
+        - confidenceReasons
+      properties:
+        gameId:
+          type: string
+        sport:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        market:
+          type: string
+        selection:
+          type: string
+        point:
+          type: ["number", "null"]
+        player:
+          description: Player name for player-prop edges; null for team markets.
+          type: ["string", "null"]
+        americanOdds:
+          type: number
+        book:
+          type: string
+        dkOdds:
+          type: number
+          nullable: true
+          description: DraftKings price for this outcome at scan time; null if DK does not quote it.
+        fairOdds:
+          type: number
+        evPercent:
+          type: number
+        sharpProb:
+          type: number
+          nullable: true
+          description: >-
+            Devigged consensus probability (percent) for this selection across
+            sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no
+            sharp book quotes it. A proxy for where sharp money leans — the
+            odds feed does not publish real bet/handle splits.
+        publicProb:
+          type: number
+          nullable: true
+          description: >-
+            Devigged consensus probability (percent) for this selection across
+            public recreational books; null if none quote it.
+        bookCount:
+          type: number
+          description: Distinct books quoting this outcome. Depth is the first ingredient of trust.
+        dispersionPercent:
+          type: number
+          nullable: true
+          description: >-
+            Spread (sample standard deviation) of devigged fair probabilities
+            across books, in percentage points. Low means the market agrees;
+            high means somebody is wrong.
+        confidenceTier:
+          type: string
+          enum: [solid, playable, fragile, suspect]
+          description: >-
+            How much to trust this edge, as distinct from how large it is. The
+            largest EV numbers are usually the least real: a big edge on a deep
+            market is more often a stale price than an opportunity. "suspect"
+            means the sharp books contradict the edge or its size is not
+            credible for a market of that depth.
+        confidenceScore:
+          type: number
+          description: Ordering hint behind the tier, 0-100. Not a probability.
+        confidenceReasons:
+          type: array
+          items:
+            type: string
+          description: Short human-readable reasons behind the tier.
+    Bet:
+      type: object
+      required:
+        - id
+        - sport
+        - gameId
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - market
+        - selection
+        - point
+        - americanOdds
+        - units
+        - fairOdds
+        - evPercent
+        - book
+        - closingOdds
+        - clvPercent
+        - status
+        - pnl
+        - notes
+        - createdAt
+      properties:
+        id:
+          type: integer
+        sport:
+          type: string
+        gameId:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        market:
+          type: string
+        selection:
+          type: string
+        point:
+          type: ["number", "null"]
+        americanOdds:
+          type: number
+        units:
+          type: number
+        fairOdds:
+          type: ["number", "null"]
+        evPercent:
+          type: ["number", "null"]
+        book:
+          type: ["string", "null"]
+        closingOdds:
+          type: ["number", "null"]
+        clvPercent:
+          type: ["number", "null"]
+        status:
+          $ref: "#/components/schemas/BetStatus"
+        pnl:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+    BetInput:
+      type: object
+      required:
+        - sport
+        - gameId
+        - commenceTime
+        - homeTeam
+        - awayTeam
+        - market
+        - selection
+        - point
+        - americanOdds
+        - units
+      properties:
+        sport:
+          type: string
+        gameId:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        market:
+          type: string
+        selection:
+          type: string
+        point:
+          type: ["number", "null"]
+        americanOdds:
+          description: >-
+            American odds price. Valid prices are at most -100 or at least
+            +100; the open interval (-100, 100) does not exist on the
+            American odds scale.
+          oneOf:
+            - type: number
+              maximum: -100
+            - type: number
+              minimum: 100
+        units:
+          description: >-
+            Stake in units. Must be at least 0.01u — the same minimum the web
+            and mobile bet forms enforce via the shared client rules.
+          type: number
+          minimum: 0.01
+        fairOdds:
+          type: ["number", "null"]
+        evPercent:
+          type: ["number", "null"]
+        book:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+    BetUpdate:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/BetStatus"
+        americanOdds:
+          description: >-
+            American odds price. Valid prices are at most -100 or at least
+            +100; the open interval (-100, 100) does not exist on the
+            American odds scale.
+          oneOf:
+            - type: number
+              maximum: -100
+            - type: number
+              minimum: 100
+        units:
+          description: >-
+            Stake in units. Must be at least 0.01u — the same minimum the web
+            and mobile bet forms enforce via the shared client rules.
+          type: number
+          minimum: 0.01
+        pnl:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+    SportBreakdown:
+      type: object
+      required: [sport, bets, won, lost, push, pending, pendingUnits, settledUnits, roiPercent, pnl]
+      properties:
+        sport:
+          type: string
+        bets:
+          type: integer
+        won:
+          type: integer
+        lost:
+          type: integer
+        push:
+          type: integer
+        pending:
+          type: integer
+        pendingUnits:
+          description: >-
+            Open exposure for this sport — the sum of units on pending
+            (unsettled) bets, excluding soft-deleted ones. Mirrors the
+            top-level pendingUnits so clients can show where open stake is
+            concentrated, not just how many bets are pending.
+          type: number
+        settledUnits:
+          description: >-
+            Realized settled stake for this sport — the sum of units on bets
+            that are settled AND have a real pnl. This is the sport-level ROI
+            denominator, mirroring the top-level totalUnits semantics; clients
+            must key P&L/ROI muting off this, not the W-L-P count, so a bet
+            settled with a still-null pnl can't produce an unmuted green zero.
+          type: number
+        roiPercent:
+          type: number
+        pnl:
+          type: number
+    DashboardSummary:
+      type: object
+      required:
+        - totalBets
+        - won
+        - lost
+        - push
+        - pending
+        - totalUnits
+        - pendingUnits
+        - totalPnl
+        - roiPercent
+        - avgClvPercent
+        - clvSampleSize
+        - bySport
+      properties:
+        totalBets:
+          type: integer
+        won:
+          type: integer
+        lost:
+          type: integer
+        push:
+          type: integer
+        pending:
+          type: integer
+        totalUnits:
+          type: number
+        pendingUnits:
+          type: number
+        totalPnl:
+          type: number
+        roiPercent:
+          type: number
+        avgClvPercent:
+          type: ["number", "null"]
+        clvSampleSize:
+          type: integer
+        bySport:
+          type: array
+          items:
+            $ref: "#/components/schemas/SportBreakdown"
+    PitcherStart:
+      type: object
+      required: [date, opponent, inningsPitched, earnedRuns, strikeOuts, walks, hits, decision]
+      properties:
+        date:
+          type: string
+        opponent:
+          type: string
+        inningsPitched:
+          type: string
+        earnedRuns:
+          type: integer
+        strikeOuts:
+          type: integer
+        walks:
+          type: integer
+        hits:
+          type: integer
+        decision:
+          type: string
+    ProbablePitcher:
+      type: object
+      required:
+        - id
+        - name
+        - team
+        - seasonEra
+        - seasonRecord
+        - seasonWhip
+        - seasonStrikeouts
+        - inningsPitched
+        - gamesStarted
+        - recentStarts
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        team:
+          type: string
+        seasonEra:
+          type: ["string", "null"]
+        seasonRecord:
+          type: ["string", "null"]
+        seasonWhip:
+          type: ["string", "null"]
+        seasonStrikeouts:
+          type: ["integer", "null"]
+        inningsPitched:
+          type: ["string", "null"]
+        gamesStarted:
+          type: ["integer", "null"]
+        recentStarts:
+          type: array
+          items:
+            $ref: "#/components/schemas/PitcherStart"
+    GameAnalysisRequest:
+      type: object
+      required: [sport, gameId, homeTeam, awayTeam, commenceTime, edges]
+      properties:
+        sport:
+          type: string
+        gameId:
+          type: string
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        commenceTime:
+          type: string
+          format: date-time
+        edges:
+          type: array
+          items:
+            $ref: "#/components/schemas/EdgeOpportunity"
+    GameAnalysisResponse:
+      type: object
+      required:
+        - gameId
+        - generatedAt
+        - model
+        - summary
+        - matchupAnalysis
+        - bettingAngle
+        - keyFactors
+        - homePitcher
+        - awayPitcher
+      properties:
+        gameId:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        model:
+          type: string
+        summary:
+          type: string
+        matchupAnalysis:
+          type: string
+        bettingAngle:
+          type: string
+        keyFactors:
+          type: array
+          items:
+            type: string
+        homePitcher:
+          anyOf:
+            - $ref: "#/components/schemas/ProbablePitcher"
+            - type: "null"
+        awayPitcher:
+          anyOf:
+            - $ref: "#/components/schemas/ProbablePitcher"
+            - type: "null"
+
+    GameSummary:
+      type: object
+      required:
+        - gamePk
+        - gameDate
+        - status
+        - homeTeam
+        - awayTeam
+        - homeProbablePitcher
+        - awayProbablePitcher
+        - homeScore
+        - awayScore
+      properties:
+        gamePk:
+          type: integer
+        gameDate:
+          type: string
+          format: date-time
+          description: ISO 8601 game start time (UTC)
+        status:
+          type: object
+          required: [abstractGameState, detailedState]
+          properties:
+            abstractGameState:
+              type: string
+            detailedState:
+              type: string
+        homeTeam:
+          type: string
+        awayTeam:
+          type: string
+        homeProbablePitcher:
+          anyOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+            - type: 'null'
+        awayProbablePitcher:
+          anyOf:
+            - type: object
+              required: [id, name]
+              properties:
+                id:
+                  type: integer
+                name:
+                  type: string
+            - type: 'null'
+        homeScore:
+          type: [integer, 'null']
+          description: Current or final score; null when game has not started
+        awayScore:
+          type: [integer, 'null']
+          description: Current or final score; null when game has not started

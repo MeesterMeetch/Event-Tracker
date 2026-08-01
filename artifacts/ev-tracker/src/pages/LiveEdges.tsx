@@ -284,6 +284,35 @@ function PitcherCard({ label, pitcher }: { label: string; pitcher: ProbablePitch
   );
 }
 
+/**
+ * The analysis endpoint accepts at most 50 edges per request. Since the tables
+ * now fetch the entire slate rather than only what clears a threshold, a
+ * prop-heavy game can easily carry several hundred, so the list has to be
+ * trimmed before it is sent.
+ *
+ * Trimming is not arbitrary. The edge the user actually clicked always goes
+ * first, since that is the one they want explained. The rest fill by descending
+ * EV, which keeps the model's context on the opportunities worth discussing
+ * rather than on a random slice of the negative-EV tail.
+ */
+const MAX_ANALYSIS_EDGES = 50;
+
+function selectAnalysisEdges(clicked: EdgeOpportunity, all: EdgeOpportunity[]): EdgeOpportunity[] {
+  const sameGame = all.filter((e) => e.gameId === clicked.gameId);
+  const isClicked = (e: EdgeOpportunity) =>
+    e.market === clicked.market &&
+    e.selection === clicked.selection &&
+    e.player === clicked.player &&
+    e.point === clicked.point &&
+    e.book === clicked.book;
+
+  const rest = sameGame
+    .filter((e) => !isClicked(e))
+    .sort((a, b) => b.evPercent - a.evPercent);
+
+  return [clicked, ...rest].slice(0, MAX_ANALYSIS_EDGES);
+}
+
 function AnalyzeGameDialog({ edge, gameEdges, children }: { edge: EdgeOpportunity; gameEdges: EdgeOpportunity[]; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const analyze = useGenerateGameAnalysis();
@@ -297,7 +326,7 @@ function AnalyzeGameDialog({ edge, gameEdges, children }: { edge: EdgeOpportunit
         homeTeam: edge.homeTeam,
         awayTeam: edge.awayTeam,
         commenceTime: edge.commenceTime,
-        edges: gameEdges,
+        edges: selectAnalysisEdges(edge, gameEdges),
       },
     });
   };

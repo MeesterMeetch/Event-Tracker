@@ -1,0 +1,66 @@
+{
+  "leaders": {
+    "categories": [
+      {
+        "name": "passingYards",
+        "displayName": "Passing Yards",
+        "leaders": [
+          {
+            "displayValue": "4707",
+            "athlete": { "displayName": "Matthew Stafford" },
+            "team": { "displayName": "Los Angeles Rams", "abbreviation": "LAR" }
+          },
+          {
+            "displayValue": "4500",
+            "athlete": { "displayName": "Joe Burrow" },
+            "team": { "displayName": "Cincinnati Bengals", "abbreviation": "CIN" }
+          }
+        ]
+      },
+      {
+        "name": "totalTackles",
+        "displayName": "Total Tackles",
+        "leaders": [
+          {
+            "displayValue": "145",
+            "athlete": { "displayName": "Zaire Franklin" },
+            "team": { "displayName": "Indianapolis Colts", "abbreviation": "IND" }
+          }
+        ]
+      },
+      {
+        "name": "rushingYards",
+        "displayName": "Rushing Yards",
+        "leaders": [
+          {
+            "displayValue": "1921",
+            "athlete": { "displayName": "Saquon Barkley" },
+            "team": { "displayName": "Philadelphia Eagles", "abbreviation": "PHI" }
+          }
+        ]
+      },
+      {
+        "name": "receivingYards",
+        "displayName": "Receiving Yards",
+        "leaders": [
+          {
+            "displayValue": "1533",
+            "athlete": { "displayName": "Ja'Marr Chase" },
+            "team": { "displayName": "Cincinnati Bengals", "abbreviation": "CIN" }
+          }
+        ]
+      },
+      {
+        "name": "sacks",
+        "displayName": "Sacks",
+        "leaders": [
+          {
+            "displayValue": "17.5",
+            "athlete": { "displayName": "Trey Hendrickson" },
+            "team": { "displayName": "Cincinnati Bengals", "abbreviation": "CIN" }
+          }
+        ]
+      }
+    ]
+  }
+}

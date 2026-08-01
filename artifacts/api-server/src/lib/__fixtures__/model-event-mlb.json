@@ -1,0 +1,39 @@
+{
+  "id": "evt-mlb-k1",
+  "sport_key": "baseball_mlb",
+  "commence_time": "2025-07-02T02:10:00Z",
+  "home_team": "Los Angeles Dodgers",
+  "away_team": "San Francisco Giants",
+  "bookmakers": [
+    {
+      "key": "draftkings",
+      "title": "DraftKings",
+      "markets": [
+        {
+          "key": "pitcher_strikeouts",
+          "outcomes": [
+            { "name": "Over", "description": "Blake Snell", "point": 5.5, "price": -110 },
+            { "name": "Under", "description": "Blake Snell", "point": 5.5, "price": -110 },
+            { "name": "Over", "description": "Logan Webb", "point": 4.5, "price": -115 },
+            { "name": "Under", "description": "Logan Webb", "point": 4.5, "price": -105 }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "fanduel",
+      "title": "FanDuel",
+      "markets": [
+        {
+          "key": "pitcher_strikeouts",
+          "outcomes": [
+            { "name": "Over", "description": "Blake Snell", "point": 5.5, "price": 120 },
+            { "name": "Under", "description": "Blake Snell", "point": 5.5, "price": -140 },
+            { "name": "Over", "description": "Logan Webb", "point": 4.5, "price": -120 },
+            { "name": "Under", "description": "Logan Webb", "point": 4.5, "price": 100 }
+          ]
+        }
+      ]
+    }
+  ]
+}

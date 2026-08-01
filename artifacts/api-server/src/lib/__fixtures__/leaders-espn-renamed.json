@@ -1,0 +1,28 @@
+{
+  "leaders": {
+    "categories": [
+      {
+        "name": "passingYardsPerGame",
+        "displayName": "Passing Yards Per Game",
+        "leaders": [
+          {
+            "displayValue": "294.2",
+            "athlete": { "displayName": "Matthew Stafford" },
+            "team": { "displayName": "Los Angeles Rams", "abbreviation": "LAR" }
+          }
+        ]
+      },
+      {
+        "name": "rushingYardsPerGame",
+        "displayName": "Rushing Yards Per Game",
+        "leaders": [
+          {
+            "displayValue": "120.1",
+            "athlete": { "displayName": "Saquon Barkley" },
+            "team": { "displayName": "Philadelphia Eagles", "abbreviation": "PHI" }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "people": [
+    {
+      "id": 605483,
+      "fullName": "Blake Snell",
+      "pitchHand": { "code": "L" },
+      "stats": [
+        {
+          "type": { "displayName": "season" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "stat": {
+                "strikeOuts": 200,
+                "battersFaced": 720,
+                "gamesStarted": 30
+              }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "career" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "stat": {
+                "strikeOuts": 1500,
+                "battersFaced": 5400,
+                "gamesStarted": 250
+              }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "gameLog" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "date": "2025-04-01",
+              "opponent": { "name": "Relief Outing" },
+              "stat": { "gamesStarted": 0, "strikeOuts": 3, "battersFaced": 10 }
+            },
+            {
+              "date": "2025-04-05",
+              "opponent": { "name": "Excluded By Window" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 50, "battersFaced": 100 }
+            },
+            {
+              "date": "2025-04-11",
+              "opponent": { "name": "San Diego Padres" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 7, "battersFaced": 25 }
+            },
+            {
+              "date": "2025-04-17",
+              "opponent": { "name": "Colorado Rockies" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 7, "battersFaced": 25 }
+            },
+            {
+              "date": "2025-04-23",
+              "opponent": { "name": "Arizona Diamondbacks" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 7, "battersFaced": 25 }
+            },
+            {
+              "date": "2025-04-29",
+              "opponent": { "name": "New York Mets" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 7, "battersFaced": 25 }
+            },
+            {
+              "date": "2025-05-05",
+              "opponent": { "name": "Chicago Cubs" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 7, "battersFaced": 25 }
+            },
+            {
+              "date": "2025-05-11",
+              "opponent": { "name": "Atlanta Braves" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 7, "battersFaced": 25 }
+            },
+            {
+              "date": "2025-05-17",
+              "opponent": { "name": "Philadelphia Phillies" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 7, "battersFaced": 25 }
+            },
+            {
+              "date": "2025-05-23",
+              "opponent": { "name": "Miami Marlins" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 7, "battersFaced": 25 }
+            },
+            {
+              "date": "2025-05-29",
+              "opponent": { "name": "Washington Nationals" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 7, "battersFaced": 25 }
+            },
+            {
+              "date": "2025-06-04",
+              "opponent": { "name": "St. Louis Cardinals" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 7, "battersFaced": 25 }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

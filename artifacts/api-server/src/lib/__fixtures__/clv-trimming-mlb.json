@@ -1,0 +1,62 @@
+[
+  {
+    "id": "evt-mlb-trim",
+    "sport_key": "baseball_mlb",
+    "commence_time": "2026-07-13T23:05:00Z",
+    "home_team": "New York Yankees",
+    "away_team": "Boston Red Sox",
+    "bookmakers": [
+      {
+        "key": "bookA",
+        "title": "Book A",
+        "markets": [
+          { "key": "h2h", "outcomes": [{ "name": "New York Yankees", "price": -300 }, { "name": "Boston Red Sox", "price": 250 }] }
+        ]
+      },
+      {
+        "key": "draftkings",
+        "title": "DraftKings",
+        "markets": [
+          { "key": "h2h", "outcomes": [{ "name": "New York Yankees", "price": -110 }, { "name": "Boston Red Sox", "price": -110 }] }
+        ]
+      },
+      {
+        "key": "fanduel",
+        "title": "FanDuel",
+        "markets": [
+          { "key": "h2h", "outcomes": [{ "name": "New York Yankees", "price": 100 }, { "name": "Boston Red Sox", "price": -120 }] }
+        ]
+      },
+      {
+        "key": "caesars",
+        "title": "Caesars",
+        "markets": [
+          { "key": "h2h", "outcomes": [{ "name": "New York Yankees", "price": 105 }, { "name": "Boston Red Sox", "price": -125 }] }
+        ]
+      },
+      {
+        "key": "bookE",
+        "title": "Book E",
+        "markets": [
+          { "key": "h2h", "outcomes": [{ "name": "New York Yankees", "price": 400 }, { "name": "Boston Red Sox", "price": -600 }] }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "evt-mlb-thin",
+    "sport_key": "baseball_mlb",
+    "commence_time": "2026-07-13T23:05:00Z",
+    "home_team": "Chicago Cubs",
+    "away_team": "St. Louis Cardinals",
+    "bookmakers": [
+      {
+        "key": "draftkings",
+        "title": "DraftKings",
+        "markets": [
+          { "key": "h2h", "outcomes": [{ "name": "Chicago Cubs", "price": -130 }, { "name": "St. Louis Cardinals", "price": 110 }] }
+        ]
+      }
+    ]
+  }
+]

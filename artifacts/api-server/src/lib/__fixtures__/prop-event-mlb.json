@@ -1,0 +1,35 @@
+{
+  "id": "evt-mlb-1",
+  "sport_key": "baseball_mlb",
+  "commence_time": "2026-07-12T23:05:00Z",
+  "home_team": "New York Yankees",
+  "away_team": "Boston Red Sox",
+  "bookmakers": [
+    {
+      "key": "draftkings",
+      "title": "DraftKings",
+      "markets": [
+        {
+          "key": "pitcher_strikeouts",
+          "outcomes": [
+            { "name": "Over", "description": "Gerrit Cole", "point": 6.5, "price": -110 },
+            { "name": "Under", "description": "Gerrit Cole", "point": 6.5, "price": -110 }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "fanduel",
+      "title": "FanDuel",
+      "markets": [
+        {
+          "key": "pitcher_strikeouts",
+          "outcomes": [
+            { "name": "Over", "description": "Gerrit Cole", "point": 6.5, "price": 120 },
+            { "name": "Under", "description": "Gerrit Cole", "point": 6.5, "price": -140 }
+          ]
+        }
+      ]
+    }
+  ]
+}

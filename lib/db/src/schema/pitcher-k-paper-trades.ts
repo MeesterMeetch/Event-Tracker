@@ -1,0 +1,84 @@
+import { pgTable, serial, text, doublePrecision, integer, boolean, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+
+/**
+ * A paper-traded pitcher-strikeout flag from the projection model. These are
+ * deliberately kept separate from the real `bets` table and the auto-grading /
+ * game-line CLV pipeline: they are model validation records, not wagers.
+ *
+ * A row starts as "open" when the user logs a model flag (capturing the model
+ * probability and the price that was available at that moment). A background
+ * job later fills `closingOdds`/`closingProb`/`clvPercent`/`beatClose` near
+ * first pitch to measure closing-line value, flipping `status` to "closed";
+ * flags whose closing line can't be captured in the window become "expired".
+ */
+export const pitcherKPaperTradesTable = pgTable("pitcher_k_paper_trades", {
+  id: serial("id").primaryKey(),
+  sport: text("sport").notNull(),
+  gameId: text("game_id").notNull(),
+  commenceTime: timestamp("commence_time", { withTimezone: true }).notNull(),
+  homeTeam: text("home_team").notNull(),
+  awayTeam: text("away_team").notNull(),
+  pitcher: text("pitcher").notNull(),
+  pitcherId: integer("pitcher_id"),
+  team: text("team").notNull(),
+  opponent: text("opponent").notNull(),
+  selection: text("selection").notNull(), // "Over" | "Under"
+  point: doublePrecision("point").notNull(),
+  book: text("book").notNull(),
+  americanOdds: doublePrecision("american_odds").notNull(),
+  modelProb: doublePrecision("model_prob").notNull(),
+  marketProb: doublePrecision("market_prob"),
+  edgePercent: doublePrecision("edge_percent"),
+  // The model's actual flag decision at scan time (scanner's `isFlagged`), so
+  // the flagged-vs-unflagged comparison reflects what the model really picked
+  // rather than a client-side re-derivation. Nullable: rows logged before this
+  // column existed have no recorded decision and fall back to the heuristic.
+  isFlagged: boolean("is_flagged"),
+  expectedStrikeouts: doublePrecision("expected_strikeouts").notNull(),
+  projectedBattersFaced: doublePrecision("projected_batters_faced").notNull(),
+  recommendedUnits: doublePrecision("recommended_units").notNull(),
+  kellyMultiplier: doublePrecision("kelly_multiplier").notNull(),
+  closingOdds: doublePrecision("closing_odds"),
+  closingProb: doublePrecision("closing_prob"),
+  clvPercent: doublePrecision("clv_percent"),
+  beatClose: boolean("beat_close"),
+  // Filled by the outcome-grading job once the game is final. Deliberately
+  // independent of the CLV lifecycle (`status`): an "expired" trade still
+  // gets an outcome, and a "closed" trade still needs one. "void" mirrors
+  // sportsbook handling of a non-start (pitcher scratched).
+  actualStrikeouts: integer("actual_strikeouts"),
+  outcome: text("outcome"), // "won" | "lost" | "push" | "void" | null (unsettled)
+  status: text("status").notNull().default("open"), // "open" | "closed" | "expired"
+  // Soft-delete marker backing the client "Undo" affordance: deleting a pick
+  // stamps this instead of dropping the row, so an immediate undo can restore
+  // the exact record (logged odds, edge snapshot, and any captured closing
+  // line) rather than approximating it with a re-create. Rows with a non-null
+  // deletedAt are invisible to list/summary/CLV and are purged after a grace
+  // period (or immediately if the same pick is re-logged).
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  // One scorecard row per pick: the same game/pitcher/selection/point/book can
+  // only be logged once, no matter which client (web, mobile, second device)
+  // sends it. Duplicates would each become another graded row and quietly
+  // inflate beat-close rate and average CLV. Enforced at the DB level so
+  // concurrent requests can't race past an application-side check.
+  uniqueIndex("pitcher_k_paper_trades_pick_uniq").on(t.gameId, t.pitcher, t.selection, t.point, t.book),
+]);
+
+export const insertPitcherKPaperTradeSchema = createInsertSchema(pitcherKPaperTradesTable).omit({
+  id: true,
+  createdAt: true,
+  closingOdds: true,
+  closingProb: true,
+  clvPercent: true,
+  beatClose: true,
+  actualStrikeouts: true,
+  outcome: true,
+  status: true,
+  deletedAt: true,
+});
+export type InsertPitcherKPaperTrade = z.infer<typeof insertPitcherKPaperTradeSchema>;
+export type PitcherKPaperTrade = typeof pitcherKPaperTradesTable.$inferSelect;

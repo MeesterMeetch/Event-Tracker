@@ -1,0 +1,48 @@
+{
+  "people": [
+    {
+      "id": 592791,
+      "fullName": "Robbie Ray",
+      "pitchHand": { "code": "L" },
+      "stats": [
+        {
+          "type": { "displayName": "season" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "stat": {
+                "era": "3.80",
+                "whip": "1.25",
+                "strikeOuts": 140,
+                "inningsPitched": "125.0",
+                "gamesStarted": 20,
+                "wins": 10,
+                "losses": 6
+              }
+            }
+          ]
+        },
+        {
+          "type": { "displayName": "gameLog" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "date": "2025-06-29",
+              "opponent": { "name": "Los Angeles Dodgers" },
+              "stat": {
+                "gamesStarted": 1,
+                "inningsPitched": "5.1",
+                "earnedRuns": 3,
+                "strikeOuts": 8,
+                "baseOnBalls": 3,
+                "hits": 4,
+                "wins": 0,
+                "losses": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

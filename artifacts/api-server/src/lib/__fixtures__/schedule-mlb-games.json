@@ -1,0 +1,74 @@
+{
+  "dates": [
+    {
+      "date": "2026-07-18",
+      "games": [
+        {
+          "gamePk": 800001,
+          "gameDate": "2026-07-18T17:10:00Z",
+          "status": {
+            "abstractGameState": "Final",
+            "detailedState": "Final"
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 137, "name": "San Francisco Giants" },
+              "probablePitcher": { "id": 657277, "fullName": "Logan Webb" }
+            },
+            "home": {
+              "team": { "id": 119, "name": "Los Angeles Dodgers" },
+              "probablePitcher": { "id": 605483, "fullName": "Blake Snell" }
+            }
+          },
+          "linescore": {
+            "teams": {
+              "away": { "runs": 3 },
+              "home": { "runs": 5 }
+            }
+          }
+        },
+        {
+          "gamePk": 800002,
+          "gameDate": "2026-07-18T22:05:00Z",
+          "status": {
+            "abstractGameState": "Live",
+            "detailedState": "In Progress"
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 110, "name": "Baltimore Orioles" },
+              "probablePitcher": { "id": 669373, "fullName": "Grayson Rodriguez" }
+            },
+            "home": {
+              "team": { "id": 147, "name": "New York Yankees" },
+              "probablePitcher": { "id": 543243, "fullName": "Gerrit Cole" }
+            }
+          },
+          "linescore": {
+            "teams": {
+              "away": { "runs": 2 },
+              "home": { "runs": 1 }
+            }
+          }
+        },
+        {
+          "gamePk": 800003,
+          "gameDate": "2026-07-19T00:15:00Z",
+          "status": {
+            "abstractGameState": "Preview",
+            "detailedState": "Scheduled"
+          },
+          "teams": {
+            "away": {
+              "team": { "id": 133, "name": "Oakland Athletics" }
+            },
+            "home": {
+              "team": { "id": 108, "name": "Los Angeles Angels" },
+              "probablePitcher": { "id": 641154, "fullName": "Patrick Sandoval" }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

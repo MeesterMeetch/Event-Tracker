@@ -1,0 +1,36 @@
+{
+  "people": [
+    {
+      "id": 592791,
+      "fullName": "Robbie Ray",
+      "pitchHand": { "code": "L" },
+      "stats": [
+        {
+          "type": { "displayName": "season" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            { "stat": { "strikeOuts": 160, "battersFaced": 600, "gamesStarted": 25 } }
+          ]
+        },
+        {
+          "type": { "displayName": "career" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            { "stat": { "strikeOuts": 1300, "battersFaced": 4600, "gamesStarted": 190 } }
+          ]
+        },
+        {
+          "type": { "displayName": "gameLog" },
+          "group": { "displayName": "pitching" },
+          "splits": [
+            {
+              "date": "2025-06-29",
+              "opponent": { "name": "San Diego Padres" },
+              "stat": { "gamesStarted": 1, "strikeOuts": 10, "battersFaced": 26 }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

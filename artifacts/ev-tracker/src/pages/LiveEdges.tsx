@@ -4,6 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableTableHead } from "@/components/SortableTableHead";
+import { useTableSort, type SortColumn } from "@/hooks/use-table-sort";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -411,6 +413,27 @@ function orderEdges<T extends { evPercent: number; confidenceTier: string }>(row
   });
 }
 
+/**
+ * Sortable columns shared by both edge tables. Anything nullable is typed as a
+ * number so blanks sink rather than sorting as text, and sharpProb in
+ * particular is null whenever no sharp book quoted the outcome.
+ */
+type AnyEdge = EdgeOpportunity;
+
+const EDGE_SORT_COLUMNS: SortColumn<AnyEdge>[] = [
+  { key: "matchup", accessor: (e) => `${e.awayTeam} @ ${e.homeTeam}` },
+  { key: "player", accessor: (e) => e.player },
+  { key: "market", accessor: (e) => e.market },
+  { key: "selection", accessor: (e) => e.selection },
+  { key: "book", accessor: (e) => e.book },
+  { key: "dk", type: "number", accessor: (e) => e.dkOdds },
+  { key: "fair", type: "number", accessor: (e) => e.fairOdds },
+  { key: "odds", type: "number", accessor: (e) => e.americanOdds },
+  { key: "ev", type: "number", accessor: (e) => e.evPercent },
+  { key: "sharp", type: "number", accessor: (e) => e.sharpProb },
+  { key: "trust", type: "number", accessor: (e) => e.confidenceScore },
+];
+
 const TIER_STYLE: Record<ConfidenceTier, string> = {
   solid: "bg-positive/15 text-positive border-positive/30",
   playable: "bg-primary/10 text-primary border-primary/30",
@@ -466,6 +489,7 @@ export default function LiveEdges() {
       return next;
     });
 
+
   const currentSport = sports?.find((s) => s.key === selectedSport);
   const propsSupported = !!currentSport?.supportsProps;
 
@@ -491,6 +515,11 @@ export default function LiveEdges() {
     () => orderEdges((propEdges ?? []).filter((e) => visibleTiers.has(e.confidenceTier as ConfidenceTier))),
     [propEdges, visibleTiers],
   );
+
+  // Click-to-sort layers on top of the tier filter. With no column active the
+  // natural EV-then-trust order from orderEdges is preserved.
+  const gameSort = useTableSort(visibleEdges as AnyEdge[], EDGE_SORT_COLUMNS);
+  const propSort = useTableSort(visiblePropEdges as AnyEdge[], EDGE_SORT_COLUMNS);
 
 
   // Standings are free and cached server-side; they only decorate matchups
@@ -624,21 +653,21 @@ export default function LiveEdges() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Matchup</TableHead>
-                  <TableHead>Market</TableHead>
-                  <TableHead>Selection</TableHead>
-                  <TableHead>Book</TableHead>
-                  <TableHead className="text-right text-muted-foreground">DK</TableHead>
-                  <TableHead className="text-right">Fair</TableHead>
-                  <TableHead className="text-right">Odds</TableHead>
-                  <TableHead className="text-right">EV%</TableHead>
-                  <TableHead className="text-right whitespace-nowrap">Sharp / Public</TableHead>
-                  <TableHead className="text-center">Trust</TableHead>
+                  <SortableTableHead columnKey="matchup" activeKey={gameSort.sortKey} direction={gameSort.sortDir} onSort={gameSort.toggleSort}>Matchup</SortableTableHead>
+                  <SortableTableHead columnKey="market" activeKey={gameSort.sortKey} direction={gameSort.sortDir} onSort={gameSort.toggleSort}>Market</SortableTableHead>
+                  <SortableTableHead columnKey="selection" activeKey={gameSort.sortKey} direction={gameSort.sortDir} onSort={gameSort.toggleSort}>Selection</SortableTableHead>
+                  <SortableTableHead columnKey="book" activeKey={gameSort.sortKey} direction={gameSort.sortDir} onSort={gameSort.toggleSort}>Book</SortableTableHead>
+                  <SortableTableHead columnKey="dk" activeKey={gameSort.sortKey} direction={gameSort.sortDir} onSort={gameSort.toggleSort} align="right" className="text-muted-foreground">DK</SortableTableHead>
+                  <SortableTableHead columnKey="fair" activeKey={gameSort.sortKey} direction={gameSort.sortDir} onSort={gameSort.toggleSort} align="right">Fair</SortableTableHead>
+                  <SortableTableHead columnKey="odds" activeKey={gameSort.sortKey} direction={gameSort.sortDir} onSort={gameSort.toggleSort} align="right">Odds</SortableTableHead>
+                  <SortableTableHead columnKey="ev" activeKey={gameSort.sortKey} direction={gameSort.sortDir} onSort={gameSort.toggleSort} align="right">EV%</SortableTableHead>
+                  <SortableTableHead columnKey="sharp" activeKey={gameSort.sortKey} direction={gameSort.sortDir} onSort={gameSort.toggleSort} align="right" className="whitespace-nowrap">Sharp / Public</SortableTableHead>
+                  <SortableTableHead columnKey="trust" activeKey={gameSort.sortKey} direction={gameSort.sortDir} onSort={gameSort.toggleSort} align="center">Trust</SortableTableHead>
                   <TableHead className="w-[130px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {visibleEdges.length === 0 ? (
+                {gameSort.rows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={11} className="text-center text-muted-foreground py-12">
                       <div className="flex flex-col items-center justify-center space-y-2">
@@ -649,7 +678,7 @@ export default function LiveEdges() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  visibleEdges.map((edge, idx) => (
+                  gameSort.rows.map((edge, idx) => (
                     <TableRow key={`${edge.gameId}-${edge.selection}-${edge.book}-${idx}`}>
                       <TableCell>
                         <div className="font-sans font-medium text-xs whitespace-nowrap">
@@ -811,21 +840,21 @@ export default function LiveEdges() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Player</TableHead>
-                          <TableHead>Market</TableHead>
-                          <TableHead>Selection</TableHead>
-                          <TableHead>Book</TableHead>
-                          <TableHead className="text-right text-muted-foreground">DK</TableHead>
-                          <TableHead className="text-right">Fair</TableHead>
-                          <TableHead className="text-right">Odds</TableHead>
-                          <TableHead className="text-right">EV%</TableHead>
-                          <TableHead className="text-right whitespace-nowrap">Sharp / Public</TableHead>
-                          <TableHead className="text-center">Trust</TableHead>
+                          <SortableTableHead columnKey="player" activeKey={propSort.sortKey} direction={propSort.sortDir} onSort={propSort.toggleSort}>Player</SortableTableHead>
+                          <SortableTableHead columnKey="market" activeKey={propSort.sortKey} direction={propSort.sortDir} onSort={propSort.toggleSort}>Market</SortableTableHead>
+                          <SortableTableHead columnKey="selection" activeKey={propSort.sortKey} direction={propSort.sortDir} onSort={propSort.toggleSort}>Selection</SortableTableHead>
+                          <SortableTableHead columnKey="book" activeKey={propSort.sortKey} direction={propSort.sortDir} onSort={propSort.toggleSort}>Book</SortableTableHead>
+                          <SortableTableHead columnKey="dk" activeKey={propSort.sortKey} direction={propSort.sortDir} onSort={propSort.toggleSort} align="right" className="text-muted-foreground">DK</SortableTableHead>
+                          <SortableTableHead columnKey="fair" activeKey={propSort.sortKey} direction={propSort.sortDir} onSort={propSort.toggleSort} align="right">Fair</SortableTableHead>
+                          <SortableTableHead columnKey="odds" activeKey={propSort.sortKey} direction={propSort.sortDir} onSort={propSort.toggleSort} align="right">Odds</SortableTableHead>
+                          <SortableTableHead columnKey="ev" activeKey={propSort.sortKey} direction={propSort.sortDir} onSort={propSort.toggleSort} align="right">EV%</SortableTableHead>
+                          <SortableTableHead columnKey="sharp" activeKey={propSort.sortKey} direction={propSort.sortDir} onSort={propSort.toggleSort} align="right" className="whitespace-nowrap">Sharp / Public</SortableTableHead>
+                          <SortableTableHead columnKey="trust" activeKey={propSort.sortKey} direction={propSort.sortDir} onSort={propSort.toggleSort} align="center">Trust</SortableTableHead>
                           <TableHead className="w-[130px]"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {visiblePropEdges.length === 0 ? (
+                        {propSort.rows.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={11} className="text-center text-muted-foreground py-12">
                               <div className="flex flex-col items-center justify-center space-y-2">
@@ -836,7 +865,7 @@ export default function LiveEdges() {
                             </TableCell>
                           </TableRow>
                         ) : (
-                          visiblePropEdges.map((edge, idx) => (
+                          propSort.rows.map((edge, idx) => (
                             <TableRow key={`${edge.gameId}-${edge.market}-${edge.player}-${edge.selection}-${edge.book}-${idx}`}>
                               <TableCell>
                                 <div className="font-sans font-medium text-xs whitespace-nowrap">{edge.player}</div>

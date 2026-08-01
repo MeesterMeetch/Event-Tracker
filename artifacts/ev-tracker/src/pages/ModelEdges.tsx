@@ -18,7 +18,7 @@ import {
   getListBetsQueryKey,
   getGetDashboardSummaryQueryKey,
 } from "@workspace/api-client-react";
-import type { ModelPitcherProjection, ModelKLine, PaperTrade } from "@workspace/api-client-react";
+import type { ModelPitcherProjection, ModelKLine, PaperTrade, EdgeOpportunity } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -98,6 +98,26 @@ function AnalyzeProjectionDialog({ projection, children }: {
       fairOdds: americanFromProb(line.modelProb),
       evPercent: line.edgePercent ?? 0,
       dkOdds: line.dkOdds ?? null,
+      // EdgeOpportunity requires the market-confidence fields that the scanner
+      // computes. A model projection is a different kind of thing: its edge
+      // comes from the strikeout model rather than from book disagreement, so
+      // there is no dispersion or sharp-vs-public split to report. Rather than
+      // invent a score, report only what is actually known. The analysis
+      // endpoint does not read these fields; they are here to satisfy the
+      // shared schema.
+      sharpProb: null,
+      publicProb: line.marketProb != null ? Math.round(line.marketProb * 1000) / 10 : null,
+      // marketProb is only populated when 2+ books quoted the line, so this is
+      // a known floor rather than an exact count.
+      bookCount: line.marketProb != null ? 2 : 1,
+      dispersionPercent: null,
+      confidenceTier: (line.marketProb != null && line.isFlagged ? "playable" : "fragile") as EdgeOpportunity["confidenceTier"],
+      confidenceScore: line.marketProb == null ? 30 : line.isFlagged ? 60 : 45,
+      confidenceReasons: [
+        line.marketProb == null
+          ? "no market consensus for this line"
+          : "model projection vs devigged market",
+      ],
     }));
     analyze.mutate({
       data: {

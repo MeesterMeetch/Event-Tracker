@@ -61,20 +61,39 @@ function describePitcher(role: string, p: ProbablePitcher | null): string {
   return lines.join("\n");
 }
 
+/** One edge rendered as a prompt line. */
+function describeEdge(e: AnalysisInput["edges"][number]): string {
+  const label = `${e.market.toUpperCase()} | ${e.player ? `${e.player} ` : ""}${e.selection}${
+    e.point != null ? ` ${e.point}` : ""
+  }`;
+  // The sign has to come from the number. Hardcoding "+" printed "+-3.6%" on
+  // the negative-EV rows that now reach this endpoint.
+  const ev = `${e.evPercent >= 0 ? "+" : ""}${e.evPercent.toFixed(1)}%`;
+  return `${label} @ ${fmtOdds(e.americanOdds)} (${e.book}); fair ${fmtOdds(e.fairOdds)}, ${ev} EV`;
+}
+
 function buildPrompt(input: AnalysisInput): string {
-  const edgeLines =
-    input.edges.length > 0
-      ? input.edges
-          .map(
-            (e) =>
-              `- ${e.market.toUpperCase()} | ${e.player ? `${e.player} ` : ""}${e.selection}${
-                e.point != null ? ` ${e.point}` : ""
-              } @ ${fmtOdds(e.americanOdds)} (${e.book}); fair ${fmtOdds(
-                e.fairOdds,
-              )}, +${e.evPercent.toFixed(1)}% EV`,
-          )
-          .join("\n")
-      : "- No standout +EV edges detected for this game right now.";
+  // The client sends the bet the user actually clicked first. Without singling
+  // it out, the model writes a general game preview and never addresses the
+  // specific wager on screen, which is the one thing the user opened the dialog
+  // to understand.
+  const [focus, ...others] = input.edges;
+
+  const focusSection = focus
+    ? [
+        "The bet to analyze:",
+        `  ${describeEdge(focus)}`,
+        "",
+        "Explain THIS bet specifically. Why might this side hit or miss? Address the",
+        "player and the number, not just the game. If the edge is small, negative, or",
+        "rests on thin support, say so plainly rather than manufacturing a case for it.",
+      ]
+    : ["No specific bet was selected; give a general read on the game."];
+
+  const contextLines =
+    others.length > 0
+      ? others.slice(0, 20).map((e) => `- ${describeEdge(e)}`).join("\n")
+      : "- No other priced edges for this game.";
 
   const isBaseball = input.sport === "baseball_mlb";
   const isFootball = input.sport.startsWith("americanfootball_");
@@ -106,8 +125,11 @@ function buildPrompt(input: AnalysisInput): string {
     `Sport: ${input.sport}`,
     `Start (UTC): ${input.commenceTime}`,
     "",
-    "Detected +EV betting edges (fair price derived by devigging the market consensus):",
-    edgeLines,
+    ...focusSection,
+    "",
+    "Other priced outcomes in this game, for context only (fair price derived by",
+    "devigging the market consensus):",
+    contextLines,
     "",
     ...formSection,
   ].join("\n");
@@ -116,13 +138,14 @@ function buildPrompt(input: AnalysisInput): string {
 const SYSTEM_PROMPT = `You are a sharp, disciplined sports betting analyst writing for a +EV bettor.
 Analyze the specific game using ONLY the data provided; never invent stats, injuries, or lines you were not given.
 Be concrete and concise. When probable starters or roster data are provided, weigh recent form heavily and reference specific numbers; when they are not, reason from the matchup and market signals without manufacturing detail.
+When a specific bet is named, that bet is the subject. Say why that player might go over or under that exact number. A general game preview that never mentions the wager is a failed answer.
 If a bet's edge looks thin or the sample is weak, say so — do not manufacture confidence.
 
 Respond with a single JSON object with exactly these keys:
 {
   "summary": string,            // 1-2 sentences framing the matchup and the sharpest angle
   "matchupAnalysis": string,    // 2-4 sentences on form and matchup impact — starting pitchers for MLB, quarterback/unit matchup and pace for football, general form otherwise
-  "bettingAngle": string,       // 2-4 sentences tying the analysis to the detected +EV edges and how you'd approach them
+  "bettingAngle": string,       // 2-4 sentences on THE SPECIFIC BET being analyzed: the case for and against that exact side and number, and whether the price justifies it. Not a general game angle.
   "keyFactors": string[]        // 3-5 short bullet strings (each under ~15 words)
 }
 Output only the JSON object, no markdown fences.`;

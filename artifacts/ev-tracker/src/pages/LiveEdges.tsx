@@ -741,7 +741,7 @@ export default function LiveEdges() {
                       <TableCell className="text-right text-primary font-bold">
                         {formatOdds(edge.americanOdds)}
                       </TableCell>
-                      <TableCell className="text-right text-positive font-bold">
+                      <TableCell className={`text-right font-bold ${edge.evPercent >= 0 ? "text-positive" : "text-negative"}`}>
                         {formatPercent(edge.evPercent)}
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
@@ -915,7 +915,7 @@ export default function LiveEdges() {
                               <TableCell className="text-right text-primary font-bold">
                                 {formatOdds(edge.americanOdds)}
                               </TableCell>
-                              <TableCell className="text-right text-positive font-bold">
+                              <TableCell className={`text-right font-bold ${edge.evPercent >= 0 ? "text-positive" : "text-negative"}`}>
                                 {formatPercent(edge.evPercent)}
                               </TableCell>
                               <TableCell className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">

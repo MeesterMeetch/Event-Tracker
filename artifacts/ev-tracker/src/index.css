@@ -60,42 +60,50 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* Base Terminal Theme - Dark by default */
+/*
+ * Base Terminal Theme - Dark by default
+ *
+ * The dark family sits at hue 222 with real saturation rather than a neutral
+ * near-black. The accents were already blue (210) and green (150); against flat
+ * black they floated, and against a deep navy they have something to sit on.
+ * Keeping every surface in the same hue family is what stops the tint from
+ * reading as a colour cast.
+ */
 :root, .dark {
-  --background: 240 10% 4%; /* Very dark slate, almost black */
+  --background: 222 32% 7%;
   --foreground: 0 0% 98%;
 
-  --card: 240 10% 6%;
+  --card: 222 30% 10%;
   --card-foreground: 0 0% 98%;
-  --card-border: 240 10% 12%;
+  --card-border: 222 25% 17%;
 
-  --border: 240 10% 15%;
-  --input: 240 10% 15%;
+  --border: 222 24% 18%;
+  --input: 222 24% 18%;
   --ring: 210 100% 60%;
 
-  --sidebar: 240 10% 6%;
-  --sidebar-foreground: 240 5% 70%;
-  --sidebar-border: 240 10% 12%;
+  --sidebar: 222 33% 9%;
+  --sidebar-foreground: 222 15% 72%;
+  --sidebar-border: 222 25% 16%;
   --sidebar-primary: 210 100% 60%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 240 10% 12%;
+  --sidebar-accent: 222 28% 15%;
   --sidebar-accent-foreground: 0 0% 98%;
   --sidebar-ring: 210 100% 60%;
 
-  --popover: 240 10% 6%;
+  --popover: 222 30% 10%;
   --popover-foreground: 0 0% 98%;
-  --popover-border: 240 10% 12%;
+  --popover-border: 222 25% 17%;
 
   --primary: 210 100% 55%; /* Electric Cyan/Blue */
-  --primary-foreground: 240 100% 10%;
+  --primary-foreground: 222 60% 8%;
 
-  --secondary: 240 10% 15%;
+  --secondary: 222 26% 16%;
   --secondary-foreground: 0 0% 98%;
 
-  --muted: 240 10% 12%;
-  --muted-foreground: 240 5% 65%;
+  --muted: 222 26% 14%;
+  --muted-foreground: 222 14% 66%;
 
-  --accent: 240 10% 15%;
+  --accent: 222 26% 16%;
   --accent-foreground: 0 0% 98%;
 
   --destructive: 0 84% 60%;

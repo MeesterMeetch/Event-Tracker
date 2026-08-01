@@ -54,7 +54,12 @@ export const ListEdgesResponseItem = zod.object({
   "fairOdds": zod.number(),
   "evPercent": zod.number(),
   "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
-  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.')
+  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.'),
+  "bookCount": zod.number().describe('Distinct books quoting this outcome. Depth is the first ingredient of trust.'),
+  "dispersionPercent": zod.number().nullish().describe('Spread (sample standard deviation) of devigged fair probabilities across books, in percentage points. Low means the market agrees; high means somebody is wrong.'),
+  "confidenceTier": zod.enum(['solid', 'playable', 'fragile', 'suspect']).describe('How much to trust this edge, as distinct from how large it is. The largest EV numbers are usually the least real: a big edge on a deep market is more often a stale price than an opportunity. \"suspect\" means the sharp books contradict the edge or its size is not credible for a market of that depth.'),
+  "confidenceScore": zod.number().describe('Ordering hint behind the tier, 0-100. Not a probability.'),
+  "confidenceReasons": zod.array(zod.string()).describe('Short human-readable reasons behind the tier.')
 })
 export const ListEdgesResponse = zod.array(ListEdgesResponseItem)
 
@@ -103,7 +108,12 @@ export const ListPropEdgesResponseItem = zod.object({
   "fairOdds": zod.number(),
   "evPercent": zod.number(),
   "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
-  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.')
+  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.'),
+  "bookCount": zod.number().describe('Distinct books quoting this outcome. Depth is the first ingredient of trust.'),
+  "dispersionPercent": zod.number().nullish().describe('Spread (sample standard deviation) of devigged fair probabilities across books, in percentage points. Low means the market agrees; high means somebody is wrong.'),
+  "confidenceTier": zod.enum(['solid', 'playable', 'fragile', 'suspect']).describe('How much to trust this edge, as distinct from how large it is. The largest EV numbers are usually the least real: a big edge on a deep market is more often a stale price than an opportunity. \"suspect\" means the sharp books contradict the edge or its size is not credible for a market of that depth.'),
+  "confidenceScore": zod.number().describe('Ordering hint behind the tier, 0-100. Not a probability.'),
+  "confidenceReasons": zod.array(zod.string()).describe('Short human-readable reasons behind the tier.')
 })
 export const ListPropEdgesResponse = zod.array(ListPropEdgesResponseItem)
 
@@ -443,7 +453,12 @@ export const GenerateGameAnalysisBody = zod.object({
   "fairOdds": zod.number(),
   "evPercent": zod.number(),
   "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
-  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.')
+  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.'),
+  "bookCount": zod.number().describe('Distinct books quoting this outcome. Depth is the first ingredient of trust.'),
+  "dispersionPercent": zod.number().nullish().describe('Spread (sample standard deviation) of devigged fair probabilities across books, in percentage points. Low means the market agrees; high means somebody is wrong.'),
+  "confidenceTier": zod.enum(['solid', 'playable', 'fragile', 'suspect']).describe('How much to trust this edge, as distinct from how large it is. The largest EV numbers are usually the least real: a big edge on a deep market is more often a stale price than an opportunity. \"suspect\" means the sharp books contradict the edge or its size is not credible for a market of that depth.'),
+  "confidenceScore": zod.number().describe('Ordering hint behind the tier, 0-100. Not a probability.'),
+  "confidenceReasons": zod.array(zod.string()).describe('Short human-readable reasons behind the tier.')
 }))
 })
 

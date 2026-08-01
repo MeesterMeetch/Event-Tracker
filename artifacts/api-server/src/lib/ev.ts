@@ -2,6 +2,7 @@ import type { OddsEvent } from "./odds";
 import { americanToDecimal, americanToImpliedProb, isSharpBook, probToAmerican } from "./odds-math";
 import { devig, configuredDevigMethod } from "./devig";
 import { isBettableBook } from "./bettable-books";
+import { assessConfidence, type ConfidenceTier } from "./edge-confidence";
 
 export interface EdgeOpportunity {
   gameId: string;
@@ -29,6 +30,20 @@ export interface EdgeOpportunity {
   sharpProb: number | null;
   /** Same consensus probability (percent) averaged across public (recreational) books; null when none quote it. */
   publicProb: number | null;
+  /** Distinct books quoting this outcome. Depth is the first ingredient of trust. */
+  bookCount: number;
+  /**
+   * Spread of de-vigged fair probabilities across books, in percentage points.
+   * Low means the market agrees; high means somebody is wrong.
+   */
+  dispersionPercent: number | null;
+  /**
+   * How much to trust this edge, as distinct from how large it is. See
+   * edge-confidence.ts: the biggest EV numbers are usually the least real.
+   */
+  confidenceTier: ConfidenceTier;
+  confidenceScore: number;
+  confidenceReasons: string[];
 }
 
 /** Averages devigged fair-probability samples into a percent rounded to 0.1; null when no book contributed. */
@@ -36,6 +51,14 @@ export function avgProbPercent(samples: number[] | undefined): number | null {
   if (!samples || samples.length === 0) return null;
   const avg = samples.reduce((sum, p) => sum + p, 0) / samples.length;
   return Math.round(avg * 1000) / 10;
+}
+
+/** Sample standard deviation of fair-probability samples, in percentage points. */
+export function dispersionPercent(samples: number[] | undefined): number | null {
+  if (!samples || samples.length < 2) return null;
+  const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+  const variance = samples.reduce((a, p) => a + (p - mean) * (p - mean), 0) / (samples.length - 1);
+  return Math.round(Math.sqrt(variance) * 1000) / 10;
 }
 
 const MARKETS = ["h2h", "spreads", "totals"] as const;
@@ -66,6 +89,7 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
       const best = new Map<string, { americanOdds: number; book: string }>();
       const dk = new Map<string, number>();
       const meta = new Map<string, { name: string; point: number | null }>();
+      const sampleBooks = new Map<string, Set<string>>();
 
       for (const bookmaker of event.bookmakers) {
         const m = bookmaker.markets.find((mk) => mk.key === market);
@@ -88,6 +112,8 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
           const splitSamples = isSharpBook(bookmaker.key) ? sharpSamples : publicSamples;
           if (!splitSamples.has(key)) splitSamples.set(key, []);
           splitSamples.get(key)!.push(fairProb);
+          if (!sampleBooks.has(key)) sampleBooks.set(key, new Set());
+          sampleBooks.get(key)!.add(bookmaker.key);
           meta.set(key, { name: outcome.name, point });
 
           // Every book feeds the consensus above, but only books you can
@@ -119,6 +145,16 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
         const evPercent = (decimalBest * avgFairProb - 1) * 100;
 
         if (evPercent >= minEdgePercent) {
+          const bookCount = sampleBooks.get(key)?.size ?? samples.length;
+          const sharpProb = avgProbPercent(sharpSamples.get(key));
+          const confidence = assessConfidence({
+            bookCount,
+            evPercent,
+            dispersionPercent: dispersionPercent(samples),
+            sharpProb,
+            publicProb: avgProbPercent(publicSamples.get(key)),
+            impliedProbPercent: (1 / decimalBest) * 100,
+          });
           edges.push({
             gameId: event.id,
             sport,
@@ -132,10 +168,15 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
             americanOdds: bestForKey.americanOdds,
             book: bestForKey.book,
             dkOdds: dk.get(key) ?? null,
-            sharpProb: avgProbPercent(sharpSamples.get(key)),
+            sharpProb,
             publicProb: avgProbPercent(publicSamples.get(key)),
             fairOdds: probToAmerican(avgFairProb),
             evPercent: Math.round(evPercent * 100) / 100,
+            bookCount,
+            dispersionPercent: dispersionPercent(samples),
+            confidenceTier: confidence.tier,
+            confidenceScore: confidence.score,
+            confidenceReasons: confidence.reasons,
           });
         }
       }

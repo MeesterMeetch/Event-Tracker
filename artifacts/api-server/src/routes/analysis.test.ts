@@ -129,6 +129,13 @@ function edge(overrides: Record<string, unknown> = {}): Record<string, unknown> 
     book: "draftkings",
     fairOdds: 130,
     evPercent: 3.2,
+    // Confidence fields are required on EdgeOpportunity: an edge without them
+    // fails request validation, which is deliberate. See edge-confidence.ts.
+    bookCount: 8,
+    dispersionPercent: 1.2,
+    confidenceTier: "playable",
+    confidenceScore: 62,
+    confidenceReasons: ["8 books quoting"],
     ...overrides,
   };
 }

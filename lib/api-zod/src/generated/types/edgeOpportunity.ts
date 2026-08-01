@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { EdgeOpportunityConfidenceTier } from './edgeOpportunityConfidenceTier';
 
 export interface EdgeOpportunity {
   gameId: string;
@@ -31,4 +32,14 @@ export interface EdgeOpportunity {
   sharpProb?: number | null;
   /** Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it. */
   publicProb?: number | null;
+  /** Distinct books quoting this outcome. Depth is the first ingredient of trust. */
+  bookCount: number;
+  /** Spread (sample standard deviation) of devigged fair probabilities across books, in percentage points. Low means the market agrees; high means somebody is wrong. */
+  dispersionPercent?: number | null;
+  /** How much to trust this edge, as distinct from how large it is. The largest EV numbers are usually the least real: a big edge on a deep market is more often a stale price than an opportunity. "suspect" means the sharp books contradict the edge or its size is not credible for a market of that depth. */
+  confidenceTier: EdgeOpportunityConfidenceTier;
+  /** Ordering hint behind the tier, 0-100. Not a probability. */
+  confidenceScore: number;
+  /** Short human-readable reasons behind the tier. */
+  confidenceReasons: string[];
 }

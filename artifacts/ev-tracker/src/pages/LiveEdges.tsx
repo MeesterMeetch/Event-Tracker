@@ -385,6 +385,52 @@ function AnalyzeGameDialog({ edge, gameEdges, children }: { edge: EdgeOpportunit
   );
 }
 
+/**
+ * Ask the API for every priced outcome rather than only those clearing a
+ * threshold. The scan costs the same either way, and the negative-EV tail is
+ * genuinely useful: a healthy market shows a smooth spread of small edges,
+ * while a few huge ones with nothing in between is the signature of a stale
+ * feed rather than a good day.
+ */
+const FULL_SLATE_THRESHOLD = -1000;
+
+type ConfidenceTier = "solid" | "playable" | "fragile" | "suspect";
+
+const TIER_RANK: Record<ConfidenceTier, number> = { solid: 0, playable: 1, fragile: 2, suspect: 3 };
+
+/**
+ * Orders a slate the way it is actually read: best EV first, but with trust as
+ * the tiebreaker so a solid 3% edge outranks a suspect 3% one.
+ */
+function orderEdges<T extends { evPercent: number; confidenceTier: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const tierGap =
+      TIER_RANK[a.confidenceTier as ConfidenceTier] - TIER_RANK[b.confidenceTier as ConfidenceTier];
+    if (Math.abs(a.evPercent - b.evPercent) < 0.5 && tierGap !== 0) return tierGap;
+    return b.evPercent - a.evPercent;
+  });
+}
+
+const TIER_STYLE: Record<ConfidenceTier, string> = {
+  solid: "bg-positive/15 text-positive border-positive/30",
+  playable: "bg-primary/10 text-primary border-primary/30",
+  fragile: "bg-muted text-muted-foreground border-border",
+  suspect: "bg-destructive/10 text-destructive border-destructive/30",
+};
+
+/** Compact badge showing how much to trust an edge, with its reasons on hover. */
+function ConfidenceBadge({ tier, reasons }: { tier: ConfidenceTier; reasons: string[] }) {
+  return (
+    <Badge
+      variant="outline"
+      className={`text-[10px] uppercase font-mono ${TIER_STYLE[tier]}`}
+      title={reasons.join(" · ")}
+    >
+      {tier}
+    </Badge>
+  );
+}
+
 export default function LiveEdges() {
   const [selectedSport, setSelectedSport] = useState<string>("");
   const [tab, setTab] = useState<"games" | "props">("games");
@@ -394,10 +440,31 @@ export default function LiveEdges() {
   // Paid scans are gated on the active tab, so browsing props never triggers
   // a sport-wide game-lines scan (and vice versa). With focus refetches off
   // and a 60s staleTime, flipping tabs only re-scans once data is stale.
+  // minEdgePercent -1000 asks for the whole slate rather than only what clears
+  // a threshold. Seeing the negative-EV tail is diagnostic: a healthy market
+  // shows a smooth spread of small edges, while a handful of huge ones and
+  // nothing in between usually means a stale feed rather than a good day. The
+  // scan costs the same either way, so filtering server-side only threw
+  // information away.
   const { data: edges, isLoading: loadingEdges, isFetching: fetchingEdges, isError } = useListEdges(
-    { sport: selectedSport },
-    { query: { enabled: !!selectedSport && tab === "games", queryKey: getListEdgesQueryKey({ sport: selectedSport }) } }
+    { sport: selectedSport, minEdgePercent: FULL_SLATE_THRESHOLD },
+    { query: { enabled: !!selectedSport && tab === "games", queryKey: getListEdgesQueryKey({ sport: selectedSport, minEdgePercent: FULL_SLATE_THRESHOLD }) } }
   );
+
+  // Which confidence tiers to show. Defaults to hiding "suspect", since those
+  // are overwhelmingly stale prices rather than opportunities, but they stay one
+  // click away because their absence is itself informative: a slate that is all
+  // suspect means the feed is stale, not that there is nothing to bet.
+  const [visibleTiers, setVisibleTiers] = useState<Set<ConfidenceTier>>(
+    () => new Set<ConfidenceTier>(["solid", "playable", "fragile"]),
+  );
+  const toggleTier = (tier: ConfidenceTier) =>
+    setVisibleTiers((prev) => {
+      const next = new Set(prev);
+      if (next.has(tier)) next.delete(tier);
+      else next.add(tier);
+      return next;
+    });
 
   const currentSport = sports?.find((s) => s.key === selectedSport);
   const propsSupported = !!currentSport?.supportsProps;
@@ -410,9 +477,21 @@ export default function LiveEdges() {
     { query: { enabled: !!selectedSport && propsSupported, queryKey: getListEventsQueryKey({ sport: selectedSport }) } }
   );
   const { data: propEdges, isLoading: loadingPropEdges, isFetching: fetchingPropEdges, isError: propEdgesError } = useListPropEdges(
-    { sport: selectedSport, eventId: selectedEventId },
-    { query: { enabled: !!selectedSport && !!selectedEventId && tab === "props", queryKey: getListPropEdgesQueryKey({ sport: selectedSport, eventId: selectedEventId }) } }
+    { sport: selectedSport, eventId: selectedEventId, minEdgePercent: FULL_SLATE_THRESHOLD },
+    { query: { enabled: !!selectedSport && !!selectedEventId && tab === "props", queryKey: getListPropEdgesQueryKey({ sport: selectedSport, eventId: selectedEventId, minEdgePercent: FULL_SLATE_THRESHOLD }) } }
   );
+
+  // Filtered and re-ordered slate. Memoized so toggling a tier does not resort
+  // the whole board on every render.
+  const visibleEdges = useMemo(
+    () => orderEdges((edges ?? []).filter((e) => visibleTiers.has(e.confidenceTier as ConfidenceTier))),
+    [edges, visibleTiers],
+  );
+  const visiblePropEdges = useMemo(
+    () => orderEdges((propEdges ?? []).filter((e) => visibleTiers.has(e.confidenceTier as ConfidenceTier))),
+    [propEdges, visibleTiers],
+  );
+
 
   // Standings are free and cached server-side; they only decorate matchups
   // with team records. Variant keys (e.g. NFL preseason) share the base
@@ -520,6 +599,27 @@ export default function LiveEdges() {
             </div>
           )}
           
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground mr-1">Trust:</span>
+            {(["solid", "playable", "fragile", "suspect"] as const).map((tier) => {
+              const count = edges.filter((e) => e.confidenceTier === tier).length;
+              const active = visibleTiers.has(tier);
+              return (
+                <button
+                  key={tier}
+                  type="button"
+                  onClick={() => toggleTier(tier)}
+                  className={`rounded-full border px-2.5 py-1 text-[10px] uppercase font-mono transition-opacity ${
+                    TIER_STYLE[tier]
+                  } ${active ? "" : "opacity-35"}`}
+                  title={active ? `Hide ${tier}` : `Show ${tier}`}
+                >
+                  {tier} {count}
+                </button>
+              );
+            })}
+          </div>
+
           <Card className="overflow-hidden">
             <Table>
               <TableHeader>
@@ -528,19 +628,19 @@ export default function LiveEdges() {
                   <TableHead>Market</TableHead>
                   <TableHead>Selection</TableHead>
                   <TableHead>Book</TableHead>
-                  <TableHead className="text-right">Public</TableHead>
                   <TableHead className="text-right text-muted-foreground">DK</TableHead>
                   <TableHead className="text-right">Fair</TableHead>
                   <TableHead className="text-right">Odds</TableHead>
                   <TableHead className="text-right">EV%</TableHead>
                   <TableHead className="text-right whitespace-nowrap">Sharp / Public</TableHead>
+                  <TableHead className="text-center">Trust</TableHead>
                   <TableHead className="w-[130px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {edges.length === 0 ? (
+                {visibleEdges.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
+                    <TableCell colSpan={11} className="text-center text-muted-foreground py-12">
                       <div className="flex flex-col items-center justify-center space-y-2">
                         <Activity className="h-6 w-6 opacity-30" />
                         <p>No +EV edges found right now.</p>
@@ -549,7 +649,7 @@ export default function LiveEdges() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  edges.map((edge, idx) => (
+                  visibleEdges.map((edge, idx) => (
                     <TableRow key={`${edge.gameId}-${edge.selection}-${edge.book}-${idx}`}>
                       <TableCell>
                         <div className="font-sans font-medium text-xs whitespace-nowrap">
@@ -588,6 +688,12 @@ export default function LiveEdges() {
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
                         {edge.sharpProb != null ? `${edge.sharpProb}%` : "—"} / {edge.publicProb != null ? `${edge.publicProb}%` : "—"}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <ConfidenceBadge
+                          tier={edge.confidenceTier as ConfidenceTier}
+                          reasons={edge.confidenceReasons}
+                        />
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
@@ -709,17 +815,19 @@ export default function LiveEdges() {
                           <TableHead>Market</TableHead>
                           <TableHead>Selection</TableHead>
                           <TableHead>Book</TableHead>
+                          <TableHead className="text-right text-muted-foreground">DK</TableHead>
                           <TableHead className="text-right">Fair</TableHead>
                           <TableHead className="text-right">Odds</TableHead>
                           <TableHead className="text-right">EV%</TableHead>
                           <TableHead className="text-right whitespace-nowrap">Sharp / Public</TableHead>
+                          <TableHead className="text-center">Trust</TableHead>
                           <TableHead className="w-[130px]"></TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {propEdges.length === 0 ? (
+                        {visiblePropEdges.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={9} className="text-center text-muted-foreground py-12">
+                            <TableCell colSpan={11} className="text-center text-muted-foreground py-12">
                               <div className="flex flex-col items-center justify-center space-y-2">
                                 <Activity className="h-6 w-6 opacity-30" />
                                 <p>No +EV player props found for this game.</p>
@@ -728,7 +836,7 @@ export default function LiveEdges() {
                             </TableCell>
                           </TableRow>
                         ) : (
-                          propEdges.map((edge, idx) => (
+                          visiblePropEdges.map((edge, idx) => (
                             <TableRow key={`${edge.gameId}-${edge.market}-${edge.player}-${edge.selection}-${edge.book}-${idx}`}>
                               <TableCell>
                                 <div className="font-sans font-medium text-xs whitespace-nowrap">{edge.player}</div>
@@ -755,9 +863,15 @@ export default function LiveEdges() {
                               <TableCell className="text-right font-mono text-xs text-muted-foreground whitespace-nowrap">
                                 {edge.sharpProb != null ? `${edge.sharpProb}%` : "—"} / {edge.publicProb != null ? `${edge.publicProb}%` : "—"}
                               </TableCell>
+                              <TableCell className="text-center">
+                                <ConfidenceBadge
+                                  tier={edge.confidenceTier as ConfidenceTier}
+                                  reasons={edge.confidenceReasons}
+                                />
+                              </TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-1">
-                                  <AnalyzeGameDialog edge={edge} gameEdges={propEdges}>
+                                  <AnalyzeGameDialog edge={edge} gameEdges={visiblePropEdges}>
                                     <Button size="sm" variant="outline" className="w-full">
                                       <Sparkles className="mr-1 h-3 w-3" />
                                       Analyze

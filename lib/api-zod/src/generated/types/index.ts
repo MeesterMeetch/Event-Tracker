@@ -12,6 +12,7 @@ export * from './betStatus';
 export * from './betUpdate';
 export * from './dashboardSummary';
 export * from './edgeOpportunity';
+export * from './edgeOpportunityConfidenceTier';
 export * from './errorResponse';
 export * from './gameAnalysisRequest';
 export * from './gameAnalysisResponse';

@@ -1,9 +1,10 @@
 import type { OddsEvent, OddsOutcome } from "./odds";
 import type { EdgeOpportunity } from "./ev";
-import { avgProbPercent } from "./ev";
+import { avgProbPercent, dispersionPercent } from "./ev";
 import { americanToDecimal, americanToImpliedProb, isSharpBook, probToAmerican } from "./odds-math";
 import { devig, configuredDevigMethod } from "./devig";
 import { isBettableBook } from "./bettable-books";
+import { assessConfidence } from "./edge-confidence";
 
 /**
  * Over/Under player-prop markets scanned per sport. Only two-sided O/U
@@ -144,6 +145,16 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
     const evPercent = (decimalBest * avgFairProb - 1) * 100;
 
     if (evPercent >= minEdgePercent) {
+      const bookCount = sampleBooks.get(key)?.size ?? samples.length;
+      const sharpProb = avgProbPercent(sharpSamples.get(key));
+      const confidence = assessConfidence({
+        bookCount,
+        evPercent,
+        dispersionPercent: dispersionPercent(samples),
+        sharpProb,
+        publicProb: avgProbPercent(publicSamples.get(key)),
+        impliedProbPercent: (1 / decimalBest) * 100,
+      });
       edges.push({
         gameId: event.id,
         sport,
@@ -157,10 +168,15 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
         americanOdds: bestForKey.americanOdds,
         book: bestForKey.book,
         dkOdds: dk.get(key) ?? null,
-        sharpProb: avgProbPercent(sharpSamples.get(key)),
+        sharpProb,
         publicProb: avgProbPercent(publicSamples.get(key)),
         fairOdds: probToAmerican(avgFairProb),
         evPercent: Math.round(evPercent * 100) / 100,
+        bookCount,
+        dispersionPercent: dispersionPercent(samples),
+        confidenceTier: confidence.tier,
+        confidenceScore: confidence.score,
+        confidenceReasons: confidence.reasons,
       });
     }
   }

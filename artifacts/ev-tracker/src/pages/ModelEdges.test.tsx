@@ -14,11 +14,12 @@ import type { PaperTrade } from "@workspace/api-client-react";
  * A refactor that drops the status check should fail here.
  */
 
-const { createMutate, updateMutate, deleteMutate, restoreMutate, toastMock, tradesRef } = vi.hoisted(() => ({
+const { createMutate, updateMutate, deleteMutate, restoreMutate, createBetMutate, toastMock, tradesRef } = vi.hoisted(() => ({
   createMutate: vi.fn(),
   updateMutate: vi.fn(),
   deleteMutate: vi.fn(),
   restoreMutate: vi.fn(),
+  createBetMutate: vi.fn(),
   toastMock: vi.fn(),
   tradesRef: { current: [] as unknown[] },
 }));
@@ -30,6 +31,12 @@ vi.mock("@workspace/api-client-react", () => ({
   useCreatePaperTrade: () => ({ mutate: createMutate, isPending: false }),
   useUpdatePaperTrade: () => ({ mutate: updateMutate, isPending: false }),
   useGetPaperTradeSummary: () => ({ data: undefined }),
+  // PaperTradesTable promotes a paper trade into the real bet log, and
+  // ProjectionCard offers AI analysis. Both are called at module scope by the
+  // components under test, so the factory has to supply them even though these
+  // suites do not assert on them.
+  useCreateBet: () => ({ mutate: createBetMutate, isPending: false }),
+  useGenerateGameAnalysis: () => ({ mutate: vi.fn(), isPending: false }),
   useListEvents: () => ({ data: [], isLoading: false, isError: false }),
   useListModelEdges: () => ({ data: undefined, isLoading: false, isFetching: false, isError: false }),
   getListEventsQueryKey: () => ["events"],

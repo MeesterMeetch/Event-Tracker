@@ -39,6 +39,23 @@ services:
       # Paste your value in the Render dashboard when prompted.
       - key: ODDS_API_KEY
         sync: false
+      # Bookmaker regions for bulk game-line scans.
+      #
+      # This must be set explicitly. lineRegions() falls back to "us" when the
+      # variable is missing, and that fallback is silent, so an unset value
+      # looks identical to a working config while quietly dropping Pinnacle —
+      # the only genuine sharp anchor reachable through this feed, and an
+      # EU-region book. Without it, sharpProbPercent is null on every edge and
+      # the fair price is a consensus of US soft books averaging each other.
+      #
+      # Cost: three markets (h2h, spreads, totals) per slate scan, doubled by
+      # the second region. Three credits becomes six. See odds-regions.ts.
+      - key: ODDS_REGIONS_LINES
+        value: us,eu
+      # ODDS_REGIONS_PROPS is intentionally NOT set to us,eu. Props bill per
+      # market per event, so an eleven-market request across a sixteen-game
+      # slate is 176 credits in one region and 352 in two. Leave it on the "us"
+      # default until the credit burn justifies otherwise.
       # Uncomment these two only if you use the AI features:
       # - key: AI_INTEGRATIONS_OPENAI_API_KEY
       #   sync: false

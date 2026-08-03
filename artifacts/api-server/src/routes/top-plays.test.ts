@@ -40,14 +40,30 @@ afterEach(() => {
 });
 
 /**
+ * Fixtures commence relative to now rather than at a fixed date. The route
+ * bounds the pool by commence time, so a hardcoded timestamp would quietly
+ * fall out of the default window once real time passed it and every
+ * assertion here would start failing for a reason unrelated to the code.
+ */
+const SOON = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+const NEXT_MONTH = new Date(Date.now() + 32 * 24 * 60 * 60 * 1000).toISOString();
+
+/**
  * A two-book game with a deliberately generous price at a bettable book, so it
  * clears the 1% floor and gives selectTopPlays something to pick.
  */
-function game(id: string, home: string, away: string, homePrice: number, awayPrice: number) {
+function game(
+  id: string,
+  home: string,
+  away: string,
+  homePrice: number,
+  awayPrice: number,
+  commenceTime: string = SOON,
+) {
   return {
     id,
     sport_key: "ignored",
-    commence_time: "2026-08-04T23:05:00Z",
+    commence_time: commenceTime,
     home_team: home,
     away_team: away,
     bookmakers: ["draftkings", "fanduel", "betmgm", "pinnacle"].map((key) => ({
@@ -269,5 +285,114 @@ describe("GET /top-plays", () => {
     const { status } = await getJson(await buildApp(), "/api/top-plays?sports=,,,");
     expect(status).toBe(400);
     expect(oddsCalls()).toHaveLength(0);
+  });
+
+  /**
+   * The feed returns every upcoming event in a sport, not just today's. In
+   * August that means September football arrives in the same list as tonight's
+   * baseball, and since a play is ranked on confidence and EV rather than on
+   * when it starts, a game five weeks out can outrank the whole live board.
+   * "Top plays of the day" has to mean the day.
+   */
+  it("drops games outside the window and says how many it dropped", async () => {
+    stubFetchRoutes([
+      SPORTS_ROUTE,
+      {
+        contains: "baseball_mlb/odds",
+        payload: [
+          game("today", "Brewers", "Pirates", 145, -190),
+          game("september", "Chiefs", "Ravens", 150, -195, NEXT_MONTH),
+        ],
+      },
+    ]);
+
+    const start = new Date(Date.now() - 60_000).toISOString();
+    const end = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+    const { status, body } = await getJson(
+      await buildApp(),
+      `/api/top-plays?sports=baseball_mlb&startTime=${encodeURIComponent(start)}&endTime=${encodeURIComponent(end)}`,
+    );
+
+    expect(status).toBe(200);
+    const ids = body.picks.map((p: any) => p.edge.gameId);
+    expect(ids).toContain("today");
+    expect(ids).not.toContain("september");
+    expect(body.edgesOutsideWindow).toBeGreaterThan(0);
+    expect(body.windowStart).toBe(start);
+    expect(body.windowEnd).toBe(end);
+  });
+
+  /**
+   * The summary is the part a user is told to read first, so it has to describe
+   * the same board the picks came from. Summarising the unfiltered pool would
+   * report a busy slate on an evening with two games left.
+   */
+  it("summarises only the window, not the rest of the season", async () => {
+    stubFetchRoutes([
+      SPORTS_ROUTE,
+      {
+        contains: "baseball_mlb/odds",
+        payload: [
+          game("today", "Brewers", "Pirates", 145, -190),
+          game("later-1", "Chiefs", "Ravens", 150, -195, NEXT_MONTH),
+          game("later-2", "Bills", "Jets", 150, -195, NEXT_MONTH),
+        ],
+      },
+    ]);
+
+    const start = new Date(Date.now() - 60_000).toISOString();
+    const end = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+    const { body } = await getJson(
+      await buildApp(),
+      `/api/top-plays?sports=baseball_mlb&startTime=${encodeURIComponent(start)}&endTime=${encodeURIComponent(end)}`,
+    );
+
+    expect(body.summary.gamesRepresented).toBe(1);
+  });
+
+  it("excludes a game that has already started", async () => {
+    stubFetchRoutes([
+      SPORTS_ROUTE,
+      {
+        contains: "baseball_mlb/odds",
+        payload: [
+          game(
+            "underway",
+            "Brewers",
+            "Pirates",
+            145,
+            -190,
+            new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+          ),
+        ],
+      },
+    ]);
+
+    const { status, body } = await getJson(await buildApp(), "/api/top-plays?sports=baseball_mlb");
+
+    expect(status).toBe(200);
+    expect(body.picks).toEqual([]);
+    expect(body.edgesOutsideWindow).toBeGreaterThan(0);
+  });
+
+  it("rejects a window that ends before it starts", async () => {
+    stubFetchRoutes([SPORTS_ROUTE]);
+    const start = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const end = new Date(Date.now()).toISOString();
+    const { status, body } = await getJson(
+      await buildApp(),
+      `/api/top-plays?sports=baseball_mlb&startTime=${encodeURIComponent(start)}&endTime=${encodeURIComponent(end)}`,
+    );
+    expect(status).toBe(400);
+    expect(String(body.error)).toContain("after startTime");
+  });
+
+  it("rejects an unparseable startTime rather than silently scanning everything", async () => {
+    stubFetchRoutes([SPORTS_ROUTE]);
+    const { status } = await getJson(
+      await buildApp(),
+      "/api/top-plays?sports=baseball_mlb&startTime=not-a-date",
+    );
+    expect(status).toBe(400);
   });
 });

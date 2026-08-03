@@ -19,4 +19,10 @@ export interface TopPlaysResponse {
   sportsFailed: SportScanFailure[];
   /** When the fan-out ran. These prices go stale in minutes. */
   scannedAt: Date;
+  /** Start of the commence-time window actually applied. */
+  windowStart: Date;
+  /** End of the commence-time window actually applied. */
+  windowEnd: Date;
+  /** Priced outcomes dropped for falling outside the window. Lets a client tell "no games left today" apart from "nothing worth betting", which are indistinguishable in an empty picks array. */
+  edgesOutsideWindow: number;
 }

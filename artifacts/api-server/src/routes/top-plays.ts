@@ -52,6 +52,13 @@ const ABSOLUTE_MAX_SPORTS = 12;
  */
 const SCAN_FLOOR_PERCENT = -100;
 
+/**
+ * Fallback window when the caller does not supply one. Twenty four hours from
+ * now rather than "the rest of the UTC day", so a bare curl at 23:50 UTC does
+ * not come back empty for want of a timezone it was never asked for.
+ */
+const DEFAULT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 interface ScanResult {
   sport: string;
   edges: EdgeOpportunity[];
@@ -72,7 +79,28 @@ router.get("/top-plays", async (req, res): Promise<void> => {
     return;
   }
 
-  const { sports, maxSports, limit, minEvPercent, maxPerGame } = parsed.data;
+  const { sports, maxSports, limit, minEvPercent, maxPerGame, startTime, endTime } =
+    parsed.data;
+
+  // The window is supplied by the caller rather than derived here, because
+  // "today" is a question about the viewer's calendar and this process runs in
+  // UTC. For five hours every evening a Denver user and this server disagree
+  // about what day it is, and the server is the one that is wrong.
+  const windowStart = startTime != null ? new Date(startTime) : new Date();
+  if (Number.isNaN(windowStart.getTime())) {
+    res.status(400).json({ error: "startTime is not a valid ISO 8601 instant" });
+    return;
+  }
+  const windowEnd =
+    endTime != null ? new Date(endTime) : new Date(windowStart.getTime() + DEFAULT_WINDOW_MS);
+  if (Number.isNaN(windowEnd.getTime())) {
+    res.status(400).json({ error: "endTime is not a valid ISO 8601 instant" });
+    return;
+  }
+  if (windowEnd.getTime() <= windowStart.getTime()) {
+    res.status(400).json({ error: "endTime must be after startTime" });
+    return;
+  }
 
   const cap = Math.max(
     1,
@@ -132,13 +160,25 @@ router.get("/top-plays", async (req, res): Promise<void> => {
     return;
   }
 
-  const picks = selectTopPlays(pooled, {
+  // Bound the pool by commence time before anything reads it. The feed returns
+  // every upcoming event in a sport, so in August a December football game sits
+  // in the same list as tonight's baseball and can outrank it. Filtering here
+  // rather than inside selectTopPlays keeps summarizeSlate honest as well: the
+  // summary should describe the day being asked about, not the rest of the
+  // season.
+  const inWindow = pooled.filter((edge) => {
+    const t = Date.parse(edge.commenceTime);
+    return Number.isFinite(t) && t >= windowStart.getTime() && t < windowEnd.getTime();
+  });
+  const edgesOutsideWindow = pooled.length - inWindow.length;
+
+  const picks = selectTopPlays(inWindow, {
     limit: limit ?? DEFAULT_TOP_PLAYS_OPTIONS.limit,
     minEvPercent: minEvPercent ?? DEFAULT_TOP_PLAYS_OPTIONS.minEvPercent,
     maxPerGame: maxPerGame ?? DEFAULT_TOP_PLAYS_OPTIONS.maxPerGame,
   });
 
-  const summary = summarizeSlate(pooled, picks);
+  const summary = summarizeSlate(inWindow, picks);
 
   res.json(
     ListTopPlaysResponse.parse({
@@ -147,6 +187,9 @@ router.get("/top-plays", async (req, res): Promise<void> => {
       sportsScanned,
       sportsFailed,
       scannedAt: new Date().toISOString(),
+      windowStart: windowStart.toISOString(),
+      windowEnd: windowEnd.toISOString(),
+      edgesOutsideWindow,
     }),
   );
 });

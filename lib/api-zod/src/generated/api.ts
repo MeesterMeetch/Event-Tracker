@@ -77,7 +77,9 @@ export const ListTopPlaysQueryParams = zod.object({
   "maxSports": zod.coerce.number().optional().describe('Ceiling on sports scanned in one call. Guards the credit spend.'),
   "limit": zod.coerce.number().optional(),
   "minEvPercent": zod.coerce.number().optional(),
-  "maxPerGame": zod.coerce.number().optional()
+  "maxPerGame": zod.coerce.number().optional(),
+  "startTime": zod.coerce.string().optional().describe('ISO 8601 instant. Only games commencing at or after this moment are considered. Clients send their own local start of day, because \"today\" is a question about the viewer\'s calendar and the server runs in UTC. Defaults to now.\n'),
+  "endTime": zod.coerce.string().optional().describe('ISO 8601 instant. Only games commencing strictly before this moment are considered. Clients send their own local midnight. Defaults to 24 hours after startTime.\n')
 })
 
 export const ListTopPlaysResponse = zod.object({
@@ -128,7 +130,10 @@ export const ListTopPlaysResponse = zod.object({
   "sport": zod.string(),
   "reason": zod.string()
 })).describe('Sports that errored. Reported rather than swallowed, because a thin board caused by three failed scans means something different from a thin board caused by an efficient market.'),
-  "scannedAt": zod.coerce.date().describe('When the fan-out ran. These prices go stale in minutes.')
+  "scannedAt": zod.coerce.date().describe('When the fan-out ran. These prices go stale in minutes.'),
+  "windowStart": zod.coerce.date().describe('Start of the commence-time window actually applied.'),
+  "windowEnd": zod.coerce.date().describe('End of the commence-time window actually applied.'),
+  "edgesOutsideWindow": zod.number().describe('Priced outcomes dropped for falling outside the window. Lets a client tell \"no games left today\" apart from \"nothing worth betting\", which are indistinguishable in an empty picks array.')
 })
 
 

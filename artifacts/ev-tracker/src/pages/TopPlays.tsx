@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useListTopPlays, getListTopPlaysQueryKey } from "@workspace/api-client-react";
-import type { TopPlay, SlateSummary } from "@workspace/api-client-react";
+import type { TopPlay, SlateSummary, ListTopPlaysParams } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -104,23 +104,60 @@ function PlayCard({ play }: { play: TopPlay }) {
   );
 }
 
+/**
+ * The window the button asks for: now until midnight tonight, in the viewer's
+ * own timezone. Computed in the browser because that is the only place that
+ * knows what "today" means for the person looking at the screen. The server
+ * runs in UTC and would call it tomorrow for the last five hours of every
+ * evening.
+ *
+ * Games already underway are excluded. These are pregame prices, and a number
+ * attached to a game in the third inning is not a play.
+ */
+function todayWindow(): ListTopPlaysParams {
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(24, 0, 0, 0);
+  return { startTime: now.toISOString(), endTime: midnight.toISOString() };
+}
+
 export default function TopPlays() {
   // Never fetched on mount. A fan-out is one billed scan per sport, so it costs
   // real money every time it runs and must be a deliberate action rather than
   // something that happens because a tab was opened.
   const [scanning, setScanning] = useState(false);
-  const { data, isFetching, isError, error, refetch } = useListTopPlays(undefined, {
-    query: { queryKey: getListTopPlaysQueryKey(), enabled: false, gcTime: 0 },
+  const [request, setRequest] = useState<ListTopPlaysParams | null>(null);
+  const { data, isFetching, isError, error, refetch } = useListTopPlays(request ?? undefined, {
+    query: {
+      queryKey: getListTopPlaysQueryKey(request ?? undefined),
+      enabled: false,
+      gcTime: 0,
+    },
   });
 
-  const run = async () => {
+  // The scan fires from an effect rather than from the click handler so the
+  // query has re-rendered with the new window before refetch runs. Calling
+  // refetch() inline would send whatever params the previous render held, which
+  // is wrong on the first press and stale on every one after midnight.
+  useEffect(() => {
+    if (request == null) return;
+    let cancelled = false;
     setScanning(true);
-    try {
-      await refetch();
-    } finally {
-      setScanning(false);
-    }
-  };
+    void (async () => {
+      try {
+        await refetch();
+      } finally {
+        if (!cancelled) setScanning(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // refetch is deliberately not a dependency; its identity changes every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request]);
+
+  const run = () => setRequest(todayWindow());
 
   const busy = scanning || isFetching;
 
@@ -219,9 +256,18 @@ export default function TopPlays() {
 
           {data.picks.length === 0 ? (
             <Card>
-              <CardContent className="pt-6 text-sm text-muted-foreground">
-                Nothing cleared the bar. Scanned{" "}
-                {data.sportsScanned.join(", ") || "no sports"}.
+              <CardContent className="pt-6 text-sm text-muted-foreground space-y-2">
+                <p>
+                  Nothing cleared the bar for today. Scanned{" "}
+                  {data.sportsScanned.join(", ") || "no sports"}.
+                </p>
+                {data.edgesOutsideWindow > 0 && (
+                  <p data-testid="text-outside-window">
+                    {data.edgesOutsideWindow} priced outcomes were set aside for falling on a
+                    later day. An empty list this late usually means today's board is
+                    finished rather than that the market is tight.
+                  </p>
+                )}
               </CardContent>
             </Card>
           ) : (

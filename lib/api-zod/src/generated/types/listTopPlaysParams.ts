@@ -18,4 +18,12 @@ maxSports?: number;
 limit?: number;
 minEvPercent?: number;
 maxPerGame?: number;
+/**
+ * ISO 8601 instant. Only games commencing at or after this moment are considered. Clients send their own local start of day, because "today" is a question about the viewer's calendar and the server runs in UTC. Defaults to now.
+ */
+startTime?: string;
+/**
+ * ISO 8601 instant. Only games commencing strictly before this moment are considered. Clients send their own local midnight. Defaults to 24 hours after startTime.
+ */
+endTime?: string;
 };

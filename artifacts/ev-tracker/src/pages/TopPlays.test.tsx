@@ -16,8 +16,11 @@ import userEvent from "@testing-library/user-event";
  * empty list is only an answer in the first case.
  */
 
-const { refetchMock, stateRef } = vi.hoisted(() => ({
+const { refetchMock, stateRef, paramsRef } = vi.hoisted(() => ({
   refetchMock: vi.fn(),
+  // Captures what the page asked the API for. The window is the whole point of
+  // the feature, so "did it send one" is worth an assertion.
+  paramsRef: { current: undefined as Record<string, string> | undefined },
   stateRef: {
     current: {
       data: undefined as unknown,
@@ -29,7 +32,10 @@ const { refetchMock, stateRef } = vi.hoisted(() => ({
 }));
 
 vi.mock("@workspace/api-client-react", () => ({
-  useListTopPlays: () => ({ ...stateRef.current, refetch: refetchMock }),
+  useListTopPlays: (params?: Record<string, string>) => {
+    paramsRef.current = params;
+    return { ...stateRef.current, refetch: refetchMock };
+  },
   getListTopPlaysQueryKey: () => ["top-plays"],
 }));
 
@@ -92,6 +98,9 @@ function response(overrides: Record<string, unknown> = {}) {
     sportsScanned: ["baseball_mlb", "basketball_nba"],
     sportsFailed: [],
     scannedAt: "2026-08-03T18:40:00Z",
+    windowStart: "2026-08-03T18:40:00Z",
+    windowEnd: "2026-08-04T06:00:00Z",
+    edgesOutsideWindow: 0,
     ...overrides,
   };
 }
@@ -99,6 +108,8 @@ function response(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   stateRef.current = { data: undefined, isFetching: false, isError: false, error: undefined };
   refetchMock.mockReset();
+  refetchMock.mockResolvedValue(undefined);
+  paramsRef.current = undefined;
 });
 
 afterEach(cleanup);
@@ -180,5 +191,47 @@ describe("TopPlays", () => {
     const button = screen.getByTestId("button-scan-top-plays") as HTMLButtonElement;
     expect(button.disabled).toBe(true);
     expect(screen.getByText(/Scanning/i)).toBeTruthy();
+  });
+
+  /**
+   * The feed hands back every upcoming event in a sport, so without a window a
+   * September football game lands in the same pool as tonight's baseball and
+   * can outrank it. The window has to come from the browser, because the server
+   * runs in UTC and would call it tomorrow for the last hours of every evening.
+   */
+  it("asks only for today, bounded by the viewer's own midnight", async () => {
+    render(<TopPlays />);
+    expect(paramsRef.current).toBeUndefined();
+
+    await userEvent.click(screen.getByTestId("button-scan-top-plays"));
+
+    const params = paramsRef.current;
+    expect(params).toBeDefined();
+
+    const start = new Date(params!.startTime);
+    const end = new Date(params!.endTime);
+
+    // Starts at roughly now: games already underway are not plays.
+    expect(Math.abs(start.getTime() - Date.now())).toBeLessThan(60_000);
+    // Ends at local midnight, whatever timezone the viewer is in.
+    expect(end.getHours()).toBe(0);
+    expect(end.getMinutes()).toBe(0);
+    expect(end.getTime()).toBeGreaterThan(start.getTime());
+  });
+
+  /**
+   * An empty list because the day is over and an empty list because the market
+   * is tight are the same JSON. They are not the same message.
+   */
+  it("distinguishes a finished day from a tight market", async () => {
+    stateRef.current.data = response({ picks: [], edgesOutsideWindow: 41 });
+    render(<TopPlays />);
+    expect(screen.getByTestId("text-outside-window").textContent).toMatch(/41 priced outcomes/);
+  });
+
+  it("says nothing about later days when the window held everything", async () => {
+    stateRef.current.data = response({ picks: [], edgesOutsideWindow: 0 });
+    render(<TopPlays />);
+    expect(screen.queryByTestId("text-outside-window")).toBeNull();
   });
 });

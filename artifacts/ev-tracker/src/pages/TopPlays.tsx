@@ -105,20 +105,50 @@ function PlayCard({ play }: { play: TopPlay }) {
 }
 
 /**
- * The window the button asks for: now until midnight tonight, in the viewer's
- * own timezone. Computed in the browser because that is the only place that
- * knows what "today" means for the person looking at the screen. The server
- * runs in UTC and would call it tomorrow for the last five hours of every
- * evening.
+ * How far ahead to look. Every option ends at a local midnight rather than at
+ * "now plus N times 24 hours", so "today" means today's calendar rather than a
+ * rolling day that dribbles into tomorrow afternoon.
  *
- * Games already underway are excluded. These are pregame prices, and a number
- * attached to a game in the third inning is not a play.
+ * Widening the window costs nothing extra. The scan is billed per sport, not
+ * per day, so the only thing a longer horizon changes is what is allowed to
+ * compete for the list.
  */
-function todayWindow(): ListTopPlaysParams {
+type WindowKey = "today" | "tomorrow" | "week" | "fortnight";
+
+interface WindowOption {
+  key: WindowKey;
+  label: string;
+  /** Extra local midnights past tonight's. Zero means tonight's. */
+  extraDays: number;
+  /** What the empty state and the header call this span. */
+  phrase: string;
+}
+
+const WINDOW_OPTIONS: readonly WindowOption[] = [
+  { key: "today", label: "Today", extraDays: 0, phrase: "today" },
+  { key: "tomorrow", label: "Today & tomorrow", extraDays: 1, phrase: "today and tomorrow" },
+  { key: "week", label: "7 days", extraDays: 7, phrase: "the next 7 days" },
+  { key: "fortnight", label: "14 days", extraDays: 14, phrase: "the next 14 days" },
+];
+
+const DEFAULT_WINDOW: WindowKey = "today";
+
+/**
+ * Builds the window in the viewer's own timezone, because that is the only
+ * place that knows what "today" means for the person looking at the screen.
+ * The server runs in UTC and would call it tomorrow for the last hours of
+ * every evening.
+ *
+ * Always starts at now, so games already underway are excluded. These are
+ * pregame prices, and a number attached to a game in the third inning is not
+ * a play.
+ */
+function windowFor(option: WindowOption): ListTopPlaysParams {
   const now = new Date();
-  const midnight = new Date(now);
-  midnight.setHours(24, 0, 0, 0);
-  return { startTime: now.toISOString(), endTime: midnight.toISOString() };
+  const end = new Date(now);
+  end.setHours(24, 0, 0, 0);
+  end.setDate(end.getDate() + option.extraDays);
+  return { startTime: now.toISOString(), endTime: end.toISOString() };
 }
 
 export default function TopPlays() {
@@ -126,7 +156,13 @@ export default function TopPlays() {
   // real money every time it runs and must be a deliberate action rather than
   // something that happens because a tab was opened.
   const [scanning, setScanning] = useState(false);
+  const [windowKey, setWindowKey] = useState<WindowKey>(DEFAULT_WINDOW);
   const [request, setRequest] = useState<ListTopPlaysParams | null>(null);
+  // The window the last scan actually used. Held separately from windowKey so
+  // the results stay labelled with the span they came from even after the
+  // selector is changed but before the board is scanned again.
+  const [scannedWindow, setScannedWindow] = useState<WindowOption | null>(null);
+  const selected = WINDOW_OPTIONS.find((o) => o.key === windowKey) ?? WINDOW_OPTIONS[0];
   const { data, isFetching, isError, error, refetch } = useListTopPlays(request ?? undefined, {
     query: {
       queryKey: getListTopPlaysQueryKey(request ?? undefined),
@@ -157,7 +193,10 @@ export default function TopPlays() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [request]);
 
-  const run = () => setRequest(todayWindow());
+  const run = () => {
+    setScannedWindow(selected);
+    setRequest(windowFor(selected));
+  };
 
   const busy = scanning || isFetching;
 
@@ -170,21 +209,49 @@ export default function TopPlays() {
             Top Plays
           </h1>
           <p className="text-sm text-muted-foreground max-w-2xl">
-            Scans the day's board across sports and selects the plays most worth making
-            together. Confidence outranks size, and a game can only contribute so much, so
-            five correlated bets on one script cannot fill the list.
+            Scans the board across sports and selects the plays most worth making together.
+            Confidence outranks size, and a game can only contribute so much, so five
+            correlated bets on one script cannot fill the list. Widening the window does not
+            cost more, since each scan is billed per sport rather than per day.
           </p>
         </div>
-        <Button onClick={run} disabled={busy} data-testid="button-scan-top-plays">
-          {busy ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Scanning
-            </>
-          ) : (
-            "Scan the board"
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-wrap gap-1" role="group" aria-label="How far ahead to look">
+            {WINDOW_OPTIONS.map((option) => (
+              <Button
+                key={option.key}
+                size="sm"
+                variant={option.key === windowKey ? "default" : "outline"}
+                onClick={() => setWindowKey(option.key)}
+                disabled={busy}
+                aria-pressed={option.key === windowKey}
+                data-testid={`button-window-${option.key}`}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+          <Button onClick={run} disabled={busy} data-testid="button-scan-top-plays">
+            {busy ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Scanning
+              </>
+            ) : (
+              "Scan the board"
+            )}
+          </Button>
+          {selected.extraDays >= 7 && (
+            <p
+              className="text-xs text-muted-foreground max-w-xs text-right"
+              data-testid="text-wide-window-note"
+            >
+              A wide window ranks a game two weeks out against tonight's board on equal
+              terms. Useful for finding early number, misleading as a list of plays to make
+              now.
+            </p>
           )}
-        </Button>
+        </div>
       </div>
 
       {!data && !busy && !isError && (
@@ -258,7 +325,7 @@ export default function TopPlays() {
             <Card>
               <CardContent className="pt-6 text-sm text-muted-foreground space-y-2">
                 <p>
-                  Nothing cleared the bar for today. Scanned{" "}
+                  Nothing cleared the bar for {(scannedWindow ?? selected).phrase}. Scanned{" "}
                   {data.sportsScanned.join(", ") || "no sports"}.
                 </p>
                 {data.edgesOutsideWindow > 0 && (

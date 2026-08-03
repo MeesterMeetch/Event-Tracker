@@ -220,6 +220,60 @@ describe("TopPlays", () => {
   });
 
   /**
+   * Every option has to land on a local midnight rather than on "now plus N
+   * days". A rolling 24 hours would put tomorrow afternoon's baseball in a list
+   * labelled Today, which is the bug this whole window exists to prevent.
+   */
+  it.each([
+    ["today", 0],
+    ["tomorrow", 1],
+    ["week", 7],
+    ["fortnight", 14],
+  ])("ends the %s window on a local midnight %i days past tonight", async (key, extraDays) => {
+    render(<TopPlays />);
+
+    await userEvent.click(screen.getByTestId(`button-window-${key}`));
+    await userEvent.click(screen.getByTestId("button-scan-top-plays"));
+
+    const end = new Date(paramsRef.current!.endTime);
+    expect(end.getHours()).toBe(0);
+    expect(end.getMinutes()).toBe(0);
+
+    const tonight = new Date();
+    tonight.setHours(24, 0, 0, 0);
+    const dayMs = 24 * 60 * 60 * 1000;
+    // Compared in whole days to stay correct across a daylight saving boundary,
+    // where the span is 23 or 25 hours rather than 24.
+    expect(Math.round((end.getTime() - tonight.getTime()) / dayMs)).toBe(extraDays);
+  });
+
+  it("defaults to today, so the expensive-looking option is never the accidental one", async () => {
+    render(<TopPlays />);
+    expect(screen.getByTestId("button-window-today").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("button-window-fortnight").getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+  });
+
+  /**
+   * A fortnight-wide list is a different object than a list of tonight's plays,
+   * and the page should not let those be confused.
+   */
+  it("warns that a wide window is not a list of plays to make now", async () => {
+    render(<TopPlays />);
+    expect(screen.queryByTestId("text-wide-window-note")).toBeNull();
+
+    await userEvent.click(screen.getByTestId("button-window-week"));
+    expect(screen.getByTestId("text-wide-window-note")).toBeTruthy();
+  });
+
+  it("labels an empty result with the window it actually scanned", async () => {
+    stateRef.current.data = response({ picks: [], edgesOutsideWindow: 3 });
+    render(<TopPlays />);
+    expect(screen.getByText(/Nothing cleared the bar for today/i)).toBeTruthy();
+  });
+
+  /**
    * An empty list because the day is over and an empty list because the market
    * is tight are the same JSON. They are not the same message.
    */

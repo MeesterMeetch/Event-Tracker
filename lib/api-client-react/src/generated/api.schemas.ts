@@ -517,9 +517,71 @@ export interface GameSummary {
   awayScore: number | null;
 }
 
+export interface TopPlay {
+  edge: EdgeOpportunity;
+  /** 1-based position in the final list. */
+  rank: number;
+  /** Combined confidence-and-EV score used for ordering. Not a probability, and not comparable across days. */
+  score: number;
+  /** Why this made the list, in plain language. */
+  rationale: string;
+  /** Selections already taken from this same game. Non-zero means the pick is correlated with something above it and should be sized smaller. */
+  sameGameCount: number;
+}
+
+export interface SlateTierCounts {
+  solid: number;
+  playable: number;
+  fragile: number;
+  suspect: number;
+}
+
+export interface SlateSummary {
+  /** Every priced outcome pooled across sports, before filtering. */
+  totalEdges: number;
+  /** Outcomes at or above 1% EV, before confidence and spacing rules. */
+  eligibleEdges: number;
+  byTier: SlateTierCounts;
+  gamesRepresented: number;
+  sportsRepresented: number;
+  /** Plain-language read on the shape of the day, independent of the individual picks. A board with no solid edges anywhere is a day to sit out, and a top-five list on its own would never tell you that. */
+  interpretation: string;
+}
+
+export interface SportScanFailure {
+  sport: string;
+  reason: string;
+}
+
+export interface TopPlaysResponse {
+  /** May be empty. An empty list with a populated summary is the honest answer on an efficient day, not a failure. */
+  picks: TopPlay[];
+  summary: SlateSummary;
+  /** Sports that returned odds and contributed to the pool. */
+  sportsScanned: string[];
+  /** Sports that errored. Reported rather than swallowed, because a thin board caused by three failed scans means something different from a thin board caused by an efficient market. */
+  sportsFailed: SportScanFailure[];
+  /** When the fan-out ran. These prices go stale in minutes. */
+  scannedAt: string;
+}
+
 export type ListEdgesParams = {
 sport: string;
 minEdgePercent?: number;
+};
+
+export type ListTopPlaysParams = {
+/**
+ * Comma-separated sport keys. Defaults to the in-season sports the picker offers, capped by maxSports to bound the credit spend.
+ */
+sports?: string;
+/**
+ * Ceiling on sports scanned in one call. Guards the credit spend.
+ */
+maxSports?: number;
+limit?: number;
+minEvPercent?: number;
+maxPerGame?: number;
 };
 
 export type ListEventsParams = {

@@ -100,6 +100,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /top-plays:
+    get:
+      operationId: listTopPlays
+      tags: [edges]
+      summary: The day's best plays, pooled across sports
+      description: >
+        Scans every requested sport, pools the edges into one list, and selects
+        the plays most worth making together. Selection is not a sort by EV:
+        confidence dominates the ranking, and each additional pick from a game
+        already represented must clear a rising bar so five correlated bets on
+        one script cannot masquerade as five positions.
+
+
+        An empty picks array is a normal and meaningful result, not an error.
+        The market is efficient more often than not, and the slate summary
+        carries the read on the day independently of whether anything cleared.
+        Callers should render the summary first and the list second.
+
+
+        Expensive: one scan per sport, billed markets times regions. Intended to
+        be triggered explicitly by a user action, never polled.
+      parameters:
+        - name: sports
+          in: query
+          required: false
+          description: >
+            Comma-separated sport keys. Defaults to the in-season sports the
+            picker offers, capped by maxSports to bound the credit spend.
+          schema:
+            type: string
+        - name: maxSports
+          in: query
+          required: false
+          description: Ceiling on sports scanned in one call. Guards the credit spend.
+          schema:
+            type: number
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: minEvPercent
+          in: query
+          required: false
+          schema:
+            type: number
+        - name: maxPerGame
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: >
+            The selected plays and the read on the slate. Both are always
+            present; picks may be empty.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopPlaysResponse"
+        "400":
+          description: Invalid sport list or parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Every requested sport failed to scan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /events:
     get:
       operationId: listEvents
@@ -1718,3 +1790,109 @@ components:
         awayScore:
           type: [integer, 'null']
           description: Current or final score; null when game has not started
+    TopPlay:
+      type: object
+      required: [edge, rank, score, rationale, sameGameCount]
+      properties:
+        edge:
+          $ref: "#/components/schemas/EdgeOpportunity"
+        rank:
+          type: number
+          description: 1-based position in the final list.
+        score:
+          type: number
+          description: >-
+            Combined confidence-and-EV score used for ordering. Not a
+            probability, and not comparable across days.
+        rationale:
+          type: string
+          description: Why this made the list, in plain language.
+        sameGameCount:
+          type: number
+          description: >-
+            Selections already taken from this same game. Non-zero means the
+            pick is correlated with something above it and should be sized
+            smaller.
+    SlateTierCounts:
+      type: object
+      required: [solid, playable, fragile, suspect]
+      properties:
+        solid:
+          type: number
+        playable:
+          type: number
+        fragile:
+          type: number
+        suspect:
+          type: number
+    SlateSummary:
+      type: object
+      required:
+        - totalEdges
+        - eligibleEdges
+        - byTier
+        - gamesRepresented
+        - sportsRepresented
+        - interpretation
+      properties:
+        totalEdges:
+          type: number
+          description: Every priced outcome pooled across sports, before filtering.
+        eligibleEdges:
+          type: number
+          description: Outcomes at or above 1% EV, before confidence and spacing rules.
+        byTier:
+          $ref: "#/components/schemas/SlateTierCounts"
+        gamesRepresented:
+          type: number
+        sportsRepresented:
+          type: number
+        interpretation:
+          type: string
+          description: >-
+            Plain-language read on the shape of the day, independent of the
+            individual picks. A board with no solid edges anywhere is a day to
+            sit out, and a top-five list on its own would never tell you that.
+    SportScanFailure:
+      type: object
+      required: [sport, reason]
+      properties:
+        sport:
+          type: string
+        reason:
+          type: string
+    TopPlaysResponse:
+      type: object
+      required:
+        - picks
+        - summary
+        - sportsScanned
+        - sportsFailed
+        - scannedAt
+      properties:
+        picks:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopPlay"
+          description: >-
+            May be empty. An empty list with a populated summary is the honest
+            answer on an efficient day, not a failure.
+        summary:
+          $ref: "#/components/schemas/SlateSummary"
+        sportsScanned:
+          type: array
+          items:
+            type: string
+          description: Sports that returned odds and contributed to the pool.
+        sportsFailed:
+          type: array
+          items:
+            $ref: "#/components/schemas/SportScanFailure"
+          description: >-
+            Sports that errored. Reported rather than swallowed, because a
+            thin board caused by three failed scans means something different
+            from a thin board caused by an efficient market.
+        scannedAt:
+          type: string
+          format: date-time
+          description: When the fan-out ran. These prices go stale in minutes.

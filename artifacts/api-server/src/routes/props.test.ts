@@ -34,6 +34,10 @@ beforeEach(() => {
   // previous test's /sports payload.
   vi.resetModules();
   process.env.ODDS_API_KEY = "test-odds-key";
+  // Same reasoning as edges.test.ts: region config is deployment state. Props
+  // are billed per market per event, so this one is left on the US default in
+  // production, but a shell export must not be able to decide that here.
+  delete process.env.ODDS_REGIONS_PROPS;
 });
 
 afterEach(() => {

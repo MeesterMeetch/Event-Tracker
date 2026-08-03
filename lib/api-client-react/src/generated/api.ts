@@ -42,6 +42,7 @@ import type {
   ListPaperTradesParams,
   ListPropEdgesParams,
   ListStandingsParams,
+  ListTopPlaysParams,
   ModelPitcherProjection,
   PaperTrade,
   PaperTradeInput,
@@ -49,7 +50,8 @@ import type {
   PaperTradeUpdate,
   RankingsSport,
   Sport,
-  StandingsGroup
+  StandingsGroup,
+  TopPlaysResponse
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -307,6 +309,95 @@ export function useListEdges<TData = Awaited<ReturnType<typeof listEdges>>, TErr
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListEdgesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListTopPlaysUrl = (params?: ListTopPlaysParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/top-plays?${stringifiedParams}` : `/api/top-plays`
+}
+
+/**
+ * Scans every requested sport, pools the edges into one list, and selects the plays most worth making together. Selection is not a sort by EV: confidence dominates the ranking, and each additional pick from a game already represented must clear a rising bar so five correlated bets on one script cannot masquerade as five positions.
+ *
+ * An empty picks array is a normal and meaningful result, not an error. The market is efficient more often than not, and the slate summary carries the read on the day independently of whether anything cleared. Callers should render the summary first and the list second.
+ *
+ * Expensive: one scan per sport, billed markets times regions. Intended to be triggered explicitly by a user action, never polled.
+ * @summary The day's best plays, pooled across sports
+ */
+export const listTopPlays = async (params?: ListTopPlaysParams, options?: RequestInit): Promise<TopPlaysResponse> => {
+
+  return customFetch<TopPlaysResponse>(getListTopPlaysUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTopPlaysQueryKey = (params?: ListTopPlaysParams,) => {
+    return [
+    `/api/top-plays`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListTopPlaysQueryOptions = <TData = Awaited<ReturnType<typeof listTopPlays>>, TError = ErrorType<ErrorResponse>>(params?: ListTopPlaysParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTopPlays>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTopPlaysQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTopPlays>>> = ({ signal }) => listTopPlays(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTopPlays>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTopPlaysQueryResult = NonNullable<Awaited<ReturnType<typeof listTopPlays>>>
+export type ListTopPlaysQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary The day's best plays, pooled across sports
+ */
+
+export function useListTopPlays<TData = Awaited<ReturnType<typeof listTopPlays>>, TError = ErrorType<ErrorResponse>>(
+ params?: ListTopPlaysParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTopPlays>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTopPlaysQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

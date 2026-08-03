@@ -13,6 +13,7 @@
     "edge:decay": "tsx scripts/edge-decay.ts",
     "odds:history": "tsx scripts/odds-history-report.ts",
     "market:survey": "tsx scripts/market-survey.ts",
+    "consensus:weighting": "tsx scripts/consensus-weighting.ts",
     "pinnacle:probe": "tsx scripts/pinnacle-probe.ts"
   },
   "dependencies": {

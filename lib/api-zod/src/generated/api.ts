@@ -65,6 +65,74 @@ export const ListEdgesResponse = zod.array(ListEdgesResponseItem)
 
 
 /**
+ * Scans every requested sport, pools the edges into one list, and selects the plays most worth making together. Selection is not a sort by EV: confidence dominates the ranking, and each additional pick from a game already represented must clear a rising bar so five correlated bets on one script cannot masquerade as five positions.
+ *
+ * An empty picks array is a normal and meaningful result, not an error. The market is efficient more often than not, and the slate summary carries the read on the day independently of whether anything cleared. Callers should render the summary first and the list second.
+ *
+ * Expensive: one scan per sport, billed markets times regions. Intended to be triggered explicitly by a user action, never polled.
+ * @summary The day's best plays, pooled across sports
+ */
+export const ListTopPlaysQueryParams = zod.object({
+  "sports": zod.coerce.string().optional().describe('Comma-separated sport keys. Defaults to the in-season sports the picker offers, capped by maxSports to bound the credit spend.\n'),
+  "maxSports": zod.coerce.number().optional().describe('Ceiling on sports scanned in one call. Guards the credit spend.'),
+  "limit": zod.coerce.number().optional(),
+  "minEvPercent": zod.coerce.number().optional(),
+  "maxPerGame": zod.coerce.number().optional()
+})
+
+export const ListTopPlaysResponse = zod.object({
+  "picks": zod.array(zod.object({
+  "edge": zod.object({
+  "gameId": zod.string(),
+  "sport": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "market": zod.string(),
+  "selection": zod.string(),
+  "point": zod.number().nullable(),
+  "player": zod.string().nullable().describe('Player name for player-prop edges; null for team markets.'),
+  "americanOdds": zod.number(),
+  "book": zod.string(),
+  "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
+  "fairOdds": zod.number(),
+  "evPercent": zod.number(),
+  "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
+  "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.'),
+  "bookCount": zod.number().describe('Distinct books quoting this outcome. Depth is the first ingredient of trust.'),
+  "dispersionPercent": zod.number().nullish().describe('Spread (sample standard deviation) of devigged fair probabilities across books, in percentage points. Low means the market agrees; high means somebody is wrong.'),
+  "confidenceTier": zod.enum(['solid', 'playable', 'fragile', 'suspect']).describe('How much to trust this edge, as distinct from how large it is. The largest EV numbers are usually the least real: a big edge on a deep market is more often a stale price than an opportunity. \"suspect\" means the sharp books contradict the edge or its size is not credible for a market of that depth.'),
+  "confidenceScore": zod.number().describe('Ordering hint behind the tier, 0-100. Not a probability.'),
+  "confidenceReasons": zod.array(zod.string()).describe('Short human-readable reasons behind the tier.')
+}),
+  "rank": zod.number().describe('1-based position in the final list.'),
+  "score": zod.number().describe('Combined confidence-and-EV score used for ordering. Not a probability, and not comparable across days.'),
+  "rationale": zod.string().describe('Why this made the list, in plain language.'),
+  "sameGameCount": zod.number().describe('Selections already taken from this same game. Non-zero means the pick is correlated with something above it and should be sized smaller.')
+})).describe('May be empty. An empty list with a populated summary is the honest answer on an efficient day, not a failure.'),
+  "summary": zod.object({
+  "totalEdges": zod.number().describe('Every priced outcome pooled across sports, before filtering.'),
+  "eligibleEdges": zod.number().describe('Outcomes at or above 1% EV, before confidence and spacing rules.'),
+  "byTier": zod.object({
+  "solid": zod.number(),
+  "playable": zod.number(),
+  "fragile": zod.number(),
+  "suspect": zod.number()
+}),
+  "gamesRepresented": zod.number(),
+  "sportsRepresented": zod.number(),
+  "interpretation": zod.string().describe('Plain-language read on the shape of the day, independent of the individual picks. A board with no solid edges anywhere is a day to sit out, and a top-five list on its own would never tell you that.')
+}),
+  "sportsScanned": zod.array(zod.string()).describe('Sports that returned odds and contributed to the pool.'),
+  "sportsFailed": zod.array(zod.object({
+  "sport": zod.string(),
+  "reason": zod.string()
+})).describe('Sports that errored. Reported rather than swallowed, because a thin board caused by three failed scans means something different from a thin board caused by an efficient market.'),
+  "scannedAt": zod.coerce.date().describe('When the fan-out ran. These prices go stale in minutes.')
+})
+
+
+/**
  * Lists upcoming games so a single game can be drilled into for player props. Backed by the free Odds API events endpoint — costs no credits.
  * @summary List upcoming games for a sport
  */

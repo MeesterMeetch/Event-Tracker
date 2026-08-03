@@ -28,15 +28,25 @@ const SPORTS_LIST = [
 
 const SPORTS_ROUTE = { contains: "all=false", payload: SPORTS_LIST };
 
+const originalRegions = process.env.ODDS_REGIONS_LINES;
+
 beforeEach(() => {
   // Fresh module graph per test so sports.ts's in-memory cache never leaks the
   // previous test's /sports payload.
   vi.resetModules();
   process.env.ODDS_API_KEY = "test-odds-key";
+  // Region config is deployment state, not test state. Production sets
+  // ODDS_REGIONS_LINES=us,eu to pull Pinnacle into the consensus, and a
+  // developer with that exported in their shell would otherwise fail a test
+  // that has nothing to do with regions. Pin it to the code default here and
+  // let odds-regions.test.ts own the configuration behaviour.
+  delete process.env.ODDS_REGIONS_LINES;
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  if (originalRegions === undefined) delete process.env.ODDS_REGIONS_LINES;
+  else process.env.ODDS_REGIONS_LINES = originalRegions;
 });
 
 async function buildApp(): Promise<Express> {
@@ -103,8 +113,28 @@ describe("GET /edges", () => {
     expect(url.pathname).toContain("/sports/baseball_mlb/odds");
     // The bulk scan must request h2h/spreads/totals and nothing else.
     expect(url.searchParams.get("markets")).toBe("h2h,spreads,totals");
+    // The default when ODDS_REGIONS_LINES is unset. Deliberately US-only so
+    // nothing doubles the credit cost of a scan without an explicit decision.
     expect(url.searchParams.get("regions")).toBe("us");
     expect(url.searchParams.get("oddsFormat")).toBe("american");
+  });
+
+  it("scans the configured regions rather than a hard-coded list", async () => {
+    // Production runs us,eu because that is the only way to reach Pinnacle, so
+    // the route must pass configuration through rather than pinning a value.
+    // Without this, adding the EU region would silently not apply to /edges.
+    process.env.ODDS_REGIONS_LINES = "us,eu";
+    stubFetchRoutes([
+      SPORTS_ROUTE,
+      { contains: "/odds", payload: loadFixture("edges-slate-mlb.json") },
+    ]);
+    const app = await buildApp();
+
+    const { status } = await getJson(app, "/api/edges?sport=baseball_mlb");
+    expect(status).toBe(200);
+
+    const url = new URL(upstreamUrls().filter((u) => u.includes("/odds"))[0]);
+    expect(url.searchParams.get("regions")).toBe("us,eu");
   });
 
   it("returns the positive-EV edges for a normal slate without dropping any game", async () => {

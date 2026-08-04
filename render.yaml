@@ -18,7 +18,13 @@ services:
     plan: starter        # always-on, so the background jobs (grading, CLV) keep running
     branch: main
 
-    buildCommand: pnpm install --no-frozen-lockfile --prod=false && pnpm --filter @workspace/api-server run build
+    # Activates the pnpm pinned in package.json rather than whatever the build
+    # image happens to ship. The overrides in pnpm-workspace.yaml are only read
+    # by pnpm 10; under pnpm 9 they are silently ignored, which would resolve a
+    # different dependency tree here than the one that was tested. The npm
+    # fallback covers an image without corepack, so a missing corepack degrades
+    # to the right version rather than failing the deploy.
+    buildCommand: (corepack enable pnpm || npm i -g pnpm@10.34.5); pnpm install --no-frozen-lockfile --prod=false && pnpm --filter @workspace/api-server run build
     # Creates/updates the database tables before the server starts.
     # Runs drizzle-kit directly (not via "pnpm run") to avoid pnpm's pre-run
     # dependency check, which kept re-triggering a failing frozen install.
@@ -70,7 +76,7 @@ services:
     runtime: static
     branch: main
 
-    buildCommand: pnpm install --no-frozen-lockfile --prod=false && pnpm --filter @workspace/ev-tracker run build
+    buildCommand: (corepack enable pnpm || npm i -g pnpm@10.34.5); pnpm install --no-frozen-lockfile --prod=false && pnpm --filter @workspace/ev-tracker run build
     staticPublishPath: artifacts/ev-tracker/dist/public
 
     routes:

@@ -599,9 +599,23 @@ export interface ModelSlateEventFailure {
   reason: string;
 }
 
+export interface ModelCalibrationState {
+  /** Logged predictions that have graded out. Null rather than zero when the database cannot be reached, because "no database" and "no graded trades yet" are different facts and a countdown that quietly reads zero on an outage would be a lie in the reassuring direction. */
+  gradedTrades?: number | null;
+  /** Whether a fitted calibration curve is in effect. */
+  plattFitted: boolean;
+  /** Weight on the model when pooling with the de-vigged market. 1 means the market is ignored entirely, which is the shipped default. */
+  blendWeight: number;
+  /** True once either correction is actually in effect. */
+  isCalibrated: boolean;
+  minGradedForCalibration: number;
+  minGradedForBlendWeight: number;
+}
+
 export interface ModelSlateResponse {
   /** Ranked by raw model edge. Empty is a legitimate answer and means the model agrees with the market everywhere it could measure. */
   plays: ModelSlatePlay[];
+  calibration: ModelCalibrationState;
   summary: ModelSlateSummary;
   eventsFailed: ModelSlateEventFailure[];
   windowStart: string;

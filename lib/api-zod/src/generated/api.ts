@@ -104,6 +104,14 @@ export const ListModelSlateResponse = zod.object({
   "isFlagged": zod.boolean().describe('True when the edge clears the threshold and 2+ books quote the line.'),
   "rank": zod.number()
 })).describe('Ranked by raw model edge. Empty is a legitimate answer and means the model agrees with the market everywhere it could measure.'),
+  "calibration": zod.object({
+  "gradedTrades": zod.number().nullish().describe('Logged predictions that have graded out. Null rather than zero when the database cannot be reached, because \"no database\" and \"no graded trades yet\" are different facts and a countdown that quietly reads zero on an outage would be a lie in the reassuring direction.'),
+  "plattFitted": zod.boolean().describe('Whether a fitted calibration curve is in effect.'),
+  "blendWeight": zod.number().describe('Weight on the model when pooling with the de-vigged market. 1 means the market is ignored entirely, which is the shipped default.'),
+  "isCalibrated": zod.boolean().describe('True once either correction is actually in effect.'),
+  "minGradedForCalibration": zod.number(),
+  "minGradedForBlendWeight": zod.number()
+}),
   "summary": zod.object({
   "eventsScanned": zod.number(),
   "linesMeasured": zod.number(),

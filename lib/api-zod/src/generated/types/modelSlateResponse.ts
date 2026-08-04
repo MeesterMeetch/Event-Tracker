@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { ModelCalibrationState } from './modelCalibrationState';
 import type { ModelSlateEventFailure } from './modelSlateEventFailure';
 import type { ModelSlatePlay } from './modelSlatePlay';
 import type { ModelSlateSummary } from './modelSlateSummary';
@@ -12,6 +13,7 @@ import type { ModelSlateSummary } from './modelSlateSummary';
 export interface ModelSlateResponse {
   /** Ranked by raw model edge. Empty is a legitimate answer and means the model agrees with the market everywhere it could measure. */
   plays: ModelSlatePlay[];
+  calibration: ModelCalibrationState;
   summary: ModelSlateSummary;
   eventsFailed: ModelSlateEventFailure[];
   windowStart: Date;

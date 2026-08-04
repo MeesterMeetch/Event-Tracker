@@ -39,11 +39,13 @@ import type {
   ListLeadersParams,
   ListMlbGamesParams,
   ListModelEdgesParams,
+  ListModelSlateParams,
   ListPaperTradesParams,
   ListPropEdgesParams,
   ListStandingsParams,
   ListTopPlaysParams,
   ModelPitcherProjection,
+  ModelSlateResponse,
   PaperTrade,
   PaperTradeInput,
   PaperTradeSummary,
@@ -309,6 +311,95 @@ export function useListEdges<TData = Awaited<ReturnType<typeof listEdges>>, TErr
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListEdgesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListModelSlateUrl = (params?: ListModelSlateParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/model-edges/slate?${stringifiedParams}` : `/api/model-edges/slate`
+}
+
+/**
+ * Runs the strikeout-projection model across every MLB game in the window and returns individual over/under lines ranked by the model's edge over the de-vigged market, rather than one game at a time.
+ *
+ * Cheap by comparison to the game-line fan-out: pitcher strikeouts is a single market, so this bills one credit per event, and a full slate is roughly fifteen. Still an explicit user action, never polled.
+ *
+ * These are model-versus-market edges, which can be large and wrong in a way market-versus-market edges cannot. Lines quoted by fewer than two books are dropped, since an edge measured against one book's price is measuring the book. Pitchers whose rate inputs were missing or degraded are excluded from the ranking and counted in the summary instead.
+ * @summary Rank the whole strikeout board by model disagreement
+ */
+export const listModelSlate = async (params?: ListModelSlateParams, options?: RequestInit): Promise<ModelSlateResponse> => {
+
+  return customFetch<ModelSlateResponse>(getListModelSlateUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListModelSlateQueryKey = (params?: ListModelSlateParams,) => {
+    return [
+    `/api/model-edges/slate`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListModelSlateQueryOptions = <TData = Awaited<ReturnType<typeof listModelSlate>>, TError = ErrorType<ErrorResponse>>(params?: ListModelSlateParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listModelSlate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListModelSlateQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listModelSlate>>> = ({ signal }) => listModelSlate(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listModelSlate>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListModelSlateQueryResult = NonNullable<Awaited<ReturnType<typeof listModelSlate>>>
+export type ListModelSlateQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Rank the whole strikeout board by model disagreement
+ */
+
+export function useListModelSlate<TData = Awaited<ReturnType<typeof listModelSlate>>, TError = ErrorType<ErrorResponse>>(
+ params?: ListModelSlateParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listModelSlate>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListModelSlateQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -65,6 +65,64 @@ export const ListEdgesResponse = zod.array(ListEdgesResponseItem)
 
 
 /**
+ * Runs the strikeout-projection model across every MLB game in the window and returns individual over/under lines ranked by the model's edge over the de-vigged market, rather than one game at a time.
+ *
+ * Cheap by comparison to the game-line fan-out: pitcher strikeouts is a single market, so this bills one credit per event, and a full slate is roughly fifteen. Still an explicit user action, never polled.
+ *
+ * These are model-versus-market edges, which can be large and wrong in a way market-versus-market edges cannot. Lines quoted by fewer than two books are dropped, since an edge measured against one book's price is measuring the book. Pitchers whose rate inputs were missing or degraded are excluded from the ranking and counted in the summary instead.
+ * @summary Rank the whole strikeout board by model disagreement
+ */
+export const ListModelSlateQueryParams = zod.object({
+  "startTime": zod.coerce.string().optional().describe('ISO 8601 instant. Only games commencing at or after this moment are scanned. Clients send their own local start of day. Defaults to now.\n'),
+  "endTime": zod.coerce.string().optional().describe('ISO 8601 instant. Only games commencing strictly before this moment are scanned. Defaults to 24 hours after startTime.\n'),
+  "limit": zod.coerce.number().optional(),
+  "minEdgePercent": zod.coerce.number().optional().describe('Threshold the model edge must clear to be flagged.'),
+  "kellyMultiplier": zod.coerce.number().optional(),
+  "maxEvents": zod.coerce.number().optional().describe('Ceiling on games scanned in one call. Guards the credit spend.')
+})
+
+export const ListModelSlateResponse = zod.object({
+  "plays": zod.array(zod.object({
+  "gameId": zod.string(),
+  "commenceTime": zod.coerce.date(),
+  "homeTeam": zod.string(),
+  "awayTeam": zod.string(),
+  "pitcher": zod.string(),
+  "team": zod.string(),
+  "opponent": zod.string(),
+  "expectedStrikeouts": zod.number().describe('The model\'s projected strikeout total for this start.'),
+  "sampleStarts": zod.number().describe('Starts behind the rate estimate. Shown rather than folded into a score, because a thin sample is the most common reason a large model edge is wrong.'),
+  "degradedInputs": zod.boolean().describe('True when opponent handedness data was unavailable.'),
+  "point": zod.number(),
+  "selection": zod.string(),
+  "americanOdds": zod.number(),
+  "book": zod.string(),
+  "modelProb": zod.number().describe('Model\'s push-adjusted win probability for this side.'),
+  "marketProb": zod.number().describe('De-vigged market consensus for this side.'),
+  "edgePercent": zod.number().describe('EV at the best available price using the model probability.'),
+  "recommendedUnits": zod.number(),
+  "isFlagged": zod.boolean().describe('True when the edge clears the threshold and 2+ books quote the line.'),
+  "rank": zod.number()
+})).describe('Ranked by raw model edge. Empty is a legitimate answer and means the model agrees with the market everywhere it could measure.'),
+  "summary": zod.object({
+  "eventsScanned": zod.number(),
+  "linesMeasured": zod.number(),
+  "pitchersProjected": zod.number(),
+  "flagged": zod.number().describe('Lines clearing the edge threshold, across the whole board.'),
+  "insufficientData": zod.number().describe('Starters excluded because their rate inputs were missing or degraded.'),
+  "interpretation": zod.string()
+}),
+  "eventsFailed": zod.array(zod.object({
+  "eventId": zod.string(),
+  "reason": zod.string()
+})),
+  "windowStart": zod.coerce.date(),
+  "windowEnd": zod.coerce.date(),
+  "scannedAt": zod.coerce.date()
+})
+
+
+/**
  * Scans every requested sport, pools the edges into one list, and selects the plays most worth making together. Selection is not a sort by EV: confidence dominates the ranking, and each additional pick from a game already represented must clear a rising bar so five correlated bets on one script cannot masquerade as five positions.
  *
  * An empty picks array is a normal and meaningful result, not an error. The market is efficient more often than not, and the slate summary carries the read on the day independently of whether anything cleared. Callers should render the summary first and the list second.

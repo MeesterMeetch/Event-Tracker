@@ -33,6 +33,34 @@ async function loadDb() {
 }
 
 /**
+ * How many logged predictions have graded out. This is the number standing
+ * between the model as it is now and a model anyone should size a bet from, so
+ * it belongs on screen rather than in a shell script nobody runs.
+ *
+ * Returns null rather than zero when the database cannot be reached, because
+ * "no database" and "no graded trades yet" are different facts and a countdown
+ * that silently reads zero on an outage would be a lie in the reassuring
+ * direction.
+ */
+export async function gradedTradeCount(): Promise<number | null> {
+  if (!process.env.DATABASE_URL) return null;
+  try {
+    const { db, pitcherKPaperTradesTable } = await loadDb();
+    const { and, isNull, isNotNull, count } = await import("drizzle-orm");
+    const rows = await db
+      .select({ n: count() })
+      .from(pitcherKPaperTradesTable)
+      .where(
+        and(isNull(pitcherKPaperTradesTable.deletedAt), isNotNull(pitcherKPaperTradesTable.outcome)),
+      );
+    return rows[0]?.n ?? 0;
+  } catch (err) {
+    logger.warn({ err }, "model-autolog: could not count graded trades");
+    return null;
+  }
+}
+
+/**
  * On unless explicitly switched off, which is a deliberate departure from
  * ODDS_HISTORY_ENABLED. That one ships off because it writes thousands of rows
  * per scan and belongs to a database bill. This writes tens, and the entire

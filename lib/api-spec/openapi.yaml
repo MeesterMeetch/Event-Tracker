@@ -2047,10 +2047,41 @@ components:
       properties:
         eventId: { type: string }
         reason: { type: string }
+    ModelCalibrationState:
+      type: object
+      required:
+        - plattFitted
+        - blendWeight
+        - isCalibrated
+        - minGradedForCalibration
+        - minGradedForBlendWeight
+      properties:
+        gradedTrades:
+          type: integer
+          nullable: true
+          description: >-
+            Logged predictions that have graded out. Null rather than zero when
+            the database cannot be reached, because "no database" and "no graded
+            trades yet" are different facts and a countdown that quietly reads
+            zero on an outage would be a lie in the reassuring direction.
+        plattFitted:
+          type: boolean
+          description: Whether a fitted calibration curve is in effect.
+        blendWeight:
+          type: number
+          description: >-
+            Weight on the model when pooling with the de-vigged market. 1 means
+            the market is ignored entirely, which is the shipped default.
+        isCalibrated:
+          type: boolean
+          description: True once either correction is actually in effect.
+        minGradedForCalibration: { type: integer }
+        minGradedForBlendWeight: { type: integer }
     ModelSlateResponse:
       type: object
       required:
         - plays
+        - calibration
         - summary
         - eventsFailed
         - windowStart
@@ -2064,6 +2095,8 @@ components:
           description: >-
             Ranked by raw model edge. Empty is a legitimate answer and means the
             model agrees with the market everywhere it could measure.
+        calibration:
+          $ref: "#/components/schemas/ModelCalibrationState"
         summary:
           $ref: "#/components/schemas/ModelSlateSummary"
         eventsFailed:

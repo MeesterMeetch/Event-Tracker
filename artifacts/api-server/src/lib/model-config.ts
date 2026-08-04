@@ -49,6 +49,14 @@ function loadBlendWeight(): number {
   return Math.min(Math.max(w, 0), 1);
 }
 
+/**
+ * Sample sizes below which a fit is noise rather than a correction. Shared with
+ * scripts/model-report.ts so the countdown shown in the UI and the thresholds
+ * the report actually enforces cannot drift apart.
+ */
+export const MIN_GRADED_FOR_CALIBRATION = 30;
+export const MIN_GRADED_FOR_BLEND_WEIGHT = 50;
+
 export const MODEL_CALIBRATION: ModelCalibrationConfig = {
   platt: loadPlatt(),
   blendWeight: loadBlendWeight(),

@@ -9,7 +9,15 @@ import {
   type ModelPitcherProjection,
 } from "../lib/pitcher-k-scanner";
 import { DEFAULT_KELLY_MULTIPLIER } from "../lib/pitcher-k-model";
-import { recordModelPaperTradesInBackground } from "../lib/model-trade-recorder";
+import {
+  recordModelPaperTradesInBackground,
+  gradedTradeCount,
+} from "../lib/model-trade-recorder";
+import {
+  MODEL_CALIBRATION,
+  MIN_GRADED_FOR_CALIBRATION,
+  MIN_GRADED_FOR_BLEND_WEIGHT,
+} from "../lib/model-config";
 
 const router: IRouter = Router();
 
@@ -224,9 +232,24 @@ router.get("/model-edges/slate", async (req, res): Promise<void> => {
     interpretation = `${flagged} of ${all.length} lines clear the edge threshold, across ${pitchers} starters. Model edges are disagreements, not certainties: check the sample size behind each before sizing.`;
   }
 
+  // How far the model is from being trustworthy, reported alongside its output
+  // rather than left in a config file. blendWeight of 1 means the market is
+  // ignored entirely, which is the shipped default and the reason a scan can
+  // disagree with the market on every line it measures.
+  const graded = await gradedTradeCount();
+  const calibration = {
+    gradedTrades: graded,
+    plattFitted: MODEL_CALIBRATION.platt != null,
+    blendWeight: MODEL_CALIBRATION.blendWeight,
+    isCalibrated: MODEL_CALIBRATION.platt != null || MODEL_CALIBRATION.blendWeight < 1,
+    minGradedForCalibration: MIN_GRADED_FOR_CALIBRATION,
+    minGradedForBlendWeight: MIN_GRADED_FOR_BLEND_WEIGHT,
+  };
+
   res.json(
     ListModelSlateResponse.parse({
       plays,
+      calibration,
       summary: {
         eventsScanned: inWindow.length - eventsFailed.length,
         linesMeasured: all.length,

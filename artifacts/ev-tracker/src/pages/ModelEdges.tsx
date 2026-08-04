@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
+import SlateBoard from "@/components/model/SlateBoard";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListEvents,
@@ -882,7 +883,7 @@ export function PaperTradesTable() {
 }
 
 export default function ModelEdges() {
-  const [tab, setTab] = useState<"projections" | "paper" | "performance">("projections");
+  const [tab, setTab] = useState<"board" | "projections" | "paper" | "performance">("projections");
   const [selectedEventId, setSelectedEventId] = useState<string>("");
 
   const [selectedDay, setSelectedDay] = useState<string>("");
@@ -947,12 +948,17 @@ export default function ModelEdges() {
         <p className="text-muted-foreground">Fundamental pitcher-strikeout projections vs the market, with Kelly staking and beat-the-close validation. MLB only.</p>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "projections" | "paper" | "performance")}>
-        <TabsList className="grid w-full grid-cols-3 sm:w-[30rem]">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "board" | "projections" | "paper" | "performance")}>
+        <TabsList className="grid w-full grid-cols-4 sm:w-[38rem]">
+          <TabsTrigger value="board">Whole Board</TabsTrigger>
           <TabsTrigger value="projections">Projections</TabsTrigger>
           <TabsTrigger value="paper">Paper Trades</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="board" className="mt-4 space-y-4">
+          <SlateBoard />
+        </TabsContent>
 
         <TabsContent value="projections" className="mt-4 space-y-4">
           <div className="space-y-3">

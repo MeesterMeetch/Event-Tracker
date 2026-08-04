@@ -19,6 +19,7 @@ import { db, pitcherKPaperTradesTable } from "@workspace/db";
 import { tailBiasReport, resolvedTrades, isTailSide, type GradedTrade } from "../src/lib/model-diagnostics";
 import { calibrationReport, fitPlatt, applyPlatt, brierScore, type Prediction } from "../src/lib/calibration";
 import { fitBlendWeight, type BlendSample } from "../src/lib/model-blend";
+import { MIN_GRADED_FOR_CALIBRATION, MIN_GRADED_FOR_BLEND_WEIGHT } from "../src/lib/model-config";
 
 function pct(x: number | null | undefined, digits = 1): string {
   if (x == null || !Number.isFinite(x)) return "n/a";
@@ -121,7 +122,7 @@ async function main(): Promise<void> {
   } else {
     console.log("Slope near 1 means the model is reasonably calibrated already.");
   }
-  if (report.sampleSize < 30) {
+  if (report.sampleSize < MIN_GRADED_FOR_CALIBRATION) {
     console.log("Sample is small. Do not wire these coefficients in yet.");
   } else {
     console.log(`To apply: set MODEL_PLATT_A=${platt.a.toFixed(4)} and MODEL_PLATT_B=${platt.b.toFixed(4)}`);
@@ -139,7 +140,7 @@ async function main(): Promise<void> {
   console.log(`Log loss, best blend:   ${num(fit.logLoss)}`);
   console.log(`Fitted weight on model: ${num(fit.weight, 2)}`);
   console.log(fit.interpretation);
-  if (fit.sampleSize >= 50) {
+  if (fit.sampleSize >= MIN_GRADED_FOR_BLEND_WEIGHT) {
     console.log(`To apply: set MODEL_BLEND_WEIGHT=${fit.weight.toFixed(2)}`);
   }
 

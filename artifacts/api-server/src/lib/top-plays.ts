@@ -186,7 +186,13 @@ export function summarizeSlate(edges: EdgeOpportunity[], picks: TopPlay[]): Slat
   const sports = new Set(edges.map((e) => e.sport));
 
   let interpretation: string;
-  if (picks.length === 0) {
+  // Checked before anything about the pick list, because a caller is free to
+  // lower the EV floor and ask for the best available anyway. When it does,
+  // picks is full and nothing in it is worth betting, and the summary is the
+  // one place that has to keep saying so.
+  if (positive.length === 0 && picks.length > 0) {
+    interpretation = `Nothing on the board clears the 1% bar. The ${picks.length} listed below are simply the best available out of ${edges.length} priced outcomes, and every one of them is priced worse than fair. Useful for seeing where the board sits, not for betting.`;
+  } else if (picks.length === 0) {
     interpretation =
       "Nothing on the board clears the bar today. That is a normal outcome and a real answer: the market is efficient more often than not, and a day with no plays is cheaper than a day with forced ones.";
   } else if (byTier.solid === 0) {

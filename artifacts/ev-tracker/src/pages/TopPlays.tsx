@@ -148,8 +148,24 @@ function windowFor(option: WindowOption): ListTopPlaysParams {
   const end = new Date(now);
   end.setHours(24, 0, 0, 0);
   end.setDate(end.getDate() + option.extraDays);
-  return { startTime: now.toISOString(), endTime: end.toISOString() };
+  return {
+    startTime: now.toISOString(),
+    endTime: end.toISOString(),
+    limit: LIST_LIMIT,
+    // Deliberately below zero. The page asks for the whole ranked board and
+    // decides how to present it, rather than letting the server hand back an
+    // empty list on a day when the honest answer is "here is where the board
+    // sits, and none of it is worth betting". The 1% bar is still applied, just
+    // as a presentation split rather than as a filter.
+    minEvPercent: -100,
+  };
 }
+
+/** How many ranked plays to pull. Enough to be useful, few enough to read. */
+const LIST_LIMIT = 15;
+
+/** The EV a play has to clear to count as a play rather than as information. */
+const EV_BAR = 1;
 
 export default function TopPlays() {
   // Never fetched on mount. A fan-out is one billed scan per sport, so it costs
@@ -197,6 +213,13 @@ export default function TopPlays() {
     setScannedWindow(selected);
     setRequest(windowFor(selected));
   };
+
+  // The server returns one ranked list; the bar decides how it is presented.
+  // Suspect-tier edges never appear here at all, since selectTopPlays excludes
+  // them upstream, which is the one filter worth keeping even in this mode.
+  const picks = data?.picks ?? [];
+  const clearing = picks.filter((p) => p.edge.evPercent >= EV_BAR);
+  const below = picks.filter((p) => p.edge.evPercent < EV_BAR);
 
   const busy = scanning || isFetching;
 
@@ -325,7 +348,7 @@ export default function TopPlays() {
             <Card>
               <CardContent className="pt-6 text-sm text-muted-foreground space-y-2">
                 <p>
-                  Nothing cleared the bar for {(scannedWindow ?? selected).phrase}. Scanned{" "}
+                  Nothing priced for {(scannedWindow ?? selected).phrase}. Scanned{" "}
                   {data.sportsScanned.join(", ") || "no sports"}.
                 </p>
                 {data.edgesOutsideWindow > 0 && (
@@ -338,11 +361,54 @@ export default function TopPlays() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-3">
-              {data.picks.map((p) => (
-                <PlayCard key={`${p.edge.gameId}-${p.edge.market}-${p.edge.selection}-${p.rank}`} play={p} />
-              ))}
-            </div>
+            <>
+              {clearing.length === 0 && (
+                <Card className="border-destructive/30 bg-destructive/5">
+                  <CardContent className="pt-6 flex items-start gap-3">
+                    <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium" data-testid="text-nothing-clears">
+                        Nothing clears the {EV_BAR}% bar. Every play below is priced worse
+                        than fair.
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        This is the ranked board, best first, so you can see where the market
+                        sits for {(scannedWindow ?? selected).phrase}. Betting any of it loses
+                        money by construction, not by bad luck.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {clearing.length > 0 && (
+                <div className="space-y-3" data-testid="list-clearing">
+                  {clearing.map((p) => (
+                    <PlayCard
+                      key={`${p.edge.gameId}-${p.edge.market}-${p.edge.selection}-${p.rank}`}
+                      play={p}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {below.length > 0 && (
+                <div className="space-y-3" data-testid="list-below-bar">
+                  {clearing.length > 0 && (
+                    <p className="text-xs text-muted-foreground pt-2">
+                      Below the {EV_BAR}% bar, ranked. Shown for context rather than as
+                      plays.
+                    </p>
+                  )}
+                  {below.map((p) => (
+                    <PlayCard
+                      key={`${p.edge.gameId}-${p.edge.market}-${p.edge.selection}-${p.rank}`}
+                      play={p}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </>
       )}

@@ -126,4 +126,21 @@ describe("summarizeSlate", () => {
     expect(s.gamesRepresented).toBe(2);
     expect(s.sportsRepresented).toBe(2);
   });
+  /**
+   * A caller is free to drop the EV floor and ask for the best available
+   * anyway. When it does, picks is full and none of it is worth betting, and
+   * the summary is the only place left that can say so.
+   */
+  it("says nothing clears even when the caller asked for a full list", () => {
+    const edges = [
+      edge({ evPercent: -0.3, confidenceTier: "solid" }),
+      edge({ evPercent: -1.2, confidenceTier: "solid" }),
+    ];
+    const picks = [{ edge: edges[0], rank: 1, score: 90, rationale: "", sameGameCount: 0 }];
+    const s = summarizeSlate(edges, picks as never);
+    expect(s.eligibleEdges).toBe(0);
+    expect(s.interpretation).toMatch(/nothing on the board clears/i);
+    expect(s.interpretation).toMatch(/worse than fair/i);
+  });
+
 });

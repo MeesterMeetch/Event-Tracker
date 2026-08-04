@@ -161,7 +161,7 @@ describe("TopPlays", () => {
     });
     render(<TopPlays />);
     expect(screen.getByText(/Nothing on the board clears the bar today/i)).toBeTruthy();
-    expect(screen.getByText(/Nothing cleared the bar/i)).toBeTruthy();
+    expect(screen.getByText(/Nothing priced for/i)).toBeTruthy();
     expect(screen.queryByText(/The scan failed/i)).toBeNull();
   });
 
@@ -182,7 +182,7 @@ describe("TopPlays", () => {
     render(<TopPlays />);
     expect(screen.getByText(/The scan failed/i)).toBeTruthy();
     expect(screen.getByText(/no conclusion should be drawn about today/i)).toBeTruthy();
-    expect(screen.queryByText(/Nothing cleared the bar/i)).toBeNull();
+    expect(screen.queryByText(/Nothing priced for/i)).toBeNull();
   });
 
   it("shows the scan is running and blocks a second click", () => {
@@ -270,7 +270,7 @@ describe("TopPlays", () => {
   it("labels an empty result with the window it actually scanned", async () => {
     stateRef.current.data = response({ picks: [], edgesOutsideWindow: 3 });
     render(<TopPlays />);
-    expect(screen.getByText(/Nothing cleared the bar for today/i)).toBeTruthy();
+    expect(screen.getByText(/Nothing priced for today/i)).toBeTruthy();
   });
 
   /**
@@ -287,5 +287,49 @@ describe("TopPlays", () => {
     stateRef.current.data = response({ picks: [], edgesOutsideWindow: 0 });
     render(<TopPlays />);
     expect(screen.queryByTestId("text-outside-window")).toBeNull();
+  });
+
+  /**
+   * The page asks for the whole ranked board rather than only what clears the
+   * bar. An empty list on a day when 146 outcomes were priced is not an answer
+   * anyone can act on; it hides where the market actually sits.
+   */
+  it("asks for the full ranked board, not just what clears the bar", async () => {
+    render(<TopPlays />);
+    await userEvent.click(screen.getByTestId("button-scan-top-plays"));
+    expect(Number(paramsRef.current!.minEvPercent)).toBeLessThan(0);
+    expect(Number(paramsRef.current!.limit)).toBeGreaterThanOrEqual(10);
+  });
+
+  /**
+   * The whole risk of showing a board with nothing on it is that a ranked list
+   * reads as a recommendation. It has to be impossible to mistake.
+   */
+  it("says plainly that nothing clears, and still ranks the board", async () => {
+    stateRef.current.data = response({
+      picks: [
+        play({ rank: 1, edge: edge({ evPercent: -0.34, gameId: "g1" }) }),
+        play({ rank: 2, edge: edge({ evPercent: -1.1, gameId: "g2" }) }),
+      ],
+    });
+    render(<TopPlays />);
+
+    expect(screen.getByTestId("text-nothing-clears").textContent).toMatch(/worse than fair/i);
+    expect(screen.getByTestId("list-below-bar")).toBeTruthy();
+    expect(screen.queryByTestId("list-clearing")).toBeNull();
+  });
+
+  it("separates what clears the bar from what is only context", async () => {
+    stateRef.current.data = response({
+      picks: [
+        play({ rank: 1, edge: edge({ evPercent: 3.2, gameId: "g1" }) }),
+        play({ rank: 2, edge: edge({ evPercent: -0.4, gameId: "g2" }) }),
+      ],
+    });
+    render(<TopPlays />);
+
+    expect(screen.getByTestId("list-clearing")).toBeTruthy();
+    expect(screen.getByTestId("list-below-bar")).toBeTruthy();
+    expect(screen.queryByTestId("text-nothing-clears")).toBeNull();
   });
 });

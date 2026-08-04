@@ -553,6 +553,62 @@ export interface SportScanFailure {
   reason: string;
 }
 
+export interface ModelSlatePlay {
+  gameId: string;
+  commenceTime: string;
+  homeTeam: string;
+  awayTeam: string;
+  pitcher: string;
+  team: string;
+  opponent: string;
+  /** The model's projected strikeout total for this start. */
+  expectedStrikeouts: number;
+  /** Starts behind the rate estimate. Shown rather than folded into a score, because a thin sample is the most common reason a large model edge is wrong. */
+  sampleStarts: number;
+  /** True when opponent handedness data was unavailable. */
+  degradedInputs: boolean;
+  point: number;
+  selection: string;
+  americanOdds: number;
+  book: string;
+  /** Model's push-adjusted win probability for this side. */
+  modelProb: number;
+  /** De-vigged market consensus for this side. */
+  marketProb: number;
+  /** EV at the best available price using the model probability. */
+  edgePercent: number;
+  recommendedUnits: number;
+  /** True when the edge clears the threshold and 2+ books quote the line. */
+  isFlagged: boolean;
+  rank: number;
+}
+
+export interface ModelSlateSummary {
+  eventsScanned: number;
+  linesMeasured: number;
+  pitchersProjected: number;
+  /** Lines clearing the edge threshold, across the whole board. */
+  flagged: number;
+  /** Starters excluded because their rate inputs were missing or degraded. */
+  insufficientData: number;
+  interpretation: string;
+}
+
+export interface ModelSlateEventFailure {
+  eventId: string;
+  reason: string;
+}
+
+export interface ModelSlateResponse {
+  /** Ranked by raw model edge. Empty is a legitimate answer and means the model agrees with the market everywhere it could measure. */
+  plays: ModelSlatePlay[];
+  summary: ModelSlateSummary;
+  eventsFailed: ModelSlateEventFailure[];
+  windowStart: string;
+  windowEnd: string;
+  scannedAt: string;
+}
+
 export interface TopPlaysResponse {
   /** May be empty. An empty list with a populated summary is the honest answer on an efficient day, not a failure. */
   picks: TopPlay[];
@@ -574,6 +630,27 @@ export interface TopPlaysResponse {
 export type ListEdgesParams = {
 sport: string;
 minEdgePercent?: number;
+};
+
+export type ListModelSlateParams = {
+/**
+ * ISO 8601 instant. Only games commencing at or after this moment are scanned. Clients send their own local start of day. Defaults to now.
+ */
+startTime?: string;
+/**
+ * ISO 8601 instant. Only games commencing strictly before this moment are scanned. Defaults to 24 hours after startTime.
+ */
+endTime?: string;
+limit?: number;
+/**
+ * Threshold the model edge must clear to be flagged.
+ */
+minEdgePercent?: number;
+kellyMultiplier?: number;
+/**
+ * Ceiling on games scanned in one call. Guards the credit spend.
+ */
+maxEvents?: number;
 };
 
 export type ListTopPlaysParams = {

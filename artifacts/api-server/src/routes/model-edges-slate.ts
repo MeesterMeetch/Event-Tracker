@@ -9,6 +9,7 @@ import {
   type ModelPitcherProjection,
 } from "../lib/pitcher-k-scanner";
 import { DEFAULT_KELLY_MULTIPLIER } from "../lib/pitcher-k-model";
+import { recordModelPaperTradesInBackground } from "../lib/model-trade-recorder";
 
 const router: IRouter = Router();
 
@@ -183,6 +184,16 @@ router.get("/model-edges/slate", async (req, res): Promise<void> => {
     });
     return;
   }
+
+  // Record every measured line before ranking. Fire-and-forget, deduplicated by
+  // the existing unique index, and the reason this route exists at all: the
+  // model has never been calibrated because nothing was ever logged to
+  // calibrate it against.
+  recordModelPaperTradesInBackground(
+    projections,
+    MODEL_SPORT_KEY,
+    kellyMultiplier ?? DEFAULT_KELLY_MULTIPLIER,
+  );
 
   const all = toPlays(projections);
 

@@ -16,8 +16,9 @@ import userEvent from "@testing-library/user-event";
  * empty list is only an answer in the first case.
  */
 
-const { refetchMock, stateRef, paramsRef } = vi.hoisted(() => ({
+const { refetchMock, stateRef, paramsRef, analyzeMock } = vi.hoisted(() => ({
   refetchMock: vi.fn(),
+  analyzeMock: vi.fn(),
   // Captures what the page asked the API for. The window is the whole point of
   // the feature, so "did it send one" is worth an assertion.
   paramsRef: { current: undefined as Record<string, string> | undefined },
@@ -37,6 +38,15 @@ vi.mock("@workspace/api-client-react", () => ({
     return { ...stateRef.current, refetch: refetchMock };
   },
   getListTopPlaysQueryKey: () => ["top-plays"],
+  // Called at module scope by the analyze dialog on every play card. The
+  // factory has to supply it even though most of these suites never open one.
+  useGenerateGameAnalysis: () => ({
+    mutate: analyzeMock,
+    isPending: false,
+    isError: false,
+    data: undefined,
+    error: undefined,
+  }),
 }));
 
 import TopPlays from "./TopPlays";
@@ -110,6 +120,7 @@ beforeEach(() => {
   stateRef.current = { data: undefined, isFetching: false, isError: false, error: undefined };
   refetchMock.mockReset();
   refetchMock.mockResolvedValue(undefined);
+  analyzeMock.mockReset();
   paramsRef.current = undefined;
 });
 
@@ -375,5 +386,54 @@ describe("TopPlays", () => {
     stateRef.current.data = response({ sportsSkipped: [] });
     render(<TopPlays />);
     expect(screen.queryByTestId("text-sports-skipped")).toBeNull();
+  });
+
+  /**
+   * The board can hold fifteen rows and each analysis is a billed AI call, so
+   * nothing may fire until a dialog is actually opened.
+   */
+  it("does not spend an AI call until the dialog is opened", () => {
+    stateRef.current.data = response();
+    render(<TopPlays />);
+    expect(screen.getByTestId("button-analyze-1")).toBeTruthy();
+    expect(analyzeMock).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The endpoint requires every edge in a request to belong to one game and
+   * caches per game, so a game with two picks must send both in a single call
+   * rather than paying twice for the same write-up.
+   */
+  it("sends the whole game when a game has more than one pick", async () => {
+    stateRef.current.data = response({
+      picks: [
+        play({ rank: 1, edge: edge({ gameId: "g1", selection: "Red Sox" }) }),
+        play({ rank: 2, edge: edge({ gameId: "g1", selection: "Over 8.5", market: "totals" }) }),
+      ],
+    });
+    render(<TopPlays />);
+
+    await userEvent.click(screen.getByTestId("button-analyze-1"));
+
+    expect(analyzeMock).toHaveBeenCalledTimes(1);
+    const sent = analyzeMock.mock.calls[0][0].data;
+    expect(sent.gameId).toBe("g1");
+    expect(sent.edges).toHaveLength(2);
+  });
+
+  it("sends only that game, not the whole board", async () => {
+    stateRef.current.data = response({
+      picks: [
+        play({ rank: 1, edge: edge({ gameId: "g1" }) }),
+        play({ rank: 2, edge: edge({ gameId: "g2" }) }),
+      ],
+    });
+    render(<TopPlays />);
+
+    await userEvent.click(screen.getByTestId("button-analyze-2"));
+
+    const sent = analyzeMock.mock.calls[0][0].data;
+    expect(sent.gameId).toBe("g2");
+    expect(sent.edges).toHaveLength(1);
   });
 });

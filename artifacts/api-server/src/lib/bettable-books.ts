@@ -29,8 +29,25 @@
 /**
  * Default allowlist. Deliberately narrow: it is better to miss an edge at a
  * book you forgot you had than to chase one at a book you can never use.
+ *
+ * This is an account list, not a market list. It should say which books the
+ * person running this can actually place a bet at, and it belongs in code
+ * rather than in an environment variable so it is visible to anyone reading
+ * the scanner rather than discoverable only from a dashboard.
+ *
+ * A controlled test on a 53-game slate measured what widening it buys. With
+ * every book eligible, six outcomes cleared 1% where three books produced
+ * none, but every one of those six sat at 1xBet or at the Matchbook and
+ * Betfair exchanges. Exchange prices are not comparable to a de-vigged
+ * sportsbook consensus in the first place, since commission comes off the
+ * winnings rather than out of the line, so those edges are an artifact of
+ * comparing two pricing models. BetRivers and Caesars did win best price on
+ * five outcomes between them, none above 0.25%.
+ *
+ * So adding a reachable book is worth doing on its merits and will not
+ * manufacture plays. Add one here when an account actually exists.
  */
-const DEFAULT_BETTABLE = ["draftkings", "fanduel", "betmgm"];
+const DEFAULT_BETTABLE = ["draftkings", "fanduel", "betmgm", "betrivers"];
 
 /** Sentinel disabling the filter. */
 const ALL = "all";

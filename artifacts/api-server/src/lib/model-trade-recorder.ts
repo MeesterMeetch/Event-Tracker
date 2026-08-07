@@ -43,6 +43,9 @@ async function loadDb() {
  * direction.
  */
 export async function gradedTradeCount(): Promise<number | null> {
+  // Same guard as the writer, for the same reason: this is a read, but it is a
+  // read against whatever database the shell happens to point at.
+  if (process.env.VITEST != null || process.env.NODE_ENV === "test") return null;
   if (!process.env.DATABASE_URL) return null;
   try {
     const { db, pitcherKPaperTradesTable } = await loadDb();
@@ -66,12 +69,23 @@ export async function gradedTradeCount(): Promise<number | null> {
  * per scan and belongs to a database bill. This writes tens, and the entire
  * point is to close a loop that has been open since the project started.
  *
- * Also off whenever there is no database configured, which is what keeps the
- * route tests from reaching for Postgres.
+ * Never on under a test runner, and that guard is load-bearing rather than
+ * belt-and-braces. The DATABASE_URL check below was originally the only gate,
+ * on the reasoning that tests run without a database. That holds in CI and in a
+ * clean sandbox and is false on a developer machine, where DATABASE_URL is
+ * routinely exported for unrelated work. Observed in practice: a local test run
+ * opened a connection to an entirely different production database and tried to
+ * insert fixture rows into it, and was stopped only by the table not existing
+ * there. Pointed at the real database it would have written Blake Snell and
+ * Logan Webb into the calibration set this whole feature exists to keep clean.
+ *
+ * The env is a parameter so this predicate can be tested without the runner's
+ * own variables making every case return false.
  */
-export function modelAutologEnabled(): boolean {
-  if (process.env.MODEL_AUTOLOG_ENABLED?.trim().toLowerCase() === "false") return false;
-  return Boolean(process.env.DATABASE_URL);
+export function modelAutologEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.VITEST != null || env.NODE_ENV === "test") return false;
+  if (env.MODEL_AUTOLOG_ENABLED?.trim().toLowerCase() === "false") return false;
+  return Boolean(env.DATABASE_URL);
 }
 
 export interface PaperTradeRow {

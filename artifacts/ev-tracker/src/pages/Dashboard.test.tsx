@@ -40,6 +40,9 @@ import Dashboard from "./Dashboard";
 
 function makeSummary(overrides: Partial<DashboardSummary>): DashboardSummary {
   return {
+    filterFrom: null,
+    filterTo: null,
+    filterBasis: "game",
     totalBets: 3,
     won: 0,
     lost: 0,

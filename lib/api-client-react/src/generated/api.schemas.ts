@@ -420,7 +420,24 @@ export interface SportBreakdown {
   pnl: number;
 }
 
+/**
+ * Which date the filter was applied to.
+ */
+export type DashboardSummaryFilterBasis = typeof DashboardSummaryFilterBasis[keyof typeof DashboardSummaryFilterBasis];
+
+
+export const DashboardSummaryFilterBasis = {
+  game: 'game',
+  logged: 'logged',
+} as const;
+
 export interface DashboardSummary {
+  /** Lower bound actually applied, or null when unbounded. */
+  filterFrom?: string | null;
+  /** Upper bound actually applied (exclusive), or null when unbounded. */
+  filterTo?: string | null;
+  /** Which date the filter was applied to. */
+  filterBasis: DashboardSummaryFilterBasis;
   totalBets: number;
   won: number;
   lost: number;
@@ -718,6 +735,29 @@ sport: string;
 export type ListBetsParams = {
 status?: BetStatus;
 };
+
+export type GetDashboardSummaryParams = {
+/**
+ * ISO 8601 instant. Bets before this are excluded. Omit for no lower bound.
+ */
+from?: string;
+/**
+ * ISO 8601 instant, exclusive, so passing the start of the next day gives exactly one day without straddling midnight. Omit for no upper bound.
+ */
+to?: string;
+/**
+ * Which date to filter on. "game" is the date the game was played and is the default, because "how did I do in July" almost always means games played in July. "logged" is when the bet was entered, which answers a different question about your own activity.
+ */
+basis?: GetDashboardSummaryBasis;
+};
+
+export type GetDashboardSummaryBasis = typeof GetDashboardSummaryBasis[keyof typeof GetDashboardSummaryBasis];
+
+
+export const GetDashboardSummaryBasis = {
+  game: 'game',
+  logged: 'logged',
+} as const;
 
 export type ListModelEdgesParams = {
 sport: string;

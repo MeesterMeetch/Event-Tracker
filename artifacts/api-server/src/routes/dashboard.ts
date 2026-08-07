@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { isNull } from "drizzle-orm";
 import { db, betsTable, type Bet } from "@workspace/db";
-import { GetDashboardSummaryResponse } from "@workspace/api-zod";
+import { GetDashboardSummaryQueryParams, GetDashboardSummaryResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -10,10 +10,53 @@ function roi(pnl: number, units: number): number {
   return Math.round((pnl / units) * 10000) / 100;
 }
 
-router.get("/dashboard/summary", async (_req, res): Promise<void> => {
+router.get("/dashboard/summary", async (req, res): Promise<void> => {
+  const parsed = GetDashboardSummaryQueryParams.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const { from, to, basis } = parsed.data;
+
+  const fromDate = from != null ? new Date(from) : null;
+  if (fromDate != null && Number.isNaN(fromDate.getTime())) {
+    res.status(400).json({ error: "from is not a valid ISO 8601 instant" });
+    return;
+  }
+  const toDate = to != null ? new Date(to) : null;
+  if (toDate != null && Number.isNaN(toDate.getTime())) {
+    res.status(400).json({ error: "to is not a valid ISO 8601 instant" });
+    return;
+  }
+  if (fromDate != null && toDate != null && toDate.getTime() <= fromDate.getTime()) {
+    res.status(400).json({ error: "to must be after from" });
+    return;
+  }
+
+  // "game" reads the date a bet was played, which is what "how did I do in
+  // July" almost always means. "logged" reads when it was entered, which
+  // answers a different question about your own activity: a game logged today
+  // for next week lands in today under "logged" and in next week under "game".
+  const useLogged = basis === "logged";
+
   // Excludes soft-deleted bets so a removed wager stops counting toward
   // profit/ROI immediately; an undo brings its numbers back with it.
-  const bets = await db.select().from(betsTable).where(isNull(betsTable.deletedAt));
+  const allBets = await db.select().from(betsTable).where(isNull(betsTable.deletedAt));
+
+  // Filtered here rather than in SQL. A personal bet log is small enough that
+  // the round trip is identical either way, and the drizzle test fake only
+  // understands eq and desc, so pushing this down would mean teaching it range
+  // predicates to gain nothing measurable.
+  const bets = allBets.filter((b) => {
+    const raw = useLogged ? b.createdAt : b.commenceTime;
+    const t = raw instanceof Date ? raw.getTime() : Date.parse(String(raw));
+    if (!Number.isFinite(t)) return false;
+    if (fromDate != null && t < fromDate.getTime()) return false;
+    // Exclusive upper bound, so a caller passing the start of the next day gets
+    // exactly one day without straddling midnight.
+    if (toDate != null && t >= toDate.getTime()) return false;
+    return true;
+  });
 
   const settled = bets.filter((b): b is Bet & { pnl: number } => b.status !== "pending" && b.pnl != null);
   const totalPnl = Math.round(settled.reduce((sum, b) => sum + b.pnl, 0) * 100) / 100;
@@ -54,6 +97,11 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   bySport.sort((a, b) => b.bets - a.bets);
 
   const summary = {
+    // Echoed back so the client can label what it is looking at rather than
+    // assuming its own request was applied.
+    filterFrom: fromDate?.toISOString() ?? null,
+    filterTo: toDate?.toISOString() ?? null,
+    filterBasis: useLogged ? "logged" : "game",
     totalBets: bets.length,
     won: bets.filter((b) => b.status === "won").length,
     lost: bets.filter((b) => b.status === "lost").length,

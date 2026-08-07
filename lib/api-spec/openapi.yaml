@@ -605,6 +605,35 @@ paths:
   /dashboard/summary:
     get:
       operationId: getDashboardSummary
+      parameters:
+        - name: from
+          in: query
+          required: false
+          description: >
+            ISO 8601 instant. Bets before this are excluded. Omit for no lower
+            bound.
+          schema:
+            type: string
+        - name: to
+          in: query
+          required: false
+          description: >
+            ISO 8601 instant, exclusive, so passing the start of the next day
+            gives exactly one day without straddling midnight. Omit for no upper
+            bound.
+          schema:
+            type: string
+        - name: basis
+          in: query
+          required: false
+          description: >
+            Which date to filter on. "game" is the date the game was played and
+            is the default, because "how did I do in July" almost always means
+            games played in July. "logged" is when the bet was entered, which
+            answers a different question about your own activity.
+          schema:
+            type: string
+            enum: [game, logged]
       tags: [dashboard]
       summary: Overall and per-sport performance stats
       responses:
@@ -1690,6 +1719,7 @@ components:
     DashboardSummary:
       type: object
       required:
+        - filterBasis
         - totalBets
         - won
         - lost
@@ -1703,6 +1733,20 @@ components:
         - clvSampleSize
         - bySport
       properties:
+        filterFrom:
+          type: string
+          format: date-time
+          nullable: true
+          description: Lower bound actually applied, or null when unbounded.
+        filterTo:
+          type: string
+          format: date-time
+          nullable: true
+          description: Upper bound actually applied (exclusive), or null when unbounded.
+        filterBasis:
+          type: string
+          enum: [game, logged]
+          description: Which date the filter was applied to.
         totalBets:
           type: integer
         won:

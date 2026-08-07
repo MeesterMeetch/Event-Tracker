@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import AnalyzeGameDialog from "@/components/top-plays/AnalyzeGameDialog";
 import { useListTopPlays, getListTopPlaysQueryKey } from "@workspace/api-client-react";
 import type { TopPlay, SlateSummary, ListTopPlaysParams } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatOdds, formatPercent, formatPoint, formatGameTime, formatMarketLabel } from "@workspace/format";
-import { Star, Loader2, AlertTriangle } from "lucide-react";
+import { Star, Loader2, AlertTriangle, Sparkles } from "lucide-react";
 
 type ConfidenceTier = "solid" | "playable" | "fragile" | "suspect";
 
@@ -61,7 +62,7 @@ function SlateRead({ summary, scannedAt }: { summary: SlateSummary; scannedAt: s
   );
 }
 
-function PlayCard({ play }: { play: TopPlay }) {
+function PlayCard({ play, gameEdges }: { play: TopPlay; gameEdges: TopPlay["edge"][] }) {
   const e = play.edge;
   const point = formatPoint(e.point, e.market);
   return (
@@ -118,10 +119,26 @@ function PlayCard({ play }: { play: TopPlay }) {
               </div>
             )}
           </div>
-          <div className="text-right shrink-0">
+          <div className="text-right shrink-0 space-y-1">
             <div className="font-mono text-lg text-positive">{formatPercent(e.evPercent)}</div>
             <div className="font-mono text-sm">{formatOdds(e.americanOdds)}</div>
             <div className="text-xs text-muted-foreground">{e.book}</div>
+            {/*
+              Scoped to the game rather than this row: the endpoint caches per
+              game, so a second pick from the same game reuses the answer
+              instead of paying for another call.
+            */}
+            <AnalyzeGameDialog edges={gameEdges}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="mt-1"
+                data-testid={`button-analyze-${play.rank}`}
+              >
+                <Sparkles className="h-3.5 w-3.5 mr-1" />
+                Analyze
+              </Button>
+            </AnalyzeGameDialog>
           </div>
         </div>
       </CardContent>
@@ -245,6 +262,15 @@ export default function TopPlays() {
   const picks = data?.picks ?? [];
   const clearing = picks.filter((p) => p.edge.evPercent >= EV_BAR);
   const below = picks.filter((p) => p.edge.evPercent < EV_BAR);
+
+  // Every pick grouped by game, so the analyze button sends the whole game in
+  // one request and the endpoint's per-game cache does the rest.
+  const edgesByGame = new Map<string, TopPlay["edge"][]>();
+  for (const p of picks) {
+    const list = edgesByGame.get(p.edge.gameId);
+    if (list) list.push(p.edge);
+    else edgesByGame.set(p.edge.gameId, [p.edge]);
+  }
 
   const busy = scanning || isFetching;
 
@@ -419,6 +445,7 @@ export default function TopPlays() {
                     <PlayCard
                       key={`${p.edge.gameId}-${p.edge.market}-${p.edge.selection}-${p.rank}`}
                       play={p}
+                      gameEdges={edgesByGame.get(p.edge.gameId) ?? [p.edge]}
                     />
                   ))}
                 </div>
@@ -436,6 +463,7 @@ export default function TopPlays() {
                     <PlayCard
                       key={`${p.edge.gameId}-${p.edge.market}-${p.edge.selection}-${p.rank}`}
                       play={p}
+                      gameEdges={edgesByGame.get(p.edge.gameId) ?? [p.edge]}
                     />
                   ))}
                 </div>

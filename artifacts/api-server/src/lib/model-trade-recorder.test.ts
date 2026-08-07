@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { paperTradeRowsFrom, modelAutologEnabled } from "./model-trade-recorder";
+import {
+  paperTradeRowsFrom,
+  modelAutologEnabled,
+  gradedTradeCount,
+} from "./model-trade-recorder";
 import type { ModelPitcherProjection, ModelKLine } from "./pitcher-k-scanner";
 
 /**
@@ -108,20 +112,50 @@ describe("paperTradeRowsFrom", () => {
 });
 
 describe("modelAutologEnabled", () => {
-  it("is off when there is no database, which is what keeps tests off Postgres", () => {
-    delete process.env.DATABASE_URL;
-    expect(modelAutologEnabled()).toBe(false);
+  /**
+   * A synthetic environment, because the real one carries the test runner's own
+   * variables and every case would trivially return false.
+   */
+  const env = (over: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv => ({
+    DATABASE_URL: "postgres://example",
+    ...over,
+  });
+
+  it("is off when there is no database", () => {
+    expect(modelAutologEnabled(env({ DATABASE_URL: undefined }))).toBe(false);
   });
 
   it("is on by default once a database is configured", () => {
-    process.env.DATABASE_URL = "postgres://example";
-    delete process.env.MODEL_AUTOLOG_ENABLED;
-    expect(modelAutologEnabled()).toBe(true);
+    expect(modelAutologEnabled(env())).toBe(true);
   });
 
   it("can be switched off explicitly", () => {
-    process.env.DATABASE_URL = "postgres://example";
-    process.env.MODEL_AUTOLOG_ENABLED = "false";
-    expect(modelAutologEnabled()).toBe(false);
+    expect(modelAutologEnabled(env({ MODEL_AUTOLOG_ENABLED: "false" }))).toBe(false);
+  });
+
+  /**
+   * The guard that actually matters, and the one whose absence let a local test
+   * run open a connection to an unrelated production database and attempt to
+   * insert fixture rows into it.
+   *
+   * Gating on DATABASE_URL alone is not enough. It is unset in CI and in a clean
+   * sandbox, which is exactly why this went unnoticed, and it is routinely
+   * exported on a developer machine for unrelated work.
+   */
+  it("is off under a test runner even with a database configured", () => {
+    expect(modelAutologEnabled(env({ VITEST: "true" }))).toBe(false);
+    expect(modelAutologEnabled(env({ NODE_ENV: "test" }))).toBe(false);
+  });
+
+  it("is off under a test runner even when explicitly switched on", () => {
+    expect(
+      modelAutologEnabled(env({ VITEST: "true", MODEL_AUTOLOG_ENABLED: "true" })),
+    ).toBe(false);
+  });
+
+  it("refuses to count graded trades under a test runner", async () => {
+    // Returns null rather than a number, so a countdown never reports progress
+    // it did not actually read.
+    await expect(gradedTradeCount()).resolves.toBeNull();
   });
 });

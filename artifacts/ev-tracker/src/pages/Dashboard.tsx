@@ -1,4 +1,9 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import DateRangeFilter, {
+  DEFAULT_RANGE,
+  paramsFor,
+  type RangeState,
+} from "@/components/dashboard/DateRangeFilter";
 import { useGetDashboardSummary, useGetLedgerAudit, useListSports } from "@workspace/api-client-react";
 import { formatSportKey } from "@workspace/format";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -9,7 +14,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TrendingUp, Target, Coins, Percent, AlertTriangle } from "lucide-react";
 
 export default function Dashboard() {
-  const { data: summary, isLoading, isError } = useGetDashboardSummary();
+  const [range, setRange] = useState<RangeState>(DEFAULT_RANGE);
+  // Recomputed per render so a tab left open overnight does not keep asking
+  // about yesterday's "last 30 days".
+  const params = paramsFor(range);
+  const { data: summary, isLoading, isError } = useGetDashboardSummary(params);
 
   // Automatic corrupt-ledger watchdog: the server runs the same checks as the
   // manual audit script. Failures stay silent here (the banner only ever
@@ -63,8 +72,14 @@ export default function Dashboard() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight mb-2">Performance Terminal</h1>
-        <p className="text-muted-foreground">Aggregated lifetime betting edge</p>
+        <p className="text-muted-foreground">
+          {range.preset === "all"
+            ? "Aggregated lifetime betting edge"
+            : `Filtered by ${range.basis === "logged" ? "date logged" : "game date"}`}
+        </p>
       </div>
+
+      <DateRangeFilter value={range} onChange={setRange} />
 
       {audit && audit.total > 0 && (
         <Alert variant="destructive" data-testid="alert-ledger-audit">

@@ -528,7 +528,16 @@ export const RestoreBetResponse = zod.object({
 /**
  * @summary Overall and per-sport performance stats
  */
+export const GetDashboardSummaryQueryParams = zod.object({
+  "from": zod.coerce.string().optional().describe('ISO 8601 instant. Bets before this are excluded. Omit for no lower bound.\n'),
+  "to": zod.coerce.string().optional().describe('ISO 8601 instant, exclusive, so passing the start of the next day gives exactly one day without straddling midnight. Omit for no upper bound.\n'),
+  "basis": zod.enum(['game', 'logged']).optional().describe('Which date to filter on. \"game\" is the date the game was played and is the default, because \"how did I do in July\" almost always means games played in July. \"logged\" is when the bet was entered, which answers a different question about your own activity.\n')
+})
+
 export const GetDashboardSummaryResponse = zod.object({
+  "filterFrom": zod.coerce.date().nullish().describe('Lower bound actually applied, or null when unbounded.'),
+  "filterTo": zod.coerce.date().nullish().describe('Upper bound actually applied (exclusive), or null when unbounded.'),
+  "filterBasis": zod.enum(['game', 'logged']).describe('Which date the filter was applied to.'),
   "totalBets": zod.number(),
   "won": zod.number(),
   "lost": zod.number(),

@@ -32,14 +32,17 @@ async function buildApp(): Promise<Express> {
   return app;
 }
 
-async function getSummary(app: Express): Promise<{ status: number; body: SummaryBody }> {
+async function getSummary(
+  app: Express,
+  query = "",
+): Promise<{ status: number; body: SummaryBody }> {
   const server = app.listen(0);
   await new Promise<void>((resolve) => server.once("listening", () => resolve()));
   const { port } = server.address() as AddressInfo;
   try {
     return await new Promise((resolve, reject) => {
       const req = http.request(
-        { host: "127.0.0.1", port, path: "/api/dashboard/summary", method: "GET" },
+        { host: "127.0.0.1", port, path: `/api/dashboard/summary${query}`, method: "GET" },
         (res) => {
           let data = "";
           res.setEncoding("utf8");
@@ -84,6 +87,10 @@ interface SummaryBody {
     roiPercent: number;
     pnl: number;
   }>;
+  filterFrom: string | null;
+  filterTo: string | null;
+  filterBasis: string;
+  error?: string;
 }
 
 /** Seeds a bet row with sane defaults; override only what a test cares about. */
@@ -295,5 +302,87 @@ describe("GET /dashboard/summary — per-sport breakdown", () => {
 
     const nba = body.bySport.find((s) => s.sport === "basketball_nba")!;
     expect(nba.settledUnits).toBe(1);
+  });
+
+});
+
+/**
+ * The two dates on a bet answer different questions and the filter has to keep
+ * them apart. A bet logged in June for a July game belongs to July when you ask
+ * how you did last month, and to June when you ask how much you were betting.
+ */
+describe("GET /dashboard/summary — date filtering", () => {
+  it("counts every bet when no range is given", async () => {
+    seedBet({ status: "won", pnl: 1, units: 1 });
+    seedBet({
+      status: "won",
+      pnl: 1,
+      units: 1,
+      commenceTime: new Date("2025-01-01T18:00:00Z"),
+      createdAt: new Date("2025-01-01T12:00:00Z"),
+    });
+
+    const { status, body } = await getSummary(await buildApp());
+    expect(status).toBe(200);
+    expect(body.totalBets).toBe(2);
+    expect(body.filterFrom).toBeNull();
+    expect(body.filterTo).toBeNull();
+    expect(body.filterBasis).toBe("game");
+  });
+
+  it("filters on the game date by default", async () => {
+    seedBet({ commenceTime: new Date("2026-07-10T18:00:00Z") });
+    seedBet({ commenceTime: new Date("2026-06-10T18:00:00Z") });
+
+    const { body } = await getSummary(
+      await buildApp(),
+      "?from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z",
+    );
+    expect(body.totalBets).toBe(1);
+    expect(body.filterBasis).toBe("game");
+  });
+
+  it("filters on the logged date when asked, which is a different answer", async () => {
+    // Logged in June, played in July. Each basis should claim it in its own
+    // month and neither should claim it in both.
+    seedBet({
+      commenceTime: new Date("2026-07-10T18:00:00Z"),
+      createdAt: new Date("2026-06-20T12:00:00Z"),
+    });
+
+    const july = "?from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z";
+    const june = "?from=2026-06-01T00:00:00Z&to=2026-07-01T00:00:00Z";
+
+    expect((await getSummary(await buildApp(), july)).body.totalBets).toBe(1);
+    expect((await getSummary(await buildApp(), `${july}&basis=logged`)).body.totalBets).toBe(0);
+    expect((await getSummary(await buildApp(), `${june}&basis=logged`)).body.totalBets).toBe(1);
+  });
+
+  /**
+   * Exclusive upper bound, so a caller asking for one day passes the start of
+   * the next one and does not silently pick up a late game from it.
+   */
+  it("treats the upper bound as exclusive", async () => {
+    seedBet({ commenceTime: new Date("2026-07-11T00:00:00Z") });
+
+    const { body } = await getSummary(
+      await buildApp(),
+      "?from=2026-07-10T00:00:00Z&to=2026-07-11T00:00:00Z",
+    );
+    expect(body.totalBets).toBe(0);
+  });
+
+  it("rejects a range that ends before it starts", async () => {
+    const { status, body } = await getSummary(
+      await buildApp(),
+      "?from=2026-08-01T00:00:00Z&to=2026-07-01T00:00:00Z",
+    );
+    expect(status).toBe(400);
+    expect(String(body.error)).toContain("after from");
+  });
+
+  it("rejects an unparseable date rather than quietly ignoring it", async () => {
+    const { status } = await getSummary(await buildApp(), "?from=last-tuesday");
+    expect(status).toBe(400);
   });
 });

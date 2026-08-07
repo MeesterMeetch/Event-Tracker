@@ -5,9 +5,16 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { DashboardSummaryFilterBasis } from './dashboardSummaryFilterBasis';
 import type { SportBreakdown } from './sportBreakdown';
 
 export interface DashboardSummary {
+  /** Lower bound actually applied, or null when unbounded. */
+  filterFrom?: Date | null;
+  /** Upper bound actually applied (exclusive), or null when unbounded. */
+  filterTo?: Date | null;
+  /** Which date the filter was applied to. */
+  filterBasis: DashboardSummaryFilterBasis;
   totalBets: number;
   won: number;
   lost: number;

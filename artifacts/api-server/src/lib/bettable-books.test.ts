@@ -13,6 +13,19 @@ describe("bettable book filtering", () => {
     expect(isBettableBook("draftkings")).toBe(true);
     expect(isBettableBook("fanduel")).toBe(true);
     expect(isBettableBook("betmgm")).toBe(true);
+    expect(isBettableBook("betrivers")).toBe(true);
+  });
+
+  /**
+   * The books that produced every above-1% edge in the all-books test. Two are
+   * exchanges, whose prices are not comparable to a de-vigged book consensus,
+   * and none will take a bet from Colorado.
+   */
+  it("excludes the exchanges and offshore books that produced the phantom edges", () => {
+    delete process.env.BETTABLE_BOOKS;
+    for (const book of ["onexbet", "matchbook", "betfair_ex_eu", "coolbet"]) {
+      expect(isBettableBook(book)).toBe(false);
+    }
   });
 
   it("excludes the European books that arrive with the EU region", () => {

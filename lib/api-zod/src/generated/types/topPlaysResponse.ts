@@ -15,6 +15,8 @@ export interface TopPlaysResponse {
   summary: SlateSummary;
   /** Sports that returned odds and contributed to the pool. */
   sportsScanned: string[];
+  /** Sports skipped without spending a credit because their free event listing showed nothing in the window. Reported so a missing sport reads as "no games tonight" rather than as a silent drop. */
+  sportsSkipped: string[];
   /** Sports that errored. Reported rather than swallowed, because a thin board caused by three failed scans means something different from a thin board caused by an efficient market. */
   sportsFailed: SportScanFailure[];
   /** When the fan-out ran. These prices go stale in minutes. */

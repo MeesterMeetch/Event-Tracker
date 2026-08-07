@@ -86,6 +86,31 @@ function PlayCard({ play }: { play: TopPlay }) {
               {formatGameTime(e.commenceTime)}
             </div>
             <div className="text-xs font-mono text-muted-foreground">{play.rationale}</div>
+
+            {/*
+              The four numbers behind the EV, rather than only its output. Market
+              is the de-vigged consensus the edge was measured against; sharp and
+              public split that same consensus by book type. There is no model
+              figure here on purpose: these are game-line edges derived from
+              market prices, and the projection model is a different pipeline
+              that only covers MLB pitcher strikeouts.
+            */}
+            <div className="text-xs font-mono text-muted-foreground flex flex-wrap gap-x-3">
+              {e.marketProb != null && (
+                <span data-testid={`text-market-${play.rank}`}>
+                  market {e.marketProb.toFixed(1)}%
+                </span>
+              )}
+              <span data-testid={`text-sharp-${play.rank}`}>
+                {e.sharpProb == null ? "sharp none" : `sharp ${e.sharpProb.toFixed(1)}%`}
+              </span>
+              <span data-testid={`text-public-${play.rank}`}>
+                {e.publicProb == null ? "public none" : `public ${e.publicProb.toFixed(1)}%`}
+              </span>
+              {e.dispersionPercent != null && (
+                <span>spread {e.dispersionPercent.toFixed(1)}pp</span>
+              )}
+            </div>
             {play.sameGameCount > 0 && (
               <div className="text-xs text-muted-foreground">
                 Second selection from this game. Correlated with a pick above it, so size it
@@ -321,6 +346,13 @@ export default function TopPlays() {
       {data && !busy && (
         <>
           <SlateRead summary={data.summary} scannedAt={String(data.scannedAt)} />
+
+          {data.sportsSkipped.length > 0 && (
+            <p className="text-xs text-muted-foreground" data-testid="text-sports-skipped">
+              Skipped without spending a credit, no games in this window:{" "}
+              {data.sportsSkipped.join(", ")}.
+            </p>
+          )}
 
           {data.sportsFailed.length > 0 && (
             <Card>

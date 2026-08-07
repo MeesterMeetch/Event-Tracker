@@ -168,6 +168,7 @@ export function computePropEdges(event: OddsEvent, sport: string, minEdgePercent
         americanOdds: bestForKey.americanOdds,
         book: bestForKey.book,
         dkOdds: dk.get(key) ?? null,
+        marketProb: Math.round(avgFairProb * 1000) / 10,
         sharpProb,
         publicProb: avgProbPercent(publicSamples.get(key)),
         fairOdds: probToAmerican(avgFairProb),

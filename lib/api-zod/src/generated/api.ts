@@ -53,6 +53,7 @@ export const ListEdgesResponseItem = zod.object({
   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
   "evPercent": zod.number(),
+  "marketProb": zod.number().optional().describe('De-vigged consensus across every book quoting this outcome, as a percent. This is the number EV is measured against.\n\nOptional rather than required on purpose: the server always sets it, but \/analysis accepts edges posted back by a client, and requiring it would 400 any browser still holding the previous bundle for as long as the deploy takes to reach it.'),
   "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
   "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.'),
   "bookCount": zod.number().describe('Distinct books quoting this outcome. Depth is the first ingredient of trust.'),
@@ -165,6 +166,7 @@ export const ListTopPlaysResponse = zod.object({
   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
   "evPercent": zod.number(),
+  "marketProb": zod.number().optional().describe('De-vigged consensus across every book quoting this outcome, as a percent. This is the number EV is measured against.\n\nOptional rather than required on purpose: the server always sets it, but \/analysis accepts edges posted back by a client, and requiring it would 400 any browser still holding the previous bundle for as long as the deploy takes to reach it.'),
   "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
   "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.'),
   "bookCount": zod.number().describe('Distinct books quoting this outcome. Depth is the first ingredient of trust.'),
@@ -192,6 +194,7 @@ export const ListTopPlaysResponse = zod.object({
   "interpretation": zod.string().describe('Plain-language read on the shape of the day, independent of the individual picks. A board with no solid edges anywhere is a day to sit out, and a top-five list on its own would never tell you that.')
 }),
   "sportsScanned": zod.array(zod.string()).describe('Sports that returned odds and contributed to the pool.'),
+  "sportsSkipped": zod.array(zod.string()).describe('Sports skipped without spending a credit because their free event listing showed nothing in the window. Reported so a missing sport reads as \"no games tonight\" rather than as a silent drop.'),
   "sportsFailed": zod.array(zod.object({
   "sport": zod.string(),
   "reason": zod.string()
@@ -246,6 +249,7 @@ export const ListPropEdgesResponseItem = zod.object({
   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
   "evPercent": zod.number(),
+  "marketProb": zod.number().optional().describe('De-vigged consensus across every book quoting this outcome, as a percent. This is the number EV is measured against.\n\nOptional rather than required on purpose: the server always sets it, but \/analysis accepts edges posted back by a client, and requiring it would 400 any browser still holding the previous bundle for as long as the deploy takes to reach it.'),
   "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
   "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.'),
   "bookCount": zod.number().describe('Distinct books quoting this outcome. Depth is the first ingredient of trust.'),
@@ -591,6 +595,7 @@ export const GenerateGameAnalysisBody = zod.object({
   "dkOdds": zod.number().nullish().describe('DraftKings price for this outcome at scan time; null if DK does not quote it.'),
   "fairOdds": zod.number(),
   "evPercent": zod.number(),
+  "marketProb": zod.number().optional().describe('De-vigged consensus across every book quoting this outcome, as a percent. This is the number EV is measured against.\n\nOptional rather than required on purpose: the server always sets it, but \/analysis accepts edges posted back by a client, and requiring it would 400 any browser still holding the previous bundle for as long as the deploy takes to reach it.'),
   "sharpProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet\/handle splits.'),
   "publicProb": zod.number().nullish().describe('Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it.'),
   "bookCount": zod.number().describe('Distinct books quoting this outcome. Depth is the first ingredient of trust.'),

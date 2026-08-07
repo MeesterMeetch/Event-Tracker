@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { ListTopPlaysQueryParams, ListTopPlaysResponse } from "@workspace/api-zod";
-import { fetchOdds } from "../lib/odds";
+import { fetchOdds, fetchEvents } from "../lib/odds";
 import { computeEdges, type EdgeOpportunity } from "../lib/ev";
 import { selectTopPlays, summarizeSlate, DEFAULT_TOP_PLAYS_OPTIONS } from "../lib/top-plays";
 import { getSupportedSports } from "../lib/sports";
@@ -124,7 +124,32 @@ router.get("/top-plays", async (req, res): Promise<void> => {
     requested = [...ranked, ...rest];
   }
 
-  const toScan = requested.slice(0, cap);
+  // Free pre-pass. Listing a sport's events costs nothing; only the odds are
+  // billed. Without this the fan-out pays six credits for NFL in August purely
+  // to discover it has no game tonight, which on a summer slate is most of the
+  // spend. A sport whose listing fails is kept rather than dropped: a failed
+  // free call is not evidence of an empty board, and the paid scan reports its
+  // own failure honestly.
+  const candidates = requested.slice(0, ABSOLUTE_MAX_SPORTS);
+  const listed = await Promise.allSettled(
+    candidates.map(async (sport) => {
+      const events = await fetchEvents(sport);
+      return events.some((e) => {
+        const t = Date.parse(e.commence_time);
+        return Number.isFinite(t) && t >= windowStart.getTime() && t < windowEnd.getTime();
+      });
+    }),
+  );
+
+  const playable: string[] = [];
+  const sportsSkipped: string[] = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const outcome = listed[i];
+    if (outcome.status === "rejected" || outcome.value) playable.push(candidates[i]);
+    else sportsSkipped.push(candidates[i]);
+  }
+
+  const toScan = playable.slice(0, cap);
 
   // Fan out concurrently. These are independent reads against an upstream that
   // tolerates parallel requests, and the caller is waiting on a button press,
@@ -185,6 +210,7 @@ router.get("/top-plays", async (req, res): Promise<void> => {
       picks,
       summary,
       sportsScanned,
+      sportsSkipped,
       sportsFailed,
       scannedAt: new Date().toISOString(),
       windowStart: windowStart.toISOString(),

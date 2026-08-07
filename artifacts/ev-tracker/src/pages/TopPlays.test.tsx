@@ -96,6 +96,7 @@ function response(overrides: Record<string, unknown> = {}) {
     picks: [play()],
     summary: summary(),
     sportsScanned: ["baseball_mlb", "basketball_nba"],
+    sportsSkipped: [],
     sportsFailed: [],
     scannedAt: "2026-08-03T18:40:00Z",
     windowStart: "2026-08-03T18:40:00Z",
@@ -331,5 +332,48 @@ describe("TopPlays", () => {
     expect(screen.getByTestId("list-clearing")).toBeTruthy();
     expect(screen.getByTestId("list-below-bar")).toBeTruthy();
     expect(screen.queryByTestId("text-nothing-clears")).toBeNull();
+  });
+
+  /**
+   * The EV is one number derived from several. Showing only the output makes a
+   * 3% edge with no sharp price look identical to a 3% edge the sharps agree
+   * with, and those are not the same bet.
+   */
+  it("shows the numbers behind the EV, not just the EV", () => {
+    stateRef.current.data = response({
+      picks: [play({ rank: 1, edge: edge({ marketProb: 47.2, sharpProb: 51.3, publicProb: 44.8 }) })],
+    });
+    render(<TopPlays />);
+
+    expect(screen.getByTestId("text-market-1").textContent).toMatch(/47\.2%/);
+    expect(screen.getByTestId("text-sharp-1").textContent).toMatch(/51\.3%/);
+    expect(screen.getByTestId("text-public-1").textContent).toMatch(/44\.8%/);
+  });
+
+  /**
+   * A missing sharp price is information, not a blank. Roughly half of a given
+   * MLB slate has no Pinnacle line, and those edges are assessed without the
+   * input that matters most.
+   */
+  it("says so when there is no sharp price rather than rendering nothing", () => {
+    stateRef.current.data = response({
+      picks: [play({ rank: 1, edge: edge({ sharpProb: null, publicProb: null }) })],
+    });
+    render(<TopPlays />);
+
+    expect(screen.getByTestId("text-sharp-1").textContent).toMatch(/none/i);
+    expect(screen.getByTestId("text-public-1").textContent).toMatch(/none/i);
+  });
+
+  it("names the sports it skipped, so an absent sport is not mistaken for a bug", () => {
+    stateRef.current.data = response({ sportsSkipped: ["americanfootball_nfl", "icehockey_nhl"] });
+    render(<TopPlays />);
+    expect(screen.getByTestId("text-sports-skipped").textContent).toMatch(/americanfootball_nfl/);
+  });
+
+  it("stays quiet about skipped sports when nothing was skipped", () => {
+    stateRef.current.data = response({ sportsSkipped: [] });
+    render(<TopPlays />);
+    expect(screen.queryByTestId("text-sports-skipped")).toBeNull();
   });
 });

@@ -27,6 +27,14 @@ export interface EdgeOpportunity {
    * sharp book quotes the outcome. A proxy for where sharp money leans —
    * The Odds API does not publish real bet/handle splits.
    */
+  /**
+   * The de-vigged consensus this edge was measured against, as a percent. Same
+   * number the EV is computed from, exposed directly rather than left to be
+   * recovered from `fairOdds`: that field is a rounded American price, and
+   * round-tripping it back to a probability would disagree with `sharpProb` and
+   * `publicProb` by a few tenths for no reason.
+   */
+  marketProb: number;
   sharpProb: number | null;
   /** Same consensus probability (percent) averaged across public (recreational) books; null when none quote it. */
   publicProb: number | null;
@@ -168,6 +176,7 @@ export function computeEdges(events: OddsEvent[], sport: string, minEdgePercent:
             americanOdds: bestForKey.americanOdds,
             book: bestForKey.book,
             dkOdds: dk.get(key) ?? null,
+            marketProb: Math.round(avgFairProb * 1000) / 10,
             sharpProb,
             publicProb: avgProbPercent(publicSamples.get(key)),
             fairOdds: probToAmerican(avgFairProb),

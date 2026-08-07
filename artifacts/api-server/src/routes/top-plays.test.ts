@@ -26,6 +26,20 @@ const SPORTS_LIST = [
 
 const SPORTS_ROUTE = { contains: "all=false", payload: SPORTS_LIST };
 
+/** The free event listing for a sport. Matched ahead of that sport's odds URL. */
+function listing(sport: string, commenceTimes: string[]) {
+  return {
+    contains: `${sport}/events`,
+    payload: commenceTimes.map((t, i) => ({
+      id: `${sport}-ev${i}`,
+      sport_key: sport,
+      commence_time: t,
+      home_team: "Home",
+      away_team: "Away",
+    })),
+  };
+}
+
 beforeEach(() => {
   vi.resetModules();
   process.env.ODDS_API_KEY = "test-odds-key";
@@ -394,5 +408,53 @@ describe("GET /top-plays", () => {
       "/api/top-plays?sports=baseball_mlb&startTime=not-a-date",
     );
     expect(status).toBe(400);
+  });
+
+  /**
+   * Listing a sport's events is free; only its odds are billed. Without this
+   * pre-pass the fan-out pays six credits for NFL in August purely to learn it
+   * has no game tonight, which on a summer slate is most of the spend.
+   */
+  it("skips a sport with nothing in the window without spending a credit", async () => {
+    stubFetchRoutes([
+      SPORTS_ROUTE,
+      listing("baseball_mlb", [SOON]),
+      listing("basketball_nba", [NEXT_MONTH]),
+      { contains: "baseball_mlb/odds", payload: [game("mlb-1", "Yankees", "Red Sox", 145, -190)] },
+      { contains: "basketball_nba/odds", payload: [game("nba-1", "Nuggets", "Lakers", 150, -195)] },
+    ]);
+
+    const { status, body } = await getJson(
+      await buildApp(),
+      "/api/top-plays?sports=baseball_mlb,basketball_nba",
+    );
+
+    expect(status).toBe(200);
+    expect(oddsCalls()).toHaveLength(1);
+    expect(oddsCalls()[0]).toContain("baseball_mlb");
+    expect(body.sportsScanned).toEqual(["baseball_mlb"]);
+    // Reported rather than silently dropped, so an absent sport reads as "no
+    // games tonight" instead of looking like a bug.
+    expect(body.sportsSkipped).toEqual(["basketball_nba"]);
+  });
+
+  /**
+   * A failed free call is not evidence of an empty board. Dropping a sport on
+   * one would turn a listing hiccup into a silently smaller slate, which is the
+   * failure mode this whole route is built to avoid.
+   */
+  it("keeps a sport whose free listing fails rather than dropping it", async () => {
+    stubFetchRoutes([
+      SPORTS_ROUTE,
+      { contains: "baseball_mlb/events", status: 500, payload: { message: "listing down" } },
+      { contains: "baseball_mlb/odds", payload: [game("mlb-1", "Yankees", "Red Sox", 145, -190)] },
+    ]);
+
+    const { status, body } = await getJson(await buildApp(), "/api/top-plays?sports=baseball_mlb");
+
+    expect(status).toBe(200);
+    expect(oddsCalls()).toHaveLength(1);
+    expect(body.sportsScanned).toEqual(["baseball_mlb"]);
+    expect(body.sportsSkipped).toEqual([]);
   });
 });

@@ -28,6 +28,12 @@ export interface EdgeOpportunity {
   dkOdds?: number | null;
   fairOdds: number;
   evPercent: number;
+  /**
+     * De-vigged consensus across every book quoting this outcome, as a percent. This is the number EV is measured against.
+     *
+     * Optional rather than required on purpose: the server always sets it, but /analysis accepts edges posted back by a client, and requiring it would 400 any browser still holding the previous bundle for as long as the deploy takes to reach it.
+     */
+  marketProb?: number;
   /** Devigged consensus probability (percent) for this selection across sharp books (Pinnacle, LowVig, BetOnline) at scan time; null if no sharp book quotes it. A proxy for where sharp money leans — the odds feed does not publish real bet/handle splits. */
   sharpProb?: number | null;
   /** Devigged consensus probability (percent) for this selection across public recreational books; null if none quote it. */

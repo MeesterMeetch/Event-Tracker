@@ -36,7 +36,7 @@ vi.mock("@workspace/api-client-react", () => ({
   getListModelSlateQueryKey: () => ["model-slate"],
 }));
 
-import SlateBoard from "./SlateBoard";
+import SlateBoard, { slateColumns } from "./SlateBoard";
 
 function play(over: Record<string, unknown> = {}) {
   return {
@@ -162,11 +162,68 @@ describe("SlateBoard", () => {
     expect(screen.getByTestId("badge-sample-1").textContent).toMatch(/3 starts/);
   });
 
+  it("cannot export a board that has not been scanned", () => {
+    render(<SlateBoard />);
+    expect((screen.getByTestId("button-export-slate") as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("offers the export once there is a board to export", () => {
+    stateRef.current.data = response();
+    render(<SlateBoard />);
+    expect((screen.getByTestId("button-export-slate") as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it("says a partial board is partial rather than quiet", () => {
     stateRef.current.data = response({
       eventsFailed: [{ eventId: "g9", reason: "upstream 500" }],
     });
     render(<SlateBoard />);
     expect(screen.getByText(/failed to scan/i)).toBeTruthy();
+  });
+});
+
+describe("slateColumns", () => {
+  const uncalibrated = {
+    gradedTrades: 0,
+    plattFitted: false,
+    blendWeight: 1,
+    isCalibrated: false,
+    minGradedForCalibration: 30,
+    minGradedForBlendWeight: 50,
+  };
+
+  function cell(header: string, calibration: typeof uncalibrated) {
+    const col = slateColumns("2026-08-07T15:00:00Z", calibration).find(
+      (c) => c.header === header,
+    );
+    return col?.value(play() as never);
+  }
+
+  /**
+   * The screen hides stake sizes while the model is unvalidated. The export has
+   * to make the same choice, or the safety decision lasts exactly as long as it
+   * takes someone to click Export and open the file.
+   */
+  it("leaves the stake empty while the model is uncalibrated", () => {
+    expect(cell("recommendedUnits", uncalibrated)).toBeNull();
+  });
+
+  it("includes the stake once calibration is in effect", () => {
+    expect(cell("recommendedUnits", { ...uncalibrated, isCalibrated: true })).toBe(1.25);
+  });
+
+  /**
+   * A spreadsheet outlives the banner that framed it. Without these columns a
+   * file of model edges three weeks from now carries no record of whether the
+   * model had ever been checked against a result.
+   */
+  it("stamps the calibration state onto every row", () => {
+    expect(cell("modelCalibrated", uncalibrated)).toBe(false);
+    expect(cell("gradedTrades", uncalibrated)).toBe(0);
+    expect(cell("blendWeight", uncalibrated)).toBe(1);
+  });
+
+  it("stamps when the scan ran, since these prices go stale in minutes", () => {
+    expect(cell("scannedAt", uncalibrated)).toBe("2026-08-07T15:00:00Z");
   });
 });

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toCsv, csvFilename, downloadCsv, type CsvColumn } from "@/lib/csv";
 import {
   useListModelSlate,
   getListModelSlateQueryKey,
@@ -11,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatOdds, formatGameTime } from "@workspace/format";
-import { Loader2, AlertTriangle, FlaskConical } from "lucide-react";
+import { Loader2, AlertTriangle, FlaskConical, Download } from "lucide-react";
 
 /**
  * The whole strikeout board, ranked by how far the model disagrees with the
@@ -138,6 +139,53 @@ function PlayRow({ play, showUnits }: { play: ModelSlatePlay; showUnits: boolean
   );
 }
 
+/**
+ * Export columns.
+ *
+ * The calibration state rides on every row deliberately. A spreadsheet outlives
+ * the banner that framed it, and a file of model edges with no record of
+ * whether the model had ever been checked is the same trap the banner exists to
+ * prevent, just deferred by three weeks.
+ *
+ * recommendedUnits is left empty while uncalibrated, matching the screen. A
+ * Kelly stake computed from an unvalidated probability should not be one
+ * spreadsheet formula away from being acted on.
+ */
+export function slateColumns(
+  scannedAt: string,
+  calibration: ModelCalibrationState,
+): CsvColumn<ModelSlatePlay>[] {
+  return [
+    { header: "rank", value: (p) => p.rank },
+    { header: "edgePercent", value: (p) => p.edgePercent },
+    { header: "pitcher", value: (p) => p.pitcher },
+    { header: "team", value: (p) => p.team },
+    { header: "opponent", value: (p) => p.opponent },
+    { header: "selection", value: (p) => p.selection },
+    { header: "point", value: (p) => p.point },
+    { header: "americanOdds", value: (p) => p.americanOdds },
+    { header: "book", value: (p) => p.book },
+    { header: "modelProb", value: (p) => p.modelProb },
+    { header: "marketProb", value: (p) => p.marketProb },
+    { header: "disagreementPoints", value: (p) => (p.modelProb - p.marketProb) * 100 },
+    { header: "expectedStrikeouts", value: (p) => p.expectedStrikeouts },
+    { header: "sampleStarts", value: (p) => p.sampleStarts },
+    { header: "degradedInputs", value: (p) => p.degradedInputs },
+    { header: "isFlagged", value: (p) => p.isFlagged },
+    {
+      header: "recommendedUnits",
+      value: (p) => (calibration.isCalibrated ? p.recommendedUnits : null),
+    },
+    { header: "modelCalibrated", value: () => calibration.isCalibrated },
+    { header: "gradedTrades", value: () => calibration.gradedTrades },
+    { header: "blendWeight", value: () => calibration.blendWeight },
+    { header: "awayTeam", value: (p) => p.awayTeam },
+    { header: "homeTeam", value: (p) => p.homeTeam },
+    { header: "commenceTime", value: (p) => p.commenceTime },
+    { header: "scannedAt", value: () => scannedAt },
+  ];
+}
+
 export default function SlateBoard() {
   const [windowKey, setWindowKey] = useState<WindowKey>("today");
   const [request, setRequest] = useState<ListModelSlateParams | null>(null);
@@ -175,6 +223,14 @@ export default function SlateBoard() {
   const busy = scanning || isFetching;
   const showUnits = data?.calibration.isCalibrated === true;
 
+  const exportCsv = () => {
+    if (data == null) return;
+    downloadCsv(
+      csvFilename("strikeout-board"),
+      toCsv(data.plays, slateColumns(String(data.scannedAt), data.calibration)),
+    );
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -199,6 +255,16 @@ export default function SlateBoard() {
               </Button>
             ))}
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={busy || !data || data.plays.length === 0}
+            data-testid="button-export-slate"
+          >
+            <Download className="h-3.5 w-3.5 mr-1" />
+            Export CSV
+          </Button>
           <Button
             onClick={() => setRequest(windowFor(selected.extraDays))}
             disabled={busy}

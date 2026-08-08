@@ -1,4 +1,4 @@
-import { pgTable, serial, text, doublePrecision, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, doublePrecision, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -29,6 +29,20 @@ export const betsTable = pgTable("bets", {
   status: text("status").notNull().default("pending"), // "pending" | "won" | "lost" | "push"
   pnl: doublePrecision("pnl"),
   notes: text("notes"),
+  /**
+   * The pitcher-strikeout paper trade this bet was promoted from, when it was.
+   *
+   * Player props cannot be graded from the scores endpoint, which only returns
+   * final team scores, so a prop bet used to sit pending until settled by hand.
+   * But the paper trade it came from is already settled every thirty minutes by
+   * settleKOutcomes against the real boxscore, including pushes and scratched
+   * starters. This link lets the bet inherit that answer rather than duplicating
+   * the lookup.
+   *
+   * Null for game-line bets, which the scores grader handles, and for any prop
+   * logged by hand rather than promoted.
+   */
+  paperTradeId: integer("paper_trade_id"),
   // Soft-delete marker backing the client "Undo" affordance: deleting a bet
   // stamps this instead of dropping the row, so an immediate undo can restore
   // the exact record — logged odds, units, and any captured closing-line/CLV

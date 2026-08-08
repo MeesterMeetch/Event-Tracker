@@ -1598,6 +1598,15 @@ components:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
+        paperTradeId:
+          type: integer
+          nullable: true
+          description: >-
+            The pitcher-strikeout paper trade this bet was promoted from.
+            Player props cannot be graded from the scores endpoint, which
+            returns final team scores only, so a prop bet inherits the
+            outcome the paper trade already has from the boxscore. Null for
+            game lines and for props logged by hand.
         createdAt:
           type: string
           format: date-time
@@ -1656,6 +1665,15 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        paperTradeId:
+          type: integer
+          nullable: true
+          description: >-
+            The pitcher-strikeout paper trade this bet was promoted from.
+            Player props cannot be graded from the scores endpoint, which
+            returns final team scores only, so a prop bet inherits the
+            outcome the paper trade already has from the boxscore. Null for
+            game lines and for props logged by hand.
     BetUpdate:
       type: object
       properties:
@@ -1681,6 +1699,15 @@ components:
           type: ["number", "null"]
         notes:
           type: ["string", "null"]
+        paperTradeId:
+          type: integer
+          nullable: true
+          description: >-
+            The pitcher-strikeout paper trade this bet was promoted from.
+            Player props cannot be graded from the scores endpoint, which
+            returns final team scores only, so a prop bet inherits the
+            outcome the paper trade already has from the boxscore. Null for
+            game lines and for props logged by hand.
     SportBreakdown:
       type: object
       required: [sport, bets, won, lost, push, pending, pendingUnits, settledUnits, roiPercent, pnl]

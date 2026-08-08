@@ -35,5 +35,7 @@ export interface Bet {
   pnl: number | null;
   /** @nullable */
   notes: string | null;
+  /** The pitcher-strikeout paper trade this bet was promoted from. Player props cannot be graded from the scores endpoint, which returns final team scores only, so a prop bet inherits the outcome the paper trade already has from the boxscore. Null for game lines and for props logged by hand. */
+  paperTradeId?: number | null;
   createdAt: Date;
 }

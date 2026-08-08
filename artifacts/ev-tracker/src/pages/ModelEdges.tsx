@@ -663,6 +663,9 @@ export function PaperTradesTable() {
           units,
           evPercent: trade.edgePercent ?? undefined,
           book: trade.book,
+          // The link the prop grader settles from. The note stays for humans
+          // reading the bet log; the column is what the code reads.
+          paperTradeId: trade.id,
           notes: `Promoted from Strikeout Model paper trade #${trade.id}`,
         },
       },

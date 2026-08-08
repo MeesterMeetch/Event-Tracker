@@ -347,6 +347,7 @@ export const ListBetsResponseItem = zod.object({
   "status": zod.enum(['pending', 'won', 'lost', 'push']),
   "pnl": zod.number().nullable(),
   "notes": zod.string().nullable(),
+  "paperTradeId": zod.number().nullish().describe('The pitcher-strikeout paper trade this bet was promoted from. Player props cannot be graded from the scores endpoint, which returns final team scores only, so a prop bet inherits the outcome the paper trade already has from the boxscore. Null for game lines and for props logged by hand.'),
   "createdAt": zod.coerce.date()
 })
 export const ListBetsResponse = zod.array(ListBetsResponseItem)
@@ -377,7 +378,8 @@ export const CreateBetBody = zod.object({
   "fairOdds": zod.number().nullish(),
   "evPercent": zod.number().nullish(),
   "book": zod.string().nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "paperTradeId": zod.number().nullish().describe('The pitcher-strikeout paper trade this bet was promoted from. Player props cannot be graded from the scores endpoint, which returns final team scores only, so a prop bet inherits the outcome the paper trade already has from the boxscore. Null for game lines and for props logged by hand.')
 })
 
 export const CreateBetResponse = zod.object({
@@ -400,6 +402,7 @@ export const CreateBetResponse = zod.object({
   "status": zod.enum(['pending', 'won', 'lost', 'push']),
   "pnl": zod.number().nullable(),
   "notes": zod.string().nullable(),
+  "paperTradeId": zod.number().nullish().describe('The pitcher-strikeout paper trade this bet was promoted from. Player props cannot be graded from the scores endpoint, which returns final team scores only, so a prop bet inherits the outcome the paper trade already has from the boxscore. Null for game lines and for props logged by hand.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -431,6 +434,7 @@ export const GetBetResponse = zod.object({
   "status": zod.enum(['pending', 'won', 'lost', 'push']),
   "pnl": zod.number().nullable(),
   "notes": zod.string().nullable(),
+  "paperTradeId": zod.number().nullish().describe('The pitcher-strikeout paper trade this bet was promoted from. Player props cannot be graded from the scores endpoint, which returns final team scores only, so a prop bet inherits the outcome the paper trade already has from the boxscore. Null for game lines and for props logged by hand.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -455,7 +459,8 @@ export const UpdateBetBody = zod.object({
   "americanOdds": zod.union([zod.number().max(updateBetBodyAmericanOddsOneMax),zod.number().min(updateBetBodyAmericanOddsTwoMin)]).optional().describe('American odds price. Valid prices are at most -100 or at least +100; the open interval (-100, 100) does not exist on the American odds scale.'),
   "units": zod.number().min(updateBetBodyUnitsMin).optional().describe('Stake in units. Must be at least 0.01u — the same minimum the web and mobile bet forms enforce via the shared client rules.'),
   "pnl": zod.number().nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "paperTradeId": zod.number().nullish().describe('The pitcher-strikeout paper trade this bet was promoted from. Player props cannot be graded from the scores endpoint, which returns final team scores only, so a prop bet inherits the outcome the paper trade already has from the boxscore. Null for game lines and for props logged by hand.')
 })
 
 export const UpdateBetResponse = zod.object({
@@ -478,6 +483,7 @@ export const UpdateBetResponse = zod.object({
   "status": zod.enum(['pending', 'won', 'lost', 'push']),
   "pnl": zod.number().nullable(),
   "notes": zod.string().nullable(),
+  "paperTradeId": zod.number().nullish().describe('The pitcher-strikeout paper trade this bet was promoted from. Player props cannot be graded from the scores endpoint, which returns final team scores only, so a prop bet inherits the outcome the paper trade already has from the boxscore. Null for game lines and for props logged by hand.'),
   "createdAt": zod.coerce.date()
 })
 
@@ -521,6 +527,7 @@ export const RestoreBetResponse = zod.object({
   "status": zod.enum(['pending', 'won', 'lost', 'push']),
   "pnl": zod.number().nullable(),
   "notes": zod.string().nullable(),
+  "paperTradeId": zod.number().nullish().describe('The pitcher-strikeout paper trade this bet was promoted from. Player props cannot be graded from the scores endpoint, which returns final team scores only, so a prop bet inherits the outcome the paper trade already has from the boxscore. Null for game lines and for props logged by hand.'),
   "createdAt": zod.coerce.date()
 })
 

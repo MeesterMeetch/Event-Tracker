@@ -6,6 +6,7 @@ import { startGrading } from "./lib/grading";
 import { startTombstonePurge } from "./lib/tombstones";
 import { startLedgerAudit } from "./lib/ledger-audit";
 import { startKOutcomeGrading } from "./lib/k-outcomes";
+import { startPropGrading } from "./lib/prop-grading";
 
 const rawPort = process.env["PORT"];
 
@@ -34,4 +35,5 @@ app.listen(port, (err) => {
   startTombstonePurge();
   startLedgerAudit();
   startKOutcomeGrading();
+  startPropGrading();
 });

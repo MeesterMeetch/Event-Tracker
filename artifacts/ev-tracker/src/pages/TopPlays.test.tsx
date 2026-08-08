@@ -436,4 +436,19 @@ describe("TopPlays", () => {
     expect(sent.gameId).toBe("g2");
     expect(sent.edges).toHaveLength(1);
   });
+
+  it("cannot export a board that has not been scanned", () => {
+    render(<TopPlays />);
+    expect((screen.getByTestId("button-export-top-plays") as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it("offers the export once there is a board to export", () => {
+    stateRef.current.data = response();
+    render(<TopPlays />);
+    expect((screen.getByTestId("button-export-top-plays") as HTMLButtonElement).disabled).toBe(
+      false,
+    );
+  });
 });

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toCsv, csvFilename, downloadCsv, type CsvColumn } from "@/lib/csv";
 import AnalyzeGameDialog from "@/components/top-plays/AnalyzeGameDialog";
 import { useListTopPlays, getListTopPlaysQueryKey } from "@workspace/api-client-react";
 import type { TopPlay, SlateSummary, ListTopPlaysParams } from "@workspace/api-client-react";
@@ -7,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatOdds, formatPercent, formatPoint, formatGameTime, formatMarketLabel } from "@workspace/format";
-import { Star, Loader2, AlertTriangle, Sparkles } from "lucide-react";
+import { Star, Loader2, AlertTriangle, Sparkles, Download } from "lucide-react";
 
 type ConfidenceTier = "solid" | "playable" | "fragile" | "suspect";
 
@@ -209,6 +210,45 @@ const LIST_LIMIT = 15;
 /** The EV a play has to clear to count as a play rather than as information. */
 const EV_BAR = 1;
 
+/**
+ * Export columns. Every number the page shows plus the ones it does not have
+ * room for, because the point of a spreadsheet is the question you have not
+ * thought of yet.
+ *
+ * `scannedAt` rides on every row rather than sitting in a header line. A note
+ * row would break a straight import, and a file that cannot say when it was
+ * taken is worthless a week later given how fast these prices move.
+ */
+function topPlayColumns(scannedAt: string): CsvColumn<TopPlay>[] {
+  return [
+    { header: "rank", value: (p) => p.rank },
+    { header: "evPercent", value: (p) => p.edge.evPercent },
+    { header: "clearsBar", value: (p) => p.edge.evPercent >= EV_BAR },
+    { header: "confidenceTier", value: (p) => p.edge.confidenceTier },
+    { header: "confidenceScore", value: (p) => p.edge.confidenceScore },
+    { header: "book", value: (p) => p.edge.book },
+    { header: "americanOdds", value: (p) => p.edge.americanOdds },
+    { header: "dkOdds", value: (p) => p.edge.dkOdds },
+    { header: "marketProb", value: (p) => p.edge.marketProb },
+    { header: "sharpProb", value: (p) => p.edge.sharpProb },
+    { header: "publicProb", value: (p) => p.edge.publicProb },
+    { header: "dispersionPercent", value: (p) => p.edge.dispersionPercent },
+    { header: "bookCount", value: (p) => p.edge.bookCount },
+    { header: "sport", value: (p) => p.edge.sport },
+    { header: "market", value: (p) => p.edge.market },
+    { header: "selection", value: (p) => p.edge.selection },
+    { header: "point", value: (p) => p.edge.point },
+    { header: "player", value: (p) => p.edge.player },
+    { header: "awayTeam", value: (p) => p.edge.awayTeam },
+    { header: "homeTeam", value: (p) => p.edge.homeTeam },
+    { header: "commenceTime", value: (p) => p.edge.commenceTime },
+    { header: "sameGameCount", value: (p) => p.sameGameCount },
+    { header: "confidenceReasons", value: (p) => p.edge.confidenceReasons.join("; ") },
+    { header: "rationale", value: (p) => p.rationale },
+    { header: "scannedAt", value: () => scannedAt },
+  ];
+}
+
 export default function TopPlays() {
   // Never fetched on mount. A fan-out is one billed scan per sport, so it costs
   // real money every time it runs and must be a deliberate action rather than
@@ -254,6 +294,17 @@ export default function TopPlays() {
   const run = () => {
     setScannedWindow(selected);
     setRequest(windowFor(selected));
+  };
+
+  const exportCsv = () => {
+    if (data == null) return;
+    const at = String(data.scannedAt);
+    downloadCsv(
+      csvFilename("top-plays"),
+      // Everything scanned, not only what cleared the bar. The rows below the
+      // bar are most of the information about where the market actually sits.
+      toCsv(data.picks, topPlayColumns(at)),
+    );
   };
 
   // The server returns one ranked list; the bar decides how it is presented.
@@ -305,6 +356,16 @@ export default function TopPlays() {
               </Button>
             ))}
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportCsv}
+            disabled={busy || !data || data.picks.length === 0}
+            data-testid="button-export-top-plays"
+          >
+            <Download className="h-3.5 w-3.5 mr-1" />
+            Export CSV
+          </Button>
           <Button onClick={run} disabled={busy} data-testid="button-scan-top-plays">
             {busy ? (
               <>

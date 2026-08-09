@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toCsv, csvFilename, downloadCsv, type CsvColumn } from "@/lib/csv";
+import { edgeColumns } from "@/lib/edge-csv";
 import AnalyzeGameDialog from "@/components/top-plays/AnalyzeGameDialog";
 import { useListTopPlays, getListTopPlaysQueryKey } from "@workspace/api-client-react";
 import type { TopPlay, SlateSummary, ListTopPlaysParams } from "@workspace/api-client-react";
@@ -211,39 +212,16 @@ const LIST_LIMIT = 15;
 const EV_BAR = 1;
 
 /**
- * Export columns. Every number the page shows plus the ones it does not have
- * room for, because the point of a spreadsheet is the question you have not
- * thought of yet.
- *
- * `scannedAt` rides on every row rather than sitting in a header line. A note
- * row would break a straight import, and a file that cannot say when it was
- * taken is worthless a week later given how fast these prices move.
+ * Export columns: every field an edge carries, plus the few a Top Play adds on
+ * top of it. The edge half is shared with Live Edges and Player Props so the
+ * three exports line up when piled into one sheet.
  */
 function topPlayColumns(scannedAt: string): CsvColumn<TopPlay>[] {
   return [
     { header: "rank", value: (p) => p.rank },
-    { header: "evPercent", value: (p) => p.edge.evPercent },
     { header: "clearsBar", value: (p) => p.edge.evPercent >= EV_BAR },
-    { header: "confidenceTier", value: (p) => p.edge.confidenceTier },
-    { header: "confidenceScore", value: (p) => p.edge.confidenceScore },
-    { header: "book", value: (p) => p.edge.book },
-    { header: "americanOdds", value: (p) => p.edge.americanOdds },
-    { header: "dkOdds", value: (p) => p.edge.dkOdds },
-    { header: "marketProb", value: (p) => p.edge.marketProb },
-    { header: "sharpProb", value: (p) => p.edge.sharpProb },
-    { header: "publicProb", value: (p) => p.edge.publicProb },
-    { header: "dispersionPercent", value: (p) => p.edge.dispersionPercent },
-    { header: "bookCount", value: (p) => p.edge.bookCount },
-    { header: "sport", value: (p) => p.edge.sport },
-    { header: "market", value: (p) => p.edge.market },
-    { header: "selection", value: (p) => p.edge.selection },
-    { header: "point", value: (p) => p.edge.point },
-    { header: "player", value: (p) => p.edge.player },
-    { header: "awayTeam", value: (p) => p.edge.awayTeam },
-    { header: "homeTeam", value: (p) => p.edge.homeTeam },
-    { header: "commenceTime", value: (p) => p.edge.commenceTime },
+    ...edgeColumns<TopPlay>((p) => p.edge),
     { header: "sameGameCount", value: (p) => p.sameGameCount },
-    { header: "confidenceReasons", value: (p) => p.edge.confidenceReasons.join("; ") },
     { header: "rationale", value: (p) => p.rationale },
     { header: "scannedAt", value: () => scannedAt },
   ];

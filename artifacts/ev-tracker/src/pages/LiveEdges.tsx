@@ -1,4 +1,6 @@
 import { useState, useRef, useMemo } from "react";
+import { toCsv, csvFilename, downloadCsv } from "@/lib/csv";
+import { edgeColumns } from "@/lib/edge-csv";
 import { useListSports, useListEdges, useListEvents, useListPropEdges, useListRankingsSports, useListStandings, useCreateBet, useGenerateGameAnalysis, getListEdgesQueryKey, getListEventsQueryKey, getListPropEdgesQueryKey, getListStandingsQueryKey, getListBetsQueryKey, getGetDashboardSummaryQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,7 +18,7 @@ import { formatOdds, formatPercent, formatPoint, formatGameTime, formatMarketLab
 import { isValidUnitsStake, isValidAmericanOdds, propSelectionLabel } from "@workspace/format";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Activity, Plus, Loader2, Sparkles } from "lucide-react";
+import { Activity, Plus, Loader2, Sparkles, Download } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -449,6 +451,19 @@ function orderEdges<T extends { evPercent: number; confidenceTier: string }>(row
  */
 type AnyEdge = EdgeOpportunity;
 
+/**
+ * Exports what is on screen: the rows after the tier filter and the current
+ * sort, in that order. Exporting the unfiltered set instead would silently
+ * discard the work of narrowing the table, which is the only reason anyone
+ * reaches for the button.
+ */
+function exportEdges(prefix: string, rows: readonly AnyEdge[]): void {
+  downloadCsv(
+    csvFilename(prefix),
+    toCsv(rows, edgeColumns<AnyEdge>((e) => e, new Date().toISOString())),
+  );
+}
+
 const EDGE_SORT_COLUMNS: SortColumn<AnyEdge>[] = [
   { key: "matchup", accessor: (e) => `${e.awayTeam} @ ${e.homeTeam}` },
   { key: "player", accessor: (e) => e.player },
@@ -678,6 +693,19 @@ export default function LiveEdges() {
             })}
           </div>
 
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportEdges("live-edges", gameSort.rows)}
+              disabled={gameSort.rows.length === 0}
+              data-testid="button-export-edges"
+            >
+              <Download className="h-3.5 w-3.5 mr-1" />
+              Export CSV
+            </Button>
+          </div>
+
           <Card className="overflow-hidden">
             <Table>
               <TableHeader>
@@ -864,6 +892,19 @@ export default function LiveEdges() {
                       <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Updating props...
                     </div>
                   )}
+
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => exportEdges("player-props", propSort.rows)}
+                      disabled={propSort.rows.length === 0}
+                      data-testid="button-export-props"
+                    >
+                      <Download className="h-3.5 w-3.5 mr-1" />
+                      Export CSV
+                    </Button>
+                  </div>
 
                   <Card className="overflow-hidden">
                     <Table>

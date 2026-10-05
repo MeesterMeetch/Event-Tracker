@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { GenerateGameAnalysisBody, GenerateGameAnalysisResponse } from "@workspace/api-zod";
 import { getMatchupPitchers } from "../lib/mlb";
+import { getFootballContext, isFootballSport } from "../lib/football-context";
 import { generateAnalysis, ANALYSIS_MODEL, type AnalysisEdge } from "../lib/analysis";
 
 const router: IRouter = Router();
@@ -73,6 +74,12 @@ router.post("/analysis", async (req, res): Promise<void> => {
         ? await getMatchupPitchers(homeTeam, awayTeam, commenceIso)
         : { home: null, away: null };
 
+    // Football gets pregame context from ESPN (records, leaders, injuries,
+    // recent results, weather). Best-effort: null falls back to market-only.
+    const footballContext = isFootballSport(sport)
+      ? await getFootballContext(sport, homeTeam, awayTeam, commenceIso)
+      : null;
+
     const analysisEdges: AnalysisEdge[] = edges.map((e) => ({
       market: e.market,
       selection: e.selection,
@@ -92,6 +99,7 @@ router.post("/analysis", async (req, res): Promise<void> => {
       edges: analysisEdges,
       homePitcher: pitchers.home,
       awayPitcher: pitchers.away,
+      footballContext,
     });
 
     const data = GenerateGameAnalysisResponse.parse({

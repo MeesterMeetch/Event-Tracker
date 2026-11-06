@@ -20,6 +20,11 @@ vi.mock("../lib/mlb", () => ({
   getMatchupPitchers: vi.fn(),
 }));
 
+vi.mock("../lib/football-context", () => ({
+  isFootballSport: (sport: string) => sport.startsWith("americanfootball_"),
+  getFootballContext: vi.fn(async () => "Atlanta Falcons (1-2 overall)\n  Passing: Test QB (QB), 900 YDS"),
+}));
+
 const ANALYSIS_MODEL = "test-analysis-model";
 vi.mock("../lib/analysis", () => ({
   generateAnalysis: vi.fn(),
@@ -172,6 +177,21 @@ describe("POST /analysis — well-formed output", () => {
 
     expect(status).toBe(200);
     expect(mockGetPitchers).not.toHaveBeenCalled();
+  });
+
+  it("passes ESPN football context through to the analysis for NFL games", async () => {
+    const app = await buildApp();
+
+    const nfl = {
+      ...GAME,
+      gameId: "nfl-context-game",
+      sport: "americanfootball_nfl",
+      edges: [edge({ sport: "americanfootball_nfl", gameId: "nfl-context-game" })],
+    };
+    const { status } = await request(app, "POST", "/api/analysis", nfl);
+
+    expect(status).toBe(200);
+    expect(mockGenerate.mock.calls[0][0].footballContext).toContain("Passing: Test QB");
   });
 });
 

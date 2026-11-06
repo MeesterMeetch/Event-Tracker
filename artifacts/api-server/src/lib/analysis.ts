@@ -29,6 +29,8 @@ export interface AnalysisInput {
   edges: AnalysisEdge[];
   homePitcher: ProbablePitcher | null;
   awayPitcher: ProbablePitcher | null;
+  /** Pregame football context (records, leaders, injuries, form, weather). */
+  footballContext?: string | null;
 }
 
 export interface AnalysisContent {
@@ -106,14 +108,18 @@ function buildPrompt(input: AnalysisInput): string {
           input.awayPitcher,
         )}`,
       ]
-    : isFootball
+    : isFootball && input.footballContext
       ? [
-          "Personnel / matchup notes:",
-          "  Probable-starter feeds are MLB-only, so no roster data is provided here.",
-          "  Reason from the matchup and the detected market edges: quarterback form and",
-          "  volume, pace and total, matchup on the relevant side of the ball, and any",
-          "  situational context implied by the line. Do not invent injuries or stat lines.",
+          "Team context (season records, statistical leaders, injury report, recent results,",
+          "conditions). Use the specific names and numbers below:",
+          input.footballContext,
         ]
+      : isFootball
+        ? [
+            "Personnel / matchup notes:",
+            "  Reason from the matchup and the market: quarterback quality, pace, the total,",
+            "  and situational context implied by the line. Do not invent injuries or stat lines.",
+          ]
       : [
           "Personnel / matchup notes:",
           "  No structured player feed is available for this sport. Reason from the",
@@ -140,6 +146,8 @@ Analyze the specific game using ONLY the data provided; never invent stats, inju
 Be concrete and concise. When probable starters or roster data are provided, weigh recent form heavily and reference specific numbers; when they are not, reason from the matchup and market signals without manufacturing detail.
 When a specific bet is named, that bet is the subject. Say why that player might go over or under that exact number. A general game preview that never mentions the wager is a failed answer.
 If a bet's edge looks thin or the sample is weak, say so — do not manufacture confidence.
+Never write about what data was or wasn't provided to you (no "without injury data", "no QB data provided", etc.). The reader can't act on that. Work with what you have and leave gaps unmentioned.
+For football, when team context is provided, name the quarterbacks and key skill players, cite relevant injuries by name, and use recent scores and conditions (dome, weather) when judging totals.
 
 Respond with a single JSON object with exactly these keys:
 {

@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { GenerateGameAnalysisBody, GenerateGameAnalysisResponse } from "@workspace/api-zod";
 import { getMatchupPitchers } from "../lib/mlb";
 import { getFootballContext, isFootballSport } from "../lib/football-context";
-import { generateAnalysis, ANALYSIS_MODEL, type AnalysisEdge } from "../lib/analysis";
+import { generateAnalysis, ANALYSIS_MODEL, AnalysisConfigError, type AnalysisEdge } from "../lib/analysis";
 
 const router: IRouter = Router();
 
@@ -122,6 +122,11 @@ router.post("/analysis", async (req, res): Promise<void> => {
     res.json(data);
   } catch (err) {
     req.log.error({ err, gameId, sport }, "analysis: failed to generate game analysis");
+    // A missing or rejected key never fixes itself on retry, so say so plainly.
+    if (err instanceof AnalysisConfigError) {
+      res.status(503).json({ error: `AI analysis isn't configured: ${err.message}` });
+      return;
+    }
     res.status(502).json({ error: "Failed to generate analysis. Try again shortly." });
   }
 });

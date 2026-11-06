@@ -29,6 +29,7 @@ const ANALYSIS_MODEL = "test-analysis-model";
 vi.mock("../lib/analysis", () => ({
   generateAnalysis: vi.fn(),
   ANALYSIS_MODEL,
+  AnalysisConfigError: class AnalysisConfigError extends Error {},
 }));
 
 let mockGenerate: Mock;
@@ -282,6 +283,17 @@ describe("POST /analysis — AI failures surface, never silently succeed", () =>
 
     expect(status).toBe(502);
     expect((body as { error: string }).error).toMatch(/failed to generate/i);
+  });
+
+  it("returns a 503 that names the fix when the API key is missing", async () => {
+    const { AnalysisConfigError } = await import("../lib/analysis");
+    mockGenerate.mockRejectedValue(new AnalysisConfigError("ANTHROPIC_API_KEY is not set on the API service."));
+    const app = await buildApp();
+
+    const { status, body } = await request(app, "POST", "/api/analysis", VALID_BODY);
+
+    expect(status).toBe(503);
+    expect((body as { error: string }).error).toMatch(/ANTHROPIC_API_KEY/);
   });
 
   it("does not cache a failure — a later working call still generates fresh output", async () => {

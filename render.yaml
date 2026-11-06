@@ -62,11 +62,11 @@ services:
       # market per event, so an eleven-market request across a sixteen-game
       # slate is 176 credits in one region and 352 in two. Leave it on the "us"
       # default until the credit burn justifies otherwise.
-      # Uncomment these two only if you use the AI features:
-      # - key: AI_INTEGRATIONS_OPENAI_API_KEY
-      #   sync: false
-      # - key: AI_INTEGRATIONS_OPENAI_BASE_URL
-      #   value: https://api.openai.com/v1
+      # Anthropic API key for the AI Game Analysis (Opus 5.5, medium effort).
+      # Without it the Analyze button returns a "not configured" message.
+      # Paste your value in the Render dashboard when prompted.
+      - key: ANTHROPIC_API_KEY
+        sync: false
 
   # ---------------------------------------------------------------------------
   # 2. Frontend — Vite static site (no "region" — Render doesn't allow it here)

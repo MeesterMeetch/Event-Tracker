@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatOdds, formatPercent, formatPoint, formatGameTime, formatMarketLabel } from "@/lib/utils";
+import { DATE_WINDOW_LABELS, inDateWindow, type DateWindow } from "@/lib/date-window";
 import { isValidUnitsStake, isValidAmericanOdds, propSelectionLabel } from "@workspace/format";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -498,10 +499,35 @@ function ConfidenceBadge({ tier, reasons }: { tier: ConfidenceTier; reasons: str
   );
 }
 
+/** All / Today / This week toggle, shared by the game-lines and props tabs. */
+function DateWindowChips({ value, onChange }: { value: DateWindow; onChange: (w: DateWindow) => void }) {
+  return (
+    <div className="flex items-center gap-1.5" role="group" aria-label="Date range">
+      <span className="text-xs text-muted-foreground mr-1">When:</span>
+      {(["all", "today", "week"] as const).map((w) => (
+        <button
+          key={w}
+          type="button"
+          onClick={() => onChange(w)}
+          aria-pressed={value === w}
+          data-testid={`date-window-${w}`}
+          className={`rounded-full border px-2.5 py-1 text-[10px] uppercase font-mono transition-colors ${
+            value === w ? "border-primary bg-primary/15 text-primary" : "border-border text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {DATE_WINDOW_LABELS[w]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function LiveEdges() {
   const [selectedSport, setSelectedSport] = useState<string>("");
   const [tab, setTab] = useState<"games" | "props">("games");
   const [selectedEventId, setSelectedEventId] = useState<string>("");
+  // Date window applies to both tabs: game-line rows and the props game picker.
+  const [dateWindow, setDateWindow] = useState<DateWindow>("all");
 
   const { data: sports, isLoading: loadingSports } = useListSports();
   // Paid scans are gated on the active tab, so browsing props never triggers
@@ -549,11 +575,21 @@ export default function LiveEdges() {
     { query: { enabled: !!selectedSport && !!selectedEventId && tab === "props", queryKey: getListPropEdgesQueryKey({ sport: selectedSport, eventId: selectedEventId, minEdgePercent: FULL_SLATE_THRESHOLD }) } }
   );
 
+  // Date window first, so the trust-chip counts describe the games in view.
+  const windowedEdges = useMemo(
+    () => (edges ?? []).filter((e) => inDateWindow(e.commenceTime, dateWindow)),
+    [edges, dateWindow],
+  );
+  const windowedEvents = useMemo(
+    () => (events ?? []).filter((ev) => inDateWindow(ev.commenceTime, dateWindow)),
+    [events, dateWindow],
+  );
+
   // Filtered and re-ordered slate. Memoized so toggling a tier does not resort
   // the whole board on every render.
   const visibleEdges = useMemo(
-    () => orderEdges((edges ?? []).filter((e) => visibleTiers.has(e.confidenceTier as ConfidenceTier))),
-    [edges, visibleTiers],
+    () => orderEdges(windowedEdges.filter((e) => visibleTiers.has(e.confidenceTier as ConfidenceTier))),
+    [windowedEdges, visibleTiers],
   );
   const visiblePropEdges = useMemo(
     () => orderEdges((propEdges ?? []).filter((e) => visibleTiers.has(e.confidenceTier as ConfidenceTier))),
@@ -586,6 +622,14 @@ export default function LiveEdges() {
   }, [sportStandings]);
   // Exact normalized name match only — a missing record beats a wrong one.
   const recordFor = (team: string) => teamRecords.get(team.trim().toLowerCase());
+
+  // Narrowing the window drops a picked props game that falls outside it, so
+  // the board never shows props for a game the picker no longer lists.
+  const changeDateWindow = (w: DateWindow) => {
+    setDateWindow(w);
+    const picked = events?.find((ev) => ev.id === selectedEventId);
+    if (picked && !inDateWindow(picked.commenceTime, w)) setSelectedEventId("");
+  };
 
   const handleSportChange = (value: string) => {
     setSelectedSport(value);
@@ -673,9 +717,10 @@ export default function LiveEdges() {
           )}
           
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground mr-1">Trust:</span>
+            <DateWindowChips value={dateWindow} onChange={changeDateWindow} />
+            <span className="text-xs text-muted-foreground mr-1 sm:ml-3">Trust:</span>
             {(["solid", "playable", "fragile", "suspect"] as const).map((tier) => {
-              const count = edges.filter((e) => e.confidenceTier === tier).length;
+              const count = windowedEdges.filter((e) => e.confidenceTier === tier).length;
               const active = visibleTiers.has(tier);
               return (
                 <button
@@ -729,8 +774,17 @@ export default function LiveEdges() {
                     <TableCell colSpan={11} className="text-center text-muted-foreground py-12">
                       <div className="flex flex-col items-center justify-center space-y-2">
                         <Activity className="h-6 w-6 opacity-30" />
-                        <p>No +EV edges found right now.</p>
-                        <p className="text-xs opacity-70">Markets are efficient. Wait for line movement.</p>
+                        {dateWindow !== "all" && windowedEdges.length === 0 ? (
+                          <>
+                            <p>No games in {DATE_WINDOW_LABELS[dateWindow].toLowerCase()}.</p>
+                            <button type="button" className="text-xs text-primary underline" onClick={() => changeDateWindow("all")}>Show all upcoming</button>
+                          </>
+                        ) : (
+                          <>
+                            <p>No +EV edges found right now.</p>
+                            <p className="text-xs opacity-70">Markets are efficient. Wait for line movement.</p>
+                          </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -827,13 +881,14 @@ export default function LiveEdges() {
             <>
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
                 <div className="w-full sm:w-96">
+                  <div className="mb-2"><DateWindowChips value={dateWindow} onChange={changeDateWindow} /></div>
                   <Label className="mb-2 block">Select Game</Label>
                   <Select value={selectedEventId} onValueChange={setSelectedEventId} disabled={loadingEvents}>
                     <SelectTrigger>
                       <SelectValue placeholder={loadingEvents ? "Loading games..." : "Choose a game"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {(events ?? []).map((ev) => (
+                      {windowedEvents.map((ev) => (
                         <SelectItem key={ev.id} value={ev.id}>
                           {ev.awayTeam}{recordFor(ev.awayTeam) ? ` (${recordFor(ev.awayTeam)})` : ""} @ {ev.homeTeam}{recordFor(ev.homeTeam) ? ` (${recordFor(ev.homeTeam)})` : ""} — {formatGameTime(ev.commenceTime)}
                         </SelectItem>
@@ -851,15 +906,15 @@ export default function LiveEdges() {
                 </div>
               )}
 
-              {!eventsError && events && events.length === 0 && (
+              {!eventsError && events && windowedEvents.length === 0 && (
                 <Card className="border-dashed">
                   <CardContent className="flex flex-col items-center justify-center h-40 text-muted-foreground">
-                    <p>No upcoming games listed for this sport.</p>
+                    <p>{events.length === 0 ? "No upcoming games listed for this sport." : `No games in ${DATE_WINDOW_LABELS[dateWindow].toLowerCase()}.`}</p>
                   </CardContent>
                 </Card>
               )}
 
-              {!selectedEventId && !eventsError && (events?.length ?? 0) > 0 && (
+              {!selectedEventId && !eventsError && windowedEvents.length > 0 && (
                 <Card className="border-dashed">
                   <CardContent className="flex flex-col items-center justify-center h-64 text-muted-foreground space-y-4">
                     <Activity className="h-8 w-8 opacity-50" />

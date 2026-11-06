@@ -1,8 +1,8 @@
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { createMessage, ANALYSIS_MODEL, AnalysisConfigError } from "./anthropic";
 import { logger } from "./logger";
 import type { ProbablePitcher } from "./mlb";
 
-export const ANALYSIS_MODEL = "claude-sonnet-5";
+export { ANALYSIS_MODEL, AnalysisConfigError };
 
 function fmtOdds(american: number): string {
   const rounded = Math.round(american);
@@ -219,19 +219,19 @@ const RETRY_NUDGE =
   "Your previous response could not be parsed. Respond with ONLY a single valid JSON object " +
   "containing exactly the required keys — no markdown, no prose, no code fences.";
 
+/**
+ * Tolerates a response wrapped in a markdown code fence despite the prompt
+ * asking for bare JSON. Anything else is passed through for JSON.parse to judge.
+ */
+function stripCodeFence(text: string): string {
+  const m = text.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return m ? m[1] : text.trim();
+}
+
 /** One model call + parse/validate. Throws AnalysisFormatError on bad output. */
 async function attemptAnalysis(input: AnalysisInput, retry: boolean): Promise<AnalysisContent> {
   const systemContent = retry ? `${SYSTEM_PROMPT}\n\n${RETRY_NUDGE}` : SYSTEM_PROMPT;
-  const completion = await openai.chat.completions.create({
-    model: ANALYSIS_MODEL,
-    max_completion_tokens: 8192,
-    messages: [
-      { role: "system", content: systemContent },
-      { role: "user", content: buildPrompt(input) },
-    ],
-  });
-
-  const text = completion.choices[0]?.message?.content ?? "";
+  const text = stripCodeFence(await createMessage(systemContent, buildPrompt(input)));
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);

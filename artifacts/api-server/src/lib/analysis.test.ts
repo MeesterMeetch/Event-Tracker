@@ -11,8 +11,10 @@ import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
  */
 
 const mockCreate = vi.fn();
-vi.mock("@workspace/integrations-openai-ai-server", () => ({
-  openai: { chat: { completions: { create: mockCreate } } },
+vi.mock("./anthropic", () => ({
+  createMessage: mockCreate,
+  ANALYSIS_MODEL: "claude-opus-5-5",
+  AnalysisConfigError: class AnalysisConfigError extends Error {},
 }));
 vi.mock("./logger", () => ({
   logger: { info() {}, warn() {}, error() {}, debug() {} },
@@ -41,17 +43,13 @@ const VALID = {
 
 /** Make the mocked client return `content` as the completion text. */
 function returns(content: string): void {
-  (mockCreate as Mock).mockResolvedValue({
-    choices: [{ message: { content } }],
-  });
+  (mockCreate as Mock).mockResolvedValue(content);
 }
 
 /** Queue up per-call completion texts (first call, second call, ...). */
 function returnsInSequence(...contents: string[]): void {
   for (const content of contents) {
-    (mockCreate as Mock).mockResolvedValueOnce({
-      choices: [{ message: { content } }],
-    });
+    (mockCreate as Mock).mockResolvedValueOnce(content);
   }
 }
 
@@ -146,6 +144,17 @@ describe("generateAnalysis — JSON missing required keys fails loudly", () => {
     await expect(generateAnalysis(INPUT)).rejects.toMatchObject({
       message: expect.stringMatching(/matchupAnalysis.*bettingAngle.*keyFactors/),
     });
+  });
+});
+
+describe("generateAnalysis — fenced JSON", () => {
+  it("accepts a response wrapped in a json code fence", async () => {
+    returns("```json\n" + JSON.stringify(VALID) + "\n```");
+
+    const content = await generateAnalysis(INPUT);
+
+    expect(content).toEqual(VALID);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 });
 
